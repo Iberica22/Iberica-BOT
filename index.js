@@ -487,9 +487,9 @@ app.get("/health", (req, res) => {
 // ── Webhook de Woztell ───────────────────────────────────────
 app.post("/webhook", async (req, res) => {
   try {
-    // Extraer datos del body según la estructura de Woztell
-    const telefono = req.body?.member?.externalId;
-    const texto = req.body?.messageEvent?.data?.text;
+    // Extraer datos del body según la estructura real de Woztell
+    const telefono = req.body?.from;
+    const texto = req.body?.data?.text;
 
     if (!telefono || !texto) {
       console.warn("[Webhook] Payload incompleto:", JSON.stringify(req.body));
