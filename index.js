@@ -155,17 +155,24 @@ async function consultarParteZoho(numeroParte) {
 
 /**
  * Envía un mensaje de texto al cliente a través de la API de Woztell.
- * @param {string} telefono - externalId del cliente (número de WhatsApp)
+ * Usa memberId (ID interno de Woztell) guardado en el estado del cliente.
+ * @param {string} telefono - clave del cliente en conversaciones (req.body.from)
  * @param {string} mensaje  - Texto a enviar
  */
 async function enviarMensaje(telefono, mensaje) {
-  console.log(`[Woztell] → ${telefono}: ${mensaje.slice(0, 80)}...`);
+  // memberId es el identificador interno de Woztell (req.body.member)
+  const memberId = conversaciones[telefono]?.memberId;
+  if (!memberId) {
+    console.error(`[Woztell] Sin memberId para ${telefono}, no se puede enviar el mensaje.`);
+    return;
+  }
+  console.log(`[Woztell] → ${telefono} (member: ${memberId}): ${mensaje.slice(0, 80)}...`);
   try {
     await axios.post(
       `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
       {
         channelId: process.env.WOZTELL_CHANNEL_ID,
-        recipientId: telefono,
+        memberId,
         response: [{ type: "TEXT", text: mensaje }],
       }
     );
@@ -256,9 +263,9 @@ function esComandoMenu(texto) {
  * Inicializa (o resetea) el estado de conversación de un cliente.
  */
 function resetearConversacion(telefono) {
-  // Preservar el thread_id si ya existe: el historial de IA sobrevive
-  // entre sesiones del menú para mantener contexto con el asistente
-  const threadAnterior = conversaciones[telefono]?.thread_id || null;
+  // Preservar thread_id y memberId entre resets para no perder contexto
+  const threadAnterior  = conversaciones[telefono]?.thread_id || null;
+  const memberAnterior  = conversaciones[telefono]?.memberId  || null;
   conversaciones[telefono] = {
     step: null,
     nombre: null,
@@ -266,6 +273,7 @@ function resetearConversacion(telefono) {
     direccion: null,
     descripcion: null,
     thread_id: threadAnterior,
+    memberId: memberAnterior,   // ID interno de Woztell para enviar mensajes
   };
 }
 
@@ -275,7 +283,7 @@ function resetearConversacion(telefono) {
 
 /**
  * Procesa el mensaje recibido y gestiona el flujo de la conversación.
- * @param {string} telefono - externalId del cliente
+ * @param {string} telefono - número del cliente (req.body.from), clave en conversaciones[]
  * @param {string} texto    - Texto del mensaje recibido
  */
 async function procesarMensaje(telefono, texto) {
@@ -499,23 +507,28 @@ app.get("/health", (req, res) => {
 app.post("/webhook", async (req, res) => {
   try {
     // Extraer datos del body según la estructura real de Woztell
-    const telefono = req.body?.from;
-    const texto = req.body?.data?.text;
+    const telefono = req.body?.from;           // número del cliente (clave de estado)
+    const memberId = req.body?.member;          // ID interno Woztell para enviar mensajes
+    const texto    = req.body?.data?.text;
 
-    if (!telefono || !texto) {
+    if (!telefono || !memberId || !texto) {
       console.warn("[Webhook] Payload incompleto:", JSON.stringify(req.body));
       return res.status(400).json({ error: "Payload incompleto" });
     }
 
-    console.log(`[Webhook] Mensaje de ${telefono}: "${texto}"`);
+    console.log(`[Webhook] Mensaje de ${telefono} (member: ${memberId}): "${texto}"`);
 
     // Inicializar conversación si no existe y mostrar menú en primer contacto
     if (!conversaciones[telefono]) {
       resetearConversacion(telefono);
+      conversaciones[telefono].memberId = memberId;
       conversaciones[telefono].step = "menu_principal";
       await enviarMensaje(telefono, MENU_PRINCIPAL);
       return res.sendStatus(200);
     }
+
+    // Actualizar memberId siempre (puede cambiar de sesión en sesión)
+    conversaciones[telefono].memberId = memberId;
 
     // Si el step es null (recién reseteado pero ya tenía estado), forzar menú
     if (conversaciones[telefono].step === null) {
