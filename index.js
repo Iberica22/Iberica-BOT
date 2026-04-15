@@ -18,13 +18,12 @@ const PORT = process.env.PORT || 3000;
 // ── Cliente OpenAI ──────────────────────────────────────────
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// ── Estado de conversaciones en memoria ────────────────────
-// Estructura por cliente: { step, nombre, telefono, direccion, descripcion }
-const conversaciones = {};
+// ── ID del asistente de OpenAI ──────────────────────────────
+const ASSISTANT_ID = "asst_TGm5TBJYuHyAAKirANa1n0QC";
 
-// Historial de mensajes para la rama de servicios (OpenAI)
-// Estructura: { [telefono]: [ {role, content}, ... ] }
-const historialServicios = {};
+// ── Estado de conversaciones en memoria ────────────────────
+// Estructura por cliente: { step, nombre, telefono, direccion, descripcion, thread_id }
+const conversaciones = {};
 
 // ── Token de Zoho en memoria ────────────────────────────────
 let zohoAccessToken = null;
@@ -179,46 +178,54 @@ async function enviarMensaje(telefono, mensaje) {
 // OPENAI - Rama de Servicios
 // ============================================================
 
-const SYSTEM_PROMPT_SERVICIOS =
-  "Eres el asistente virtual de Ibérica Seguridad, empresa especializada en seguridad, " +
-  "cerrajería, automatismos y domótica. Habla siempre en español, tono cercano y profesional, " +
-  "frases cortas y claras. Somos fabricantes, instaladores y asesores. " +
-  "Nunca inventes precios ni estados de partes.";
-
 /**
- * Consulta a GPT-4o manteniendo el historial de conversación del cliente.
- * @param {string} telefono - ID del cliente
- * @param {string} mensajeUsuario - Último mensaje del usuario
+ * Envía un mensaje al asistente de OpenAI (Assistants API) y devuelve su respuesta.
+ * Cada cliente tiene su propio thread persistente guardado en estado.thread_id.
+ * Si no existe, se crea uno nuevo automáticamente.
+ * @param {string} telefono - ID del cliente (usado para recuperar su estado)
+ * @param {string} mensajeUsuario - Texto enviado por el cliente
  * @returns {string} - Respuesta del asistente
  */
-async function consultarOpenAI(telefono, mensajeUsuario) {
-  // Inicializar historial si no existe
-  if (!historialServicios[telefono]) {
-    historialServicios[telefono] = [];
-  }
-
-  const historial = historialServicios[telefono];
-  historial.push({ role: "user", content: mensajeUsuario });
-
-  // Mantener solo los últimos 10 mensajes para no exceder el contexto
-  if (historial.length > 10) {
-    historial.splice(0, historial.length - 10);
-  }
+async function consultarAsistente(telefono, mensajeUsuario) {
+  const estado = conversaciones[telefono];
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT_SERVICIOS },
-        ...historial,
-      ],
+    // Crear thread si el cliente no tiene uno todavía
+    if (!estado.thread_id) {
+      const thread = await openai.beta.threads.create();
+      estado.thread_id = thread.id;
+      console.log(`[OpenAI] Nuevo thread creado para ${telefono}: ${thread.id}`);
+    }
+
+    // Añadir el mensaje del usuario al thread
+    await openai.beta.threads.messages.create(estado.thread_id, {
+      role: "user",
+      content: mensajeUsuario,
     });
 
-    const respuesta = completion.choices[0].message.content;
-    historial.push({ role: "assistant", content: respuesta });
+    // Ejecutar el asistente y esperar a que termine (polling automático)
+    const run = await openai.beta.threads.runs.createAndPoll(estado.thread_id, {
+      assistant_id: ASSISTANT_ID,
+    });
+
+    if (run.status !== "completed") {
+      console.error(`[OpenAI] Run finalizado con estado inesperado: ${run.status}`);
+      throw new Error(`Run no completado: ${run.status}`);
+    }
+
+    // Obtener el último mensaje del asistente (el primero de la lista, orden desc)
+    const mensajes = await openai.beta.threads.messages.list(estado.thread_id, {
+      order: "desc",
+      limit: 1,
+    });
+
+    const respuesta = mensajes.data[0]?.content[0]?.text?.value;
+    if (!respuesta) throw new Error("Respuesta vacía del asistente");
+
+    console.log(`[OpenAI] Respuesta para ${telefono}: ${respuesta.slice(0, 80)}...`);
     return respuesta;
   } catch (err) {
-    console.error("[OpenAI] Error en la consulta:", err.message);
+    console.error("[OpenAI] Error en Assistants API:", err.message);
     throw new Error("Error al consultar el asistente de IA");
   }
 }
@@ -249,12 +256,16 @@ function esComandoMenu(texto) {
  * Inicializa (o resetea) el estado de conversación de un cliente.
  */
 function resetearConversacion(telefono) {
+  // Preservar el thread_id si ya existe: el historial de IA sobrevive
+  // entre sesiones del menú para mantener contexto con el asistente
+  const threadAnterior = conversaciones[telefono]?.thread_id || null;
   conversaciones[telefono] = {
     step: null,
     nombre: null,
     telefono: null,
     direccion: null,
     descripcion: null,
+    thread_id: threadAnterior,
   };
 }
 
@@ -300,8 +311,6 @@ async function procesarMensaje(telefono, texto) {
     }
     if (["3", "servicios", "información", "informacion"].includes(msgLower)) {
       estado.step = "servicios";
-      // Limpiar historial de OpenAI al entrar en modo servicios
-      historialServicios[telefono] = [];
       await enviarMensaje(
         telefono,
         "Estoy aquí para informarte sobre nuestros servicios. ¿Qué quieres saber? (Escribe *menú* cuando quieras volver al inicio)"
@@ -420,7 +429,7 @@ async function procesarMensaje(telefono, texto) {
     }
 
     try {
-      const respuestaIA = await consultarOpenAI(telefono, msg);
+      const respuestaIA = await consultarAsistente(telefono, msg);
       await enviarMensaje(telefono, respuestaIA);
     } catch (err) {
       await enviarMensaje(
