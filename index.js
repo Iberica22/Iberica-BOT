@@ -155,67 +155,46 @@ async function consultarParteZoho(numeroParte) {
 
 /**
  * Envía un mensaje de texto al cliente a través de la API de Woztell.
- * Prueba los dos endpoints conocidos y logea la respuesta completa para debug.
+ * Usa el channelId real del webhook entrante (req.body.channel) en lugar
+ * del .env, ya que ambos valores pueden diferir.
  * @param {string} telefono - clave del cliente en conversaciones (req.body.from)
  * @param {string} mensaje  - Texto a enviar
  */
 async function enviarMensaje(telefono, mensaje) {
-  const memberId = conversaciones[telefono]?.memberId;
+  const estado = conversaciones[telefono];
+  const memberId  = estado?.memberId;
+  // Usar el channelId que llegó en el webhook; el .env es fallback de emergencia
+  const channelId = estado?.channelId || process.env.WOZTELL_CHANNEL_ID;
+
   if (!memberId) {
-    console.error(`[Woztell] Sin memberId para ${telefono}, no se puede enviar el mensaje.`);
+    console.error(`[Woztell] Sin memberId para ${telefono}, no se puede enviar.`);
     return;
   }
 
-  // Probamos los dos endpoints documentados; el primero en responder ok:1 gana
-  const endpoints = [
-    "https://bot.api.woztell.com/sendResponses",
-    "https://api.woztell.com/sendResponses",
-  ];
+  const body = {
+    channelId,
+    memberId,   // string: "69df644a0e70e45b41053725"
+    response: [{ type: "TEXT", text: mensaje }],
+  };
 
-  // Dos variantes de memberId: string plano y objeto con _id (ambas formas vistas en Woztell)
-  const variantesMemberId = [
-    memberId,                   // string: "69df644a0e70e45b41053725"
-    { _id: memberId },          // objeto: { _id: "69df644a0e70e45b41053725" }
-  ];
+  console.log(`[Woztell] → ${telefono} | channel: ${channelId} | member: ${memberId}`);
+  console.log(`[Woztell] Body:`, JSON.stringify(body));
 
-  console.log(`[Woztell] Enviando a ${telefono} | memberId: ${memberId}`);
-  console.log(`[Woztell] Mensaje: "${mensaje.slice(0, 120)}"`);
+  try {
+    const res = await axios.post(
+      `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
+      body
+    );
+    console.log(`[Woztell] HTTP ${res.status} | Response:`, JSON.stringify(res.data));
 
-  for (const url of endpoints) {
-    for (const memberIdVariante of variantesMemberId) {
-      const body = {
-        channelId: process.env.WOZTELL_CHANNEL_ID,
-        memberId: memberIdVariante,
-        response: [{ type: "TEXT", text: mensaje }],
-      };
-
-      console.log(`[Woztell] Intentando → ${url}`);
-      console.log(`[Woztell] Body enviado:`, JSON.stringify(body));
-
-      try {
-        const res = await axios.post(
-          `${url}?accessToken=${process.env.WOZTELL_TOKEN}`,
-          body
-        );
-
-        // Log completo de la respuesta
-        console.log(`[Woztell] HTTP status: ${res.status}`);
-        console.log(`[Woztell] Response body:`, JSON.stringify(res.data));
-
-        // Si Woztell confirma ok:1, paramos aquí
-        if (res.data?.ok === 1) {
-          console.log(`[Woztell] ✅ Enviado correctamente con → ${url} | memberId: ${JSON.stringify(memberIdVariante)}`);
-          return;
-        }
-
-        console.warn(`[Woztell] ⚠️  ok:0 con ${url} y memberId ${JSON.stringify(memberIdVariante)}. Probando siguiente variante...`);
-      } catch (err) {
-        console.error(`[Woztell] ❌ Error HTTP con ${url}:`, err.response?.status, JSON.stringify(err.response?.data) || err.message);
-      }
+    if (res.data?.ok === 1) {
+      console.log(`[Woztell] ✅ Mensaje enviado correctamente.`);
+    } else {
+      console.error(`[Woztell] ❌ ok:0 — ${JSON.stringify(res.data)}`);
     }
+  } catch (err) {
+    console.error(`[Woztell] ❌ Error HTTP ${err.response?.status}:`, JSON.stringify(err.response?.data) || err.message);
   }
-
-  console.error("[Woztell] ❌ Todos los intentos fallaron. Revisa el token, channelId y memberId.");
 }
 
 // ============================================================
@@ -303,6 +282,7 @@ function resetearConversacion(telefono) {
   // Preservar thread_id y memberId entre resets para no perder contexto
   const threadAnterior  = conversaciones[telefono]?.thread_id || null;
   const memberAnterior  = conversaciones[telefono]?.memberId  || null;
+  const channelAnterior = conversaciones[telefono]?.channelId || null;
   conversaciones[telefono] = {
     step: null,
     nombre: null,
@@ -310,7 +290,8 @@ function resetearConversacion(telefono) {
     direccion: null,
     descripcion: null,
     thread_id: threadAnterior,
-    memberId: memberAnterior,   // ID interno de Woztell para enviar mensajes
+    memberId:  memberAnterior,    // ID interno de Woztell para enviar mensajes
+    channelId: channelAnterior,   // canal real del que llega el mensaje (req.body.channel)
   };
 }
 
@@ -544,28 +525,31 @@ app.get("/health", (req, res) => {
 app.post("/webhook", async (req, res) => {
   try {
     // Extraer datos del body según la estructura real de Woztell
-    const telefono = req.body?.from;           // número del cliente (clave de estado)
-    const memberId = req.body?.member;          // ID interno Woztell para enviar mensajes
+    const telefono = req.body?.from;      // número del cliente (clave de estado)
+    const memberId = req.body?.member;    // ID interno Woztell para enviar mensajes
+    const channelId = req.body?.channel;  // canal real — puede diferir del .env
     const texto    = req.body?.data?.text;
 
-    if (!telefono || !memberId || !texto) {
+    if (!telefono || !memberId || !channelId || !texto) {
       console.warn("[Webhook] Payload incompleto:", JSON.stringify(req.body));
       return res.status(400).json({ error: "Payload incompleto" });
     }
 
-    console.log(`[Webhook] Mensaje de ${telefono} (member: ${memberId}): "${texto}"`);
+    console.log(`[Webhook] De: ${telefono} | member: ${memberId} | channel: ${channelId} | msg: "${texto}"`);
 
     // Inicializar conversación si no existe y mostrar menú en primer contacto
     if (!conversaciones[telefono]) {
       resetearConversacion(telefono);
-      conversaciones[telefono].memberId = memberId;
+      conversaciones[telefono].memberId  = memberId;
+      conversaciones[telefono].channelId = channelId;
       conversaciones[telefono].step = "menu_principal";
       await enviarMensaje(telefono, MENU_PRINCIPAL);
       return res.sendStatus(200);
     }
 
-    // Actualizar memberId siempre (puede cambiar de sesión en sesión)
-    conversaciones[telefono].memberId = memberId;
+    // Actualizar memberId y channelId en cada mensaje (pueden variar entre sesiones)
+    conversaciones[telefono].memberId  = memberId;
+    conversaciones[telefono].channelId = channelId;
 
     // Si el step es null (recién reseteado pero ya tenía estado), forzar menú
     if (conversaciones[telefono].step === null) {
