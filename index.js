@@ -155,30 +155,67 @@ async function consultarParteZoho(numeroParte) {
 
 /**
  * Envía un mensaje de texto al cliente a través de la API de Woztell.
- * Usa memberId (ID interno de Woztell) guardado en el estado del cliente.
+ * Prueba los dos endpoints conocidos y logea la respuesta completa para debug.
  * @param {string} telefono - clave del cliente en conversaciones (req.body.from)
  * @param {string} mensaje  - Texto a enviar
  */
 async function enviarMensaje(telefono, mensaje) {
-  // memberId es el identificador interno de Woztell (req.body.member)
   const memberId = conversaciones[telefono]?.memberId;
   if (!memberId) {
     console.error(`[Woztell] Sin memberId para ${telefono}, no se puede enviar el mensaje.`);
     return;
   }
-  console.log(`[Woztell] → ${telefono} (member: ${memberId}): ${mensaje.slice(0, 80)}...`);
-  try {
-    await axios.post(
-      `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
-      {
+
+  // Probamos los dos endpoints documentados; el primero en responder ok:1 gana
+  const endpoints = [
+    "https://bot.api.woztell.com/sendResponses",
+    "https://api.woztell.com/sendResponses",
+  ];
+
+  // Dos variantes de memberId: string plano y objeto con _id (ambas formas vistas en Woztell)
+  const variantesMemberId = [
+    memberId,                   // string: "69df644a0e70e45b41053725"
+    { _id: memberId },          // objeto: { _id: "69df644a0e70e45b41053725" }
+  ];
+
+  console.log(`[Woztell] Enviando a ${telefono} | memberId: ${memberId}`);
+  console.log(`[Woztell] Mensaje: "${mensaje.slice(0, 120)}"`);
+
+  for (const url of endpoints) {
+    for (const memberIdVariante of variantesMemberId) {
+      const body = {
         channelId: process.env.WOZTELL_CHANNEL_ID,
-        memberId,
+        memberId: memberIdVariante,
         response: [{ type: "TEXT", text: mensaje }],
+      };
+
+      console.log(`[Woztell] Intentando → ${url}`);
+      console.log(`[Woztell] Body enviado:`, JSON.stringify(body));
+
+      try {
+        const res = await axios.post(
+          `${url}?accessToken=${process.env.WOZTELL_TOKEN}`,
+          body
+        );
+
+        // Log completo de la respuesta
+        console.log(`[Woztell] HTTP status: ${res.status}`);
+        console.log(`[Woztell] Response body:`, JSON.stringify(res.data));
+
+        // Si Woztell confirma ok:1, paramos aquí
+        if (res.data?.ok === 1) {
+          console.log(`[Woztell] ✅ Enviado correctamente con → ${url} | memberId: ${JSON.stringify(memberIdVariante)}`);
+          return;
+        }
+
+        console.warn(`[Woztell] ⚠️  ok:0 con ${url} y memberId ${JSON.stringify(memberIdVariante)}. Probando siguiente variante...`);
+      } catch (err) {
+        console.error(`[Woztell] ❌ Error HTTP con ${url}:`, err.response?.status, JSON.stringify(err.response?.data) || err.message);
       }
-    );
-  } catch (err) {
-    console.error("[Woztell] Error enviando mensaje:", err.response?.data || err.message);
+    }
   }
+
+  console.error("[Woztell] ❌ Todos los intentos fallaron. Revisa el token, channelId y memberId.");
 }
 
 // ============================================================
