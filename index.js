@@ -524,11 +524,20 @@ app.get("/health", (req, res) => {
 // ── Webhook de Woztell ───────────────────────────────────────
 app.post("/webhook", async (req, res) => {
   try {
+    const tipo = req.body?.type;
+
+    // Ignorar silenciosamente eventos que no son mensajes de texto:
+    // READ, DELIVERED, SENT, etc. Solo procesar type === "TEXT"
+    if (tipo !== "TEXT") {
+      console.log(`[Webhook] Evento ignorado (type: ${tipo})`);
+      return res.sendStatus(200);
+    }
+
     // Extraer datos del body según la estructura real de Woztell
-    const telefono = req.body?.from;      // número del cliente (clave de estado)
-    const memberId = req.body?.member;    // ID interno Woztell para enviar mensajes
-    const channelId = req.body?.channel;  // canal real — puede diferir del .env
-    const texto    = req.body?.data?.text;
+    const telefono  = req.body?.from;      // número del cliente (clave de estado)
+    const memberId  = req.body?.member;    // ID interno Woztell para enviar mensajes
+    const channelId = req.body?.channel;   // canal real — puede diferir del .env
+    const texto     = req.body?.data?.text;
 
     if (!telefono || !memberId || !channelId || !texto) {
       console.warn("[Webhook] Payload incompleto:", JSON.stringify(req.body));
