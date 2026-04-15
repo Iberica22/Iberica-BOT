@@ -9,7 +9,9 @@ const axios = require("axios");
 const OpenAI = require("openai");
 
 const app = express();
-app.use(express.json());
+// Parsear JSON con o sin Content-Type correcto (Woztell puede omitirlo)
+app.use(express.json({ type: "*/*" }));
+app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 3000;
 
