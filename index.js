@@ -84,21 +84,25 @@ async function crearParteZoho(datos) {
   const token = await obtenerTokenZoho();
   const asunto = `Urgencia - ${datos.nombre} - ${new Date().toLocaleDateString("es-ES")}`;
 
+  const body = {
+    data: [
+      {
+        Subject: asunto,
+        Description: datos.descripcion,
+        Phone: datos.telefono,
+        Street: datos.direccion,
+        Status: "Open",
+        Priority: "High",
+      },
+    ],
+  };
+
+  console.log("[Zoho] Creando parte con body:", JSON.stringify(body));
+
   try {
     const res = await axios.post(
       "https://www.zohoapis.eu/crm/v2/Cases",
-      {
-        data: [
-          {
-            Subject: asunto,
-            Description: datos.descripcion,
-            Phone: datos.telefono,
-            Street: datos.direccion,
-            Status: "Open",
-            Priority: "High",
-          },
-        ],
-      },
+      body,
       {
         headers: {
           Authorization: `Zoho-oauthtoken ${token}`,
@@ -107,12 +111,16 @@ async function crearParteZoho(datos) {
       }
     );
 
+    console.log(`[Zoho] HTTP ${res.status} | Response:`, JSON.stringify(res.data));
+
     const parte = res.data.data?.[0];
     const id = parte?.details?.id || parte?.id || "N/D";
     console.log(`[Zoho] Parte creado con ID: ${id}`);
     return id;
   } catch (err) {
-    console.error("[Zoho] Error creando parte:", err.response?.data || err.message);
+    console.error("[Zoho] ❌ HTTP status:", err.response?.status);
+    console.error("[Zoho] ❌ Response body:", JSON.stringify(err.response?.data));
+    console.error("[Zoho] ❌ Message:", err.message);
     throw new Error("Error al crear el parte en Zoho");
   }
 }
