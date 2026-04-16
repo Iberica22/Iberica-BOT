@@ -22,8 +22,16 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const ASSISTANT_ID = "asst_TGm5TBJYuHyAAKirANa1n0QC";
 
 // ── Estado de conversaciones en memoria ────────────────────
-// Estructura por cliente: { step, nombre, telefono, direccion, descripcion, thread_id }
+// Estructura por cliente: { step, nombre, telefono, direccion, descripcion, thread_id, memberId, channelId }
 const conversaciones = {};
+
+// ── Control del bot por cliente ─────────────────────────────
+// true = bot activo (por defecto), false = agente humano atiende
+const botActivo = {};
+
+// ── Registro de actividad por cliente (para el panel admin) ─
+// { [telefono]: { ultimoMensaje, ultimaActividad, mensajesTotal } }
+const actividad = {};
 
 // ── Token de Zoho en memoria ────────────────────────────────
 let zohoAccessToken = null;
@@ -524,6 +532,190 @@ async function procesarMensaje(telefono, texto) {
 // ENDPOINTS EXPRESS
 // ============================================================
 
+// ── Middleware: Basic Auth para rutas /admin ──────────────────
+function authAdmin(req, res, next) {
+  const header = req.headers["authorization"] || "";
+  const b64 = header.replace("Basic ", "");
+  const [user, pass] = Buffer.from(b64, "base64").toString().split(":");
+  if (user === "admin" && pass === process.env.ADMIN_PASSWORD) return next();
+  res.set("WWW-Authenticate", 'Basic realm="Ibérica Seguridad Admin"');
+  res.status(401).send("Acceso restringido");
+}
+
+// ── Panel de administración ───────────────────────────────────
+app.get("/admin", authAdmin, (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ibérica Seguridad — Panel Bot</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #1a1a2e; }
+    header { background: #1a1a2e; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    header h1 { font-size: 1.2rem; font-weight: 600; }
+    header span { font-size: 0.8rem; opacity: 0.6; margin-left: auto; }
+    .container { max-width: 900px; margin: 28px auto; padding: 0 16px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+    .stat { background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .stat .num { font-size: 2rem; font-weight: 700; color: #1a1a2e; }
+    .stat .lbl { font-size: 0.8rem; color: #888; margin-top: 4px; }
+    .stat.verde .num { color: #25d366; }
+    .stat.roja .num { color: #e74c3c; }
+    h2 { font-size: 1rem; font-weight: 600; color: #555; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .card { background: white; border-radius: 12px; padding: 18px 20px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 16px; transition: box-shadow 0.2s; }
+    .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+    .avatar { width: 44px; height: 44px; border-radius: 50%; background: #1a1a2e; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; flex-shrink: 0; }
+    .avatar.inactivo { background: #ccc; }
+    .info { flex: 1; min-width: 0; }
+    .info .tel { font-weight: 600; font-size: 0.95rem; }
+    .info .msg { font-size: 0.82rem; color: #666; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400px; }
+    .info .hora { font-size: 0.75rem; color: #aaa; margin-top: 2px; }
+    .badge { font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: 20px; margin-left: 8px; }
+    .badge.activo { background: #d4f8e2; color: #1a8a3a; }
+    .badge.pausado { background: #fde8e8; color: #c0392b; }
+    .toggle { position: relative; width: 52px; height: 28px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; background: #ccc; border-radius: 28px; cursor: pointer; transition: 0.3s; }
+    .slider:before { content: ""; position: absolute; width: 20px; height: 20px; left: 4px; bottom: 4px; background: white; border-radius: 50%; transition: 0.3s; }
+    input:checked + .slider { background: #25d366; }
+    input:checked + .slider:before { transform: translateX(24px); }
+    .empty { text-align: center; padding: 48px; color: #aaa; font-size: 0.95rem; }
+    #refreshBar { text-align: right; margin-bottom: 10px; font-size: 0.78rem; color: #aaa; }
+    #refreshBar span { font-weight: 600; color: #555; }
+  </style>
+</head>
+<body>
+  <header>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    <h1>Ibérica Seguridad — Panel Bot WhatsApp</h1>
+    <span id="reloj"></span>
+  </header>
+
+  <div class="container">
+    <div class="stats">
+      <div class="stat"><div class="num" id="sTotal">—</div><div class="lbl">Contactos totales</div></div>
+      <div class="stat verde"><div class="num" id="sActivos">—</div><div class="lbl">Bot activo</div></div>
+      <div class="stat roja"><div class="num" id="sPausados">—</div><div class="lbl">Atendidos por agente</div></div>
+    </div>
+
+    <div id="refreshBar">Actualización automática en <span id="cuenta">30</span>s</div>
+    <h2>Conversaciones</h2>
+    <div id="lista"><div class="empty">Aún no hay mensajes recibidos</div></div>
+  </div>
+
+  <script>
+    function hora(ts) {
+      if (!ts) return '—';
+      const d = new Date(ts);
+      const hoy = new Date();
+      const esHoy = d.toDateString() === hoy.toDateString();
+      return esHoy
+        ? d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+        : d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    async function cargar() {
+      const res = await fetch('/admin/api/contactos');
+      const data = await res.json();
+      const lista = document.getElementById('lista');
+      const activos = data.filter(c => c.botActivo).length;
+
+      document.getElementById('sTotal').textContent = data.length;
+      document.getElementById('sActivos').textContent = activos;
+      document.getElementById('sPausados').textContent = data.length - activos;
+
+      if (data.length === 0) {
+        lista.innerHTML = '<div class="empty">Aún no hay mensajes recibidos</div>';
+        return;
+      }
+
+      lista.innerHTML = data.map(c => {
+        const inicial = c.telefono.slice(-2).toUpperCase();
+        return \`
+          <div class="card">
+            <div class="avatar \${c.botActivo ? '' : 'inactivo'}">\${inicial}</div>
+            <div class="info">
+              <div class="tel">
+                \${c.telefono}
+                <span class="badge \${c.botActivo ? 'activo' : 'pausado'}">\${c.botActivo ? '🤖 Bot activo' : '👤 Agente'}</span>
+              </div>
+              <div class="msg">\${c.ultimoMensaje || 'Sin mensajes aún'}</div>
+              <div class="hora">Último mensaje: \${hora(c.ultimaActividad)} · Total: \${c.mensajesTotal} mensaje\${c.mensajesTotal !== 1 ? 's' : ''}</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" \${c.botActivo ? 'checked' : ''} onchange="toggle('\${c.telefono}', this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>\`;
+      }).join('');
+    }
+
+    async function toggle(telefono, activo) {
+      await fetch('/admin/api/toggle/' + encodeURIComponent(telefono), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ activo }) });
+      cargar();
+    }
+
+    // Reloj
+    setInterval(() => {
+      document.getElementById('reloj').textContent = new Date().toLocaleTimeString('es-ES');
+    }, 1000);
+
+    // Auto-refresh cada 30s con cuenta atrás
+    let seg = 30;
+    setInterval(() => {
+      seg--;
+      document.getElementById('cuenta').textContent = seg;
+      if (seg <= 0) { seg = 30; cargar(); }
+    }, 1000);
+
+    cargar();
+  </script>
+</body>
+</html>`);
+});
+
+// ── API: lista de contactos para el panel ─────────────────────
+app.get("/admin/api/contactos", authAdmin, (req, res) => {
+  const lista = Object.keys(actividad).map((telefono) => ({
+    telefono,
+    botActivo: botActivo[telefono] !== false, // true por defecto
+    ultimoMensaje: actividad[telefono]?.ultimoMensaje || null,
+    ultimaActividad: actividad[telefono]?.ultimaActividad || null,
+    mensajesTotal: actividad[telefono]?.mensajesTotal || 0,
+  }));
+  // Ordenar por última actividad (más reciente primero)
+  lista.sort((a, b) => (b.ultimaActividad || 0) - (a.ultimaActividad || 0));
+  res.json(lista);
+});
+
+// ── API: activar/pausar bot para un cliente ───────────────────
+app.post("/admin/api/toggle/:telefono", authAdmin, async (req, res) => {
+  const telefono = decodeURIComponent(req.params.telefono);
+  const activo = req.body?.activo;
+  const estabaActivo = botActivo[telefono] !== false;
+  botActivo[telefono] = activo;
+  console.log(`[Admin] Bot ${activo ? "activado" : "pausado"} para ${telefono}`);
+
+  // Si se acaba de pausar, avisar al cliente que un agente le atenderá
+  if (estabaActivo && !activo && conversaciones[telefono]?.memberId) {
+    await enviarMensaje(
+      telefono,
+      "Un agente de Ibérica Seguridad se pondrá en contacto contigo en breve. ¡Gracias por tu paciencia! 🙏"
+    );
+  }
+
+  // Si se reactiva el bot, reiniciar la conversación con el menú
+  if (!estabaActivo && activo && conversaciones[telefono]?.memberId) {
+    resetearConversacion(telefono);
+    conversaciones[telefono].step = "menu_principal";
+    await enviarMensaje(telefono, MENU_PRINCIPAL);
+  }
+
+  res.json({ ok: true, telefono, botActivo: activo });
+});
+
 // ── Health check ─────────────────────────────────────────────
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
@@ -553,6 +745,18 @@ app.post("/webhook", async (req, res) => {
     }
 
     console.log(`[Webhook] De: ${telefono} | member: ${memberId} | channel: ${channelId} | msg: "${texto}"`);
+
+    // Registrar actividad del cliente (para el panel admin)
+    if (!actividad[telefono]) actividad[telefono] = { mensajesTotal: 0 };
+    actividad[telefono].ultimoMensaje  = texto;
+    actividad[telefono].ultimaActividad = Date.now();
+    actividad[telefono].mensajesTotal++;
+
+    // ── Comprobar si el bot está pausado para este cliente ──
+    if (botActivo[telefono] === false) {
+      console.log(`[Webhook] Bot pausado para ${telefono} — mensaje ignorado`);
+      return res.sendStatus(200);
+    }
 
     // Inicializar conversación si no existe y mostrar menú en primer contacto
     if (!conversaciones[telefono]) {
