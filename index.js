@@ -842,6 +842,49 @@ app.get("/zoho/callback", async (req, res) => {
   }
 });
 
+// ── Test de conexión Zoho CRM ─────────────────────────────────
+// Visita /zoho/test en el navegador para verificar si el token funciona
+app.get("/zoho/test", async (req, res) => {
+  try {
+    const token = await obtenerTokenZoho();
+    const resultados = {};
+
+    // Test 1: información de la organización (más básico)
+    try {
+      const org = await axios.get("https://www.zohoapis.eu/crm/v2/org", {
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+      });
+      resultados.org = { ok: true, nombre: org.data.org?.[0]?.company_name };
+    } catch (e) {
+      resultados.org = { ok: false, status: e.response?.status, error: e.response?.data };
+    }
+
+    // Test 2: listar módulos disponibles
+    try {
+      const modulos = await axios.get("https://www.zohoapis.eu/crm/v2/settings/modules", {
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+      });
+      resultados.modulos = modulos.data.modules?.map(m => m.api_name) || [];
+    } catch (e) {
+      resultados.modulos = { ok: false, status: e.response?.status, error: e.response?.data };
+    }
+
+    // Test 3: acceso directo al módulo Cases
+    try {
+      const cases = await axios.get("https://www.zohoapis.eu/crm/v2/Cases?per_page=1", {
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+      });
+      resultados.cases = { ok: true, total: cases.data.info?.count };
+    } catch (e) {
+      resultados.cases = { ok: false, status: e.response?.status, error: e.response?.data };
+    }
+
+    res.json({ token_primeros_20: token?.slice(0, 20), resultados });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ============================================================
 // ARRANQUE DEL SERVIDOR
 // ============================================================
