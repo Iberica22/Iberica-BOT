@@ -773,17 +773,17 @@ app.get("/admin", authAdmin, (req, res) => {
   <title>Ibérica Seguridad — Panel Bot</title>
   <style>
     :root {
-      --navy: #1B1D35;
-      --navy2: #23264A;
-      --gold: #C49650;
-      --gold-bg: rgba(196,150,80,0.12);
-      --bg: #F4F1EC;
+      --navy: #1A5C2B;
+      --navy2: #26843D;
+      --gold: #747576;
+      --gold-bg: rgba(116,117,118,0.10);
+      --bg: #F5F7F5;
       --white: #FFFFFF;
-      --text: #1B1D35;
-      --muted: #9199B0;
-      --border: #E8E4DC;
-      --green: #25D366;
-      --shadow: 0 2px 10px rgba(27,29,53,0.09);
+      --text: #2A2A2A;
+      --muted: #747576;
+      --border: #E0E8E2;
+      --green: #26843D;
+      --shadow: 0 2px 10px rgba(26,92,43,0.09);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
@@ -906,8 +906,8 @@ app.get("/admin", authAdmin, (req, res) => {
       font-size: 0.66rem; font-weight: 700;
       padding: 2px 8px; border-radius: 20px;
     }
-    .status-pill.on  { background: #D6F5E3; color: #1A7A3A; }
-    .status-pill.off { background: #FEF2DC; color: #9A6810; }
+    .status-pill.on  { background: #D6EFE0; color: #1A5C2B; }
+    .status-pill.off { background: #EBEBEB; color: #747576; }
     .info-msg { font-size: 0.8rem; color: #666; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
     .info-meta { font-size: 0.7rem; color: #bbb; margin-top: 3px; }
 
