@@ -952,12 +952,13 @@ app.get("/admin", authAdmin, (req, res) => {
 
 <script>
   const CANALES = {
-    "69af0932bd6b88aaf5da3887": "General",
-    "69a6981752ac843492cb9ed5": "Mari",
-    "69af0e9ee1c709083b065b8a": "Jose",
-    "69bd11ce7614bf4b4d6f2d3c": "Isabel",
-    "69c3a0276c369daa9f0bbf81": "Nieves"
+    "69af0932bd6b88aaf5da3887": { nombre: "General",  tel: null },
+    "69a6981752ac843492cb9ed5": { nombre: "Mari",     tel: "34674163817" },
+    "69af0e9ee1c709083b065b8a": { nombre: "Jose",     tel: "34674163818" },
+    "69bd11ce7614bf4b4d6f2d3c": { nombre: "Isabel",   tel: "34664658254" },
+    "69c3a0276c369daa9f0bbf81": { nombre: "Nieves",   tel: "34663303461" }
   };
+  function nombreCanal(id) { return CANALES[id]?.nombre || id; }
 
   let tabActivo = "todos";
   let todosContactos = [];
@@ -973,15 +974,11 @@ app.get("/admin", authAdmin, (req, res) => {
 
   function renderTabs(data) {
     const bar = document.getElementById('tabsBar');
-    const canalesVistos = {};
-    data.forEach(c => {
-      const id = c.canalId || 'sin-canal';
-      if (!canalesVistos[id]) canalesVistos[id] = { nombre: c.canalNombre || id, count: 0 };
-      canalesVistos[id].count++;
-    });
+    const conteo = {};
+    data.forEach(c => { const id = c.canalId || 'sin-canal'; conteo[id] = (conteo[id] || 0) + 1; });
 
     const tabs = [{ id: 'todos', nombre: 'Todos', count: data.length }];
-    Object.entries(canalesVistos).forEach(([id, info]) => tabs.push({ id, nombre: info.nombre, count: info.count }));
+    Object.entries(CANALES).forEach(([id, info]) => tabs.push({ id, nombre: info.nombre, count: conteo[id] || 0 }));
 
     bar.innerHTML = tabs.map(t => \`
       <button class="tab-btn \${tabActivo === t.id ? 'active' : ''}" onclick="cambiarTab('\${t.id}')">
@@ -993,7 +990,7 @@ app.get("/admin", authAdmin, (req, res) => {
     const filtrado = tabActivo === 'todos' ? data : data.filter(c => (c.canalId || 'sin-canal') === tabActivo);
     const lista = document.getElementById('lista');
     document.getElementById('secLabel').textContent =
-      tabActivo === 'todos' ? 'Todas las conversaciones' : 'Conversaciones — ' + (CANALES[tabActivo] || tabActivo);
+      tabActivo === 'todos' ? 'Todas las conversaciones' : 'Conversaciones — ' + nombreCanal(tabActivo);
 
     if (filtrado.length === 0) {
       lista.innerHTML = '<div class="empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><p>Sin conversaciones en este canal</p></div>';
