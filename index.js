@@ -186,6 +186,42 @@ async function consultarParteZoho(numeroParte) {
 }
 
 /**
+ * Busca todos los partes de Zoho asociados a un teléfono.
+ * Usa los últimos 9 dígitos para compatibilidad con distintos formatos.
+ * Devuelve el parte más reciente (priorizando los abiertos).
+ * @param {string} telefono - Número en formato Woztell (ej: "34633765620")
+ * @returns {object|null}
+ */
+async function consultarPartePorTelefono(telefono) {
+  const token = await obtenerTokenZoho();
+  const tel9 = telefono.slice(-9);
+
+  try {
+    const res = await axios.get("https://www.zohoapis.eu/crm/v2/Cases/search", {
+      params: { criteria: `(Phone:contains:${tel9})` },
+      headers: { Authorization: `Zoho-oauthtoken ${token}` },
+    });
+
+    const casos = res.data.data;
+    if (!casos || casos.length === 0) return null;
+
+    // Ordenar: primero los no cerrados, luego por fecha de creación desc
+    casos.sort((a, b) => {
+      const abierto = (s) => !["Cerrado", "Closed", "Resuelto"].includes(s);
+      if (abierto(a.Status) && !abierto(b.Status)) return -1;
+      if (!abierto(a.Status) && abierto(b.Status)) return 1;
+      return new Date(b.Created_Time) - new Date(a.Created_Time);
+    });
+
+    return casos[0];
+  } catch (err) {
+    if (err.response?.status === 204) return null;
+    console.error("[Zoho] Error buscando por teléfono:", err.response?.data || err.message);
+    throw new Error("Error al consultar el parte en Zoho");
+  }
+}
+
+/**
  * Usa OpenAI para generar una respuesta amigable sobre el estado de un parte,
  * interpretando los campos más relevantes del Case de Zoho.
  * @param {object} caso - Objeto Case devuelto por Zoho CRM
@@ -432,8 +468,23 @@ async function procesarMensaje(telefono, texto) {
       return;
     }
     if (["4", "estado", "expediente", "parte"].includes(msgLower)) {
-      estado.step = "estado_numero";
-      await enviarMensaje(telefono, "Por favor, indícame la referencia de tu parte (ej: *2026-9866*).");
+      await enviarMensaje(telefono, "🔍 Consultando tus partes...");
+      try {
+        const parte = await consultarPartePorTelefono(telefono);
+        if (!parte) {
+          await enviarMensaje(
+            telefono,
+            "No hemos encontrado ningún parte asociado a tu número de teléfono.\n\nSi crees que es un error, contacta con nosotros directamente."
+          );
+        } else {
+          const respuestaIA = await interpretarParteConIA(parte);
+          await enviarMensaje(telefono, respuestaIA);
+        }
+      } catch (err) {
+        console.error("[Bot] Error consultando parte por teléfono:", err.message);
+        await enviarMensaje(telefono, "Ha ocurrido un error al consultar el parte. Por favor, inténtalo más tarde.");
+      }
+      await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
       return;
     }
     if (["5", "agente", "persona", "humano"].includes(msgLower)) {
@@ -554,37 +605,6 @@ async function procesarMensaje(telefono, texto) {
     return;
   }
 
-  // ── RAMA 4: ESTADO DE PARTE ──────────────────────────────
-  if (estado.step === "estado_numero") {
-    const numeroParte = msg;
-    estado.step = "estado_consultar";
-
-    await enviarMensaje(telefono, `🔍 Consultando tu parte *${numeroParte}*...`);
-
-    try {
-      const parte = await consultarParteZoho(numeroParte);
-
-      if (!parte) {
-        await enviarMensaje(
-          telefono,
-          `No hemos encontrado ningún parte con la referencia *${numeroParte}*.\n\nComprueba el número e inténtalo de nuevo, o contacta con nosotros directamente.`
-        );
-      } else {
-        const respuestaIA = await interpretarParteConIA(parte);
-        await enviarMensaje(telefono, respuestaIA);
-      }
-    } catch (err) {
-      console.error("[Bot] Error en consulta de parte:", err.message);
-      await enviarMensaje(
-        telefono,
-        "Ha ocurrido un error al consultar el parte. Por favor, inténtalo más tarde o contacta con nosotros directamente."
-      );
-    }
-
-    resetearConversacion(telefono);
-    await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
-    return;
-  }
 
   // ── Fallback: mensaje no reconocido ─────────────────────
   console.warn(`[Bot] Step desconocido o mensaje no manejado. step: ${estado.step}`);
