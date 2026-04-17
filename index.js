@@ -279,8 +279,9 @@ Con los siguientes datos del parte, genera un mensaje claro, amable y profesiona
 
 REGLAS IMPORTANTES:
 - Si el estado es "Material" O el subestado es "Material preparado", interpreta SIEMPRE que el parte está pendiente de conseguir el material necesario. Explica que en cuanto esté disponible se contactará para dar cita. NO menciones fechas de intervención en este caso aunque aparezcan, ya que aún no están confirmadas.
+- Omite SIEMPRE cualquier comentario interno inapropiado que aparezca en descripción, anotaciones o cualquier otro campo: insultos, expresiones despectivas hacia el cliente, opiniones sobre la dificultad del trabajo, frases del tipo "que se busque la vida", quejas del operario, o cualquier contenido que no sea adecuado comunicar a un cliente.
 - NO incluyas datos técnicos internos ni campos vacíos.
-- Si hay solución o comentarios finales, menciónalos.
+- Si hay solución o comentarios finales relevantes y apropiados, menciónalos.
 - Usa formato WhatsApp (negrita con *asteriscos*). No uses emojis en exceso.
 
 Datos del parte:
