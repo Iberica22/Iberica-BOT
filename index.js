@@ -41,6 +41,15 @@ const NOMBRES_AGENTES = {
   "34663303461": "Nieves",
 };
 
+// ── Canales Woztell → agente ─────────────────────────────────
+const CANALES_AGENTES = {
+  "69af0932bd6b88aaf5da3887": "General",
+  "69a6981752ac843492cb9ed5": "Mari",
+  "69af0e9ee1c709083b065b8a": "Jose",
+  "69bd11ce7614bf4b4d6f2d3c": "Isabel",
+  "69c3a0276c369daa9f0bbf81": "Nieves",
+};
+
 // ── Token de Zoho en memoria ────────────────────────────────
 let zohoAccessToken = null;
 let zohoTokenExpira = 0; // timestamp en ms cuando expira
@@ -763,129 +772,296 @@ app.get("/admin", authAdmin, (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ibérica Seguridad — Panel Bot</title>
   <style>
+    :root {
+      --navy: #1B1D35;
+      --navy2: #23264A;
+      --gold: #C49650;
+      --gold-bg: rgba(196,150,80,0.12);
+      --bg: #F4F1EC;
+      --white: #FFFFFF;
+      --text: #1B1D35;
+      --muted: #9199B0;
+      --border: #E8E4DC;
+      --green: #25D366;
+      --shadow: 0 2px 10px rgba(27,29,53,0.09);
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #1a1a2e; }
-    header { background: #1a1a2e; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-    header h1 { font-size: 1.2rem; font-weight: 600; }
-    header span { font-size: 0.8rem; opacity: 0.6; margin-left: auto; }
-    .container { max-width: 900px; margin: 28px auto; padding: 0 16px; }
-    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
-    .stat { background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-    .stat .num { font-size: 2rem; font-weight: 700; color: #1a1a2e; }
-    .stat .lbl { font-size: 0.8rem; color: #888; margin-top: 4px; }
-    .stat.verde .num { color: #25d366; }
-    .stat.roja .num { color: #e74c3c; }
-    h2 { font-size: 1rem; font-weight: 600; color: #555; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .card { background: white; border-radius: 12px; padding: 18px 20px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 16px; transition: box-shadow 0.2s; }
-    .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
-    .avatar { width: 44px; height: 44px; border-radius: 50%; background: #1a1a2e; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; flex-shrink: 0; }
-    .avatar.inactivo { background: #ccc; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── Header ── */
+    header {
+      background: var(--navy);
+      padding: 0 32px;
+      height: 62px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.28);
+    }
+    .logo-icon { color: var(--gold); flex-shrink: 0; }
+    .header-title { color: #fff; font-size: 1rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .header-sub { color: rgba(255,255,255,0.35); font-size: 0.75rem; margin-left: 4px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+    .header-clock { margin-left: auto; color: rgba(255,255,255,0.45); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+      background: var(--navy2);
+      padding: 16px 32px;
+      display: flex;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .stat {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 12px 22px;
+      min-width: 130px;
+    }
+    .stat .num { font-size: 1.7rem; font-weight: 800; color: #fff; line-height: 1; }
+    .stat .num.gold { color: var(--gold); }
+    .stat .num.green { color: var(--green); }
+    .stat .lbl { font-size: 0.68rem; color: rgba(255,255,255,0.4); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.07em; }
+
+    /* ── Tabs ── */
+    .tabs-bar {
+      background: var(--navy);
+      padding: 0 32px;
+      display: flex;
+      gap: 2px;
+      overflow-x: auto;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .tabs-bar::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      padding: 12px 18px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.4);
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      letter-spacing: 0.02em;
+    }
+    .tab-btn:hover { color: rgba(255,255,255,0.75); }
+    .tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+    .tab-count {
+      display: inline-block;
+      font-size: 0.62rem;
+      padding: 1px 6px;
+      border-radius: 20px;
+      margin-left: 5px;
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.4);
+      font-weight: 700;
+    }
+    .tab-btn.active .tab-count { background: var(--gold-bg); color: var(--gold); }
+
+    /* ── Content ── */
+    .content { max-width: 880px; margin: 28px auto; padding: 0 24px; }
+    .refresh-bar { text-align: right; margin-bottom: 14px; font-size: 0.73rem; color: var(--muted); }
+    .refresh-bar b { color: var(--text); }
+    .section-label { font-size: 0.68rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--white);
+      border-radius: 12px;
+      padding: 15px 18px;
+      margin-bottom: 9px;
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-left: 3px solid transparent;
+      transition: box-shadow 0.18s, border-color 0.18s;
+    }
+    .card:hover { box-shadow: 0 6px 20px rgba(27,29,53,0.13); }
+    .card.bot-on  { border-left-color: var(--green); }
+    .card.bot-off { border-left-color: var(--gold); }
+
+    .avatar {
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      background: var(--navy);
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 1rem;
+      flex-shrink: 0;
+      letter-spacing: -0.5px;
+    }
+    .card.bot-off .avatar { background: var(--gold); }
+
     .info { flex: 1; min-width: 0; }
-    .info .tel { font-weight: 600; font-size: 0.95rem; }
-    .info .msg { font-size: 0.82rem; color: #666; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400px; }
-    .info .hora { font-size: 0.75rem; color: #aaa; margin-top: 2px; }
-    .badge { font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: 20px; margin-left: 8px; }
-    .badge.activo { background: #d4f8e2; color: #1a8a3a; }
-    .badge.pausado { background: #fde8e8; color: #c0392b; }
-    .toggle { position: relative; width: 52px; height: 28px; flex-shrink: 0; }
+    .info-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .info-name { font-weight: 700; font-size: 0.92rem; }
+    .info-tel { font-size: 0.75rem; color: var(--muted); }
+    .status-pill {
+      font-size: 0.66rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px;
+    }
+    .status-pill.on  { background: #D6F5E3; color: #1A7A3A; }
+    .status-pill.off { background: #FEF2DC; color: #9A6810; }
+    .info-msg { font-size: 0.8rem; color: #666; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
+    .info-meta { font-size: 0.7rem; color: #bbb; margin-top: 3px; }
+
+    /* ── Toggle ── */
+    .toggle { position: relative; width: 48px; height: 26px; flex-shrink: 0; }
     .toggle input { opacity: 0; width: 0; height: 0; }
-    .slider { position: absolute; inset: 0; background: #ccc; border-radius: 28px; cursor: pointer; transition: 0.3s; }
-    .slider:before { content: ""; position: absolute; width: 20px; height: 20px; left: 4px; bottom: 4px; background: white; border-radius: 50%; transition: 0.3s; }
-    input:checked + .slider { background: #25d366; }
-    input:checked + .slider:before { transform: translateX(24px); }
-    .empty { text-align: center; padding: 48px; color: #aaa; font-size: 0.95rem; }
-    #refreshBar { text-align: right; margin-bottom: 10px; font-size: 0.78rem; color: #aaa; }
-    #refreshBar span { font-weight: 600; color: #555; }
+    .slider { position: absolute; inset: 0; background: #D5D8E0; border-radius: 26px; cursor: pointer; transition: 0.28s; }
+    .slider:before { content: ""; position: absolute; width: 18px; height: 18px; left: 4px; bottom: 4px; background: white; border-radius: 50%; transition: 0.28s; box-shadow: 0 1px 4px rgba(0,0,0,0.18); }
+    input:checked + .slider { background: var(--green); }
+    input:checked + .slider:before { transform: translateX(22px); }
+
+    /* ── Empty ── */
+    .empty { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 0.88rem; }
+    .empty svg { opacity: 0.18; margin-bottom: 14px; display: block; margin-left: auto; margin-right: auto; }
   </style>
 </head>
 <body>
-  <header>
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-    <h1>Ibérica Seguridad — Panel Bot WhatsApp</h1>
-    <span id="reloj"></span>
-  </header>
 
-  <div class="container">
-    <div class="stats">
-      <div class="stat"><div class="num" id="sTotal">—</div><div class="lbl">Contactos totales</div></div>
-      <div class="stat verde"><div class="num" id="sActivos">—</div><div class="lbl">Bot activo</div></div>
-      <div class="stat roja"><div class="num" id="sPausados">—</div><div class="lbl">Atendidos por agente</div></div>
-    </div>
-
-    <div id="refreshBar">Actualización automática en <span id="cuenta">30</span>s</div>
-    <h2>Conversaciones</h2>
-    <div id="lista"><div class="empty">Aún no hay mensajes recibidos</div></div>
+<header>
+  <svg class="logo-icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+  <div>
+    <span class="header-title">Ibérica Seguridad</span>
+    <span class="header-sub">Panel Bot WhatsApp</span>
   </div>
+  <div class="header-clock" id="reloj"></div>
+</header>
 
-  <script>
-    function hora(ts) {
-      if (!ts) return '—';
-      const d = new Date(ts);
-      const hoy = new Date();
-      const esHoy = d.toDateString() === hoy.toDateString();
-      return esHoy
-        ? d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-        : d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+<div class="stats-bar">
+  <div class="stat"><div class="num" id="sTotal">—</div><div class="lbl">Contactos</div></div>
+  <div class="stat"><div class="num green" id="sActivos">—</div><div class="lbl">Bot activo</div></div>
+  <div class="stat"><div class="num gold" id="sPausados">—</div><div class="lbl">Con agente</div></div>
+</div>
+
+<div class="tabs-bar" id="tabsBar"></div>
+
+<div class="content">
+  <div class="refresh-bar">Actualización en <b><span id="cuenta">30</span>s</b></div>
+  <div class="section-label" id="secLabel">Conversaciones</div>
+  <div id="lista"><div class="empty">Cargando...</div></div>
+</div>
+
+<script>
+  const CANALES = {
+    "69af0932bd6b88aaf5da3887": "General",
+    "69a6981752ac843492cb9ed5": "Mari",
+    "69af0e9ee1c709083b065b8a": "Jose",
+    "69bd11ce7614bf4b4d6f2d3c": "Isabel",
+    "69c3a0276c369daa9f0bbf81": "Nieves"
+  };
+
+  let tabActivo = "todos";
+  let todosContactos = [];
+
+  function hora(ts) {
+    if (!ts) return '—';
+    const d = new Date(ts);
+    const esHoy = d.toDateString() === new Date().toDateString();
+    return esHoy
+      ? d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function renderTabs(data) {
+    const bar = document.getElementById('tabsBar');
+    const canalesVistos = {};
+    data.forEach(c => {
+      const id = c.canalId || 'sin-canal';
+      if (!canalesVistos[id]) canalesVistos[id] = { nombre: c.canalNombre || id, count: 0 };
+      canalesVistos[id].count++;
+    });
+
+    const tabs = [{ id: 'todos', nombre: 'Todos', count: data.length }];
+    Object.entries(canalesVistos).forEach(([id, info]) => tabs.push({ id, nombre: info.nombre, count: info.count }));
+
+    bar.innerHTML = tabs.map(t => \`
+      <button class="tab-btn \${tabActivo === t.id ? 'active' : ''}" onclick="cambiarTab('\${t.id}')">
+        \${t.nombre}<span class="tab-count">\${t.count}</span>
+      </button>\`).join('');
+  }
+
+  function renderLista(data) {
+    const filtrado = tabActivo === 'todos' ? data : data.filter(c => (c.canalId || 'sin-canal') === tabActivo);
+    const lista = document.getElementById('lista');
+    document.getElementById('secLabel').textContent =
+      tabActivo === 'todos' ? 'Todas las conversaciones' : 'Conversaciones — ' + (CANALES[tabActivo] || tabActivo);
+
+    if (filtrado.length === 0) {
+      lista.innerHTML = '<div class="empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><p>Sin conversaciones en este canal</p></div>';
+      return;
     }
 
-    async function cargar() {
-      const res = await fetch('/admin/api/contactos');
-      const data = await res.json();
-      const lista = document.getElementById('lista');
-      const activos = data.filter(c => c.botActivo).length;
-
-      document.getElementById('sTotal').textContent = data.length;
-      document.getElementById('sActivos').textContent = activos;
-      document.getElementById('sPausados').textContent = data.length - activos;
-
-      if (data.length === 0) {
-        lista.innerHTML = '<div class="empty">Aún no hay mensajes recibidos</div>';
-        return;
-      }
-
-      lista.innerHTML = data.map(c => {
-        const etiqueta = c.nombre || c.telefono;
-        const inicial = c.nombre ? c.nombre[0].toUpperCase() : c.telefono.slice(-2).toUpperCase();
-        return \`
-          <div class="card">
-            <div class="avatar \${c.botActivo ? '' : 'inactivo'}">\${inicial}</div>
-            <div class="info">
-              <div class="tel">
-                \${etiqueta}
-                \${c.nombre ? '<span style="font-size:0.8rem;color:#888;font-weight:400;margin-left:6px;">+\${c.telefono}</span>' : ''}
-                <span class="badge \${c.botActivo ? 'activo' : 'pausado'}">\${c.botActivo ? '🤖 Bot activo' : '👤 Agente'}</span>
-              </div>
-              <div class="msg">\${c.ultimoMensaje || 'Sin mensajes aún'}</div>
-              <div class="hora">Último mensaje: \${hora(c.ultimaActividad)} · Total: \${c.mensajesTotal} mensaje\${c.mensajesTotal !== 1 ? 's' : ''}</div>
+    lista.innerHTML = filtrado.map(c => {
+      const nombre = c.nombre || c.telefono;
+      const inicial = (c.nombre || c.telefono.slice(-2)).charAt(0).toUpperCase();
+      const on = c.botActivo;
+      return \`
+        <div class="card \${on ? 'bot-on' : 'bot-off'}">
+          <div class="avatar">\${inicial}</div>
+          <div class="info">
+            <div class="info-top">
+              <span class="info-name">\${nombre}</span>
+              \${c.nombre ? \`<span class="info-tel">+\${c.telefono}</span>\` : ''}
+              <span class="status-pill \${on ? 'on' : 'off'}">\${on ? 'Bot activo' : 'Agente'}</span>
             </div>
-            <label class="toggle">
-              <input type="checkbox" \${c.botActivo ? 'checked' : ''} onchange="toggle('\${c.telefono}', this.checked)">
-              <span class="slider"></span>
-            </label>
-          </div>\`;
-      }).join('');
-    }
+            <div class="info-msg">\${c.ultimoMensaje || 'Sin mensajes aún'}</div>
+            <div class="info-meta">Último: \${hora(c.ultimaActividad)} &middot; \${c.mensajesTotal} mensaje\${c.mensajesTotal !== 1 ? 's' : ''} &middot; \${c.canalNombre}</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" \${on ? 'checked' : ''} onchange="toggleBot('\${c.telefono}', this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>\`;
+    }).join('');
+  }
 
-    async function toggle(telefono, activo) {
-      await fetch('/admin/api/toggle/' + encodeURIComponent(telefono), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ activo }) });
-      cargar();
-    }
+  async function cargar() {
+    const res = await fetch('/admin/api/contactos');
+    todosContactos = await res.json();
+    const activos = todosContactos.filter(c => c.botActivo).length;
+    document.getElementById('sTotal').textContent = todosContactos.length;
+    document.getElementById('sActivos').textContent = activos;
+    document.getElementById('sPausados').textContent = todosContactos.length - activos;
+    renderTabs(todosContactos);
+    renderLista(todosContactos);
+  }
 
-    // Reloj
-    setInterval(() => {
-      document.getElementById('reloj').textContent = new Date().toLocaleTimeString('es-ES');
-    }, 1000);
+  function cambiarTab(id) {
+    tabActivo = id;
+    renderTabs(todosContactos);
+    renderLista(todosContactos);
+  }
 
-    // Auto-refresh cada 30s con cuenta atrás
-    let seg = 30;
-    setInterval(() => {
-      seg--;
-      document.getElementById('cuenta').textContent = seg;
-      if (seg <= 0) { seg = 30; cargar(); }
-    }, 1000);
-
+  async function toggleBot(telefono, activo) {
+    await fetch('/admin/api/toggle/' + encodeURIComponent(telefono), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activo })
+    });
     cargar();
-  </script>
+  }
+
+  setInterval(() => {
+    document.getElementById('reloj').textContent = new Date().toLocaleTimeString('es-ES');
+  }, 1000);
+
+  let seg = 30;
+  setInterval(() => {
+    seg--;
+    document.getElementById('cuenta').textContent = seg;
+    if (seg <= 0) { seg = 30; cargar(); }
+  }, 1000);
+
+  cargar();
+</script>
 </body>
 </html>`);
 });
@@ -895,12 +1071,13 @@ app.get("/admin/api/contactos", authAdmin, (req, res) => {
   const lista = Object.keys(actividad).map((telefono) => ({
     telefono,
     nombre: NOMBRES_AGENTES[telefono] || null,
-    botActivo: botActivo[telefono] !== false, // true por defecto
+    canalId: actividad[telefono]?.canalId || null,
+    canalNombre: CANALES_AGENTES[actividad[telefono]?.canalId] || "Desconocido",
+    botActivo: botActivo[telefono] !== false,
     ultimoMensaje: actividad[telefono]?.ultimoMensaje || null,
     ultimaActividad: actividad[telefono]?.ultimaActividad || null,
     mensajesTotal: actividad[telefono]?.mensajesTotal || 0,
   }));
-  // Ordenar por última actividad (más reciente primero)
   lista.sort((a, b) => (b.ultimaActividad || 0) - (a.ultimaActividad || 0));
   res.json(lista);
 });
@@ -970,6 +1147,7 @@ app.post("/webhook", async (req, res) => {
     actividad[telefono].ultimoMensaje  = texto;
     actividad[telefono].ultimaActividad = Date.now();
     actividad[telefono].mensajesTotal++;
+    actividad[telefono].canalId = channelId;
     redisSet("iberica:actividad", actividad);
 
     // ── Comprobar si el bot está pausado para este cliente ──
