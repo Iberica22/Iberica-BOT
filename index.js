@@ -277,8 +277,11 @@ Con los siguientes datos del parte, genera un mensaje claro, amable y profesiona
 - Quién lo va a atender (si hay operario asignado)
 - Cualquier información relevante sobre el avance
 
-NO incluyas datos técnicos internos ni campos vacíos. Si hay solución o comentarios finales, menciónalos.
-Usa formato WhatsApp (negrita con *asteriscos*). No uses emojis en exceso.
+REGLAS IMPORTANTES:
+- Si el estado es "Material" O el subestado es "Material preparado", interpreta SIEMPRE que el parte está pendiente de conseguir el material necesario. Explica que en cuanto esté disponible se contactará para dar cita. NO menciones fechas de intervención en este caso aunque aparezcan, ya que aún no están confirmadas.
+- NO incluyas datos técnicos internos ni campos vacíos.
+- Si hay solución o comentarios finales, menciónalos.
+- Usa formato WhatsApp (negrita con *asteriscos*). No uses emojis en exceso.
 
 Datos del parte:
 ${JSON.stringify(datosParte, null, 2)}`;
