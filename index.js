@@ -46,11 +46,15 @@ let zohoTokenExpira = 0; // timestamp en ms cuando expira
  * El access token dura 1 hora; lo guardamos en memoria.
  */
 async function renovarTokenZoho() {
+  const refreshToken = process.env.ZOHO_REFRESH_TOKEN;
   console.log("[Zoho] Renovando access token...");
+  console.log("[Zoho] REFRESH_TOKEN (primeros 30 chars):", refreshToken?.slice(0, 30));
+  console.log("[Zoho] CLIENT_ID:", process.env.ZOHO_CLIENT_ID);
+
   try {
     const res = await axios.post("https://accounts.zoho.eu/oauth/v2/token", null, {
       params: {
-        refresh_token: process.env.ZOHO_REFRESH_TOKEN,
+        refresh_token: refreshToken,
         client_id: process.env.ZOHO_CLIENT_ID,
         client_secret: process.env.ZOHO_CLIENT_SECRET,
         redirect_uri: process.env.ZOHO_REDIRECT_URI,
@@ -58,13 +62,22 @@ async function renovarTokenZoho() {
       },
     });
 
+    console.log("[Zoho] Respuesta renovación HTTP:", res.status);
+    console.log("[Zoho] Respuesta renovación body:", JSON.stringify(res.data));
+
+    if (res.data.error) {
+      console.error("[Zoho] Error en respuesta de renovación:", res.data.error);
+      throw new Error("Zoho devolvió error: " + res.data.error);
+    }
+
     zohoAccessToken = res.data.access_token;
-    // Restamos 60 s de margen para renovar antes de que caduque
     zohoTokenExpira = Date.now() + (res.data.expires_in - 60) * 1000;
-    console.log("[Zoho] Access token renovado correctamente.");
+    console.log("[Zoho] ✅ Access token renovado. Expira en:", res.data.expires_in, "segundos");
     return zohoAccessToken;
   } catch (err) {
-    console.error("[Zoho] Error renovando token:", err.response?.data || err.message);
+    console.error("[Zoho] ❌ Error renovando token — HTTP:", err.response?.status);
+    console.error("[Zoho] ❌ Body:", JSON.stringify(err.response?.data));
+    console.error("[Zoho] ❌ Message:", err.message);
     throw new Error("No se pudo renovar el token de Zoho");
   }
 }
