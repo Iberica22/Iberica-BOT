@@ -12,6 +12,7 @@ const app = express();
 // Parsear JSON con o sin Content-Type correcto (Woztell puede omitirlo)
 app.use(express.json({ type: "*/*" }));
 app.use(express.urlencoded({ extended: true }));
+app.use('/static', require('express').static(require('path').join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
 
@@ -808,23 +809,23 @@ app.get("/admin", authAdmin, (req, res) => {
 
     /* ── Stats bar ── */
     .stats-bar {
-      background: var(--navy2);
+      background: var(--navy);
       padding: 16px 32px;
       display: flex;
       gap: 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+      border-bottom: 2px solid rgba(0,0,0,0.15);
     }
     .stat {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.08);
+      background: #fff;
       border-radius: 10px;
-      padding: 12px 22px;
+      padding: 12px 24px;
       min-width: 130px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.10);
     }
-    .stat .num { font-size: 1.7rem; font-weight: 800; color: #fff; line-height: 1; }
-    .stat .num.gold { color: var(--gold); }
+    .stat .num { font-size: 1.8rem; font-weight: 800; color: var(--navy); line-height: 1; }
     .stat .num.green { color: var(--green); }
-    .stat .lbl { font-size: 0.68rem; color: rgba(255,255,255,0.4); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.07em; }
+    .stat .num.gray  { color: var(--muted); }
+    .stat .lbl { font-size: 0.66rem; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.07em; }
 
     /* ── Tabs ── */
     .tabs-bar {
@@ -927,7 +928,7 @@ app.get("/admin", authAdmin, (req, res) => {
 <body>
 
 <header>
-  <svg class="logo-icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+  <img src="/static/logo.jpg" alt="Ibérica Seguridad" style="height:44px;width:44px;object-fit:cover;border-radius:50%;border:2px solid rgba(255,255,255,0.25);flex-shrink:0;">
   <div>
     <span class="header-title">Ibérica Seguridad</span>
     <span class="header-sub">Panel Bot WhatsApp</span>
@@ -938,7 +939,7 @@ app.get("/admin", authAdmin, (req, res) => {
 <div class="stats-bar">
   <div class="stat"><div class="num" id="sTotal">—</div><div class="lbl">Contactos</div></div>
   <div class="stat"><div class="num green" id="sActivos">—</div><div class="lbl">Bot activo</div></div>
-  <div class="stat"><div class="num gold" id="sPausados">—</div><div class="lbl">Con agente</div></div>
+  <div class="stat"><div class="num gray" id="sPausados">—</div><div class="lbl">Con agente</div></div>
 </div>
 
 <div class="tabs-bar" id="tabsBar"></div>
