@@ -46,6 +46,45 @@ let zohoAccessToken = null;
 let zohoTokenExpira = 0; // timestamp en ms cuando expira
 
 // ============================================================
+// UPSTASH REDIS - Persistencia de estado
+// ============================================================
+
+async function redisGet(key) {
+  if (!process.env.UPSTASH_REDIS_REST_URL) return null;
+  try {
+    const res = await axios.post(process.env.UPSTASH_REDIS_REST_URL, ["GET", key], {
+      headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` },
+    });
+    const val = res.data.result;
+    return val ? JSON.parse(val) : null;
+  } catch (err) {
+    console.error(`[Redis] Error GET ${key}:`, err.message);
+    return null;
+  }
+}
+
+async function redisSet(key, value) {
+  if (!process.env.UPSTASH_REDIS_REST_URL) return;
+  try {
+    await axios.post(process.env.UPSTASH_REDIS_REST_URL, ["SET", key, JSON.stringify(value)], {
+      headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}` },
+    });
+  } catch (err) {
+    console.error(`[Redis] Error SET ${key}:`, err.message);
+  }
+}
+
+async function cargarEstadoDesdeRedis() {
+  const [botActivoGuardado, actividadGuardada] = await Promise.all([
+    redisGet("iberica:botActivo"),
+    redisGet("iberica:actividad"),
+  ]);
+  if (botActivoGuardado) Object.assign(botActivo, botActivoGuardado);
+  if (actividadGuardada) Object.assign(actividad, actividadGuardada);
+  console.log(`[Redis] Estado cargado — ${Object.keys(actividad).length} contactos, ${Object.keys(botActivo).length} estados de bot`);
+}
+
+// ============================================================
 // ZOHO CRM - Gestión de tokens
 // ============================================================
 
@@ -872,6 +911,7 @@ app.post("/admin/api/toggle/:telefono", authAdmin, async (req, res) => {
   const activo = req.body?.activo;
   const estabaActivo = botActivo[telefono] !== false;
   botActivo[telefono] = activo;
+  redisSet("iberica:botActivo", botActivo);
   console.log(`[Admin] Bot ${activo ? "activado" : "pausado"} para ${telefono}`);
 
   // Si se acaba de pausar, avisar al cliente que un agente le atenderá
@@ -930,6 +970,7 @@ app.post("/webhook", async (req, res) => {
     actividad[telefono].ultimoMensaje  = texto;
     actividad[telefono].ultimaActividad = Date.now();
     actividad[telefono].mensajesTotal++;
+    redisSet("iberica:actividad", actividad);
 
     // ── Comprobar si el bot está pausado para este cliente ──
     if (botActivo[telefono] === false) {
@@ -1132,6 +1173,14 @@ app.listen(PORT, async () => {
   console.log(`\n🚀 Ibérica Seguridad Bot arrancado en puerto ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/health`);
   console.log(`   Webhook:      http://localhost:${PORT}/webhook`);
+
+  // Cargar estado persistido desde Redis
+  try {
+    await cargarEstadoDesdeRedis();
+    console.log("✅ Estado cargado desde Redis correctamente.");
+  } catch (err) {
+    console.warn("⚠️  No se pudo cargar el estado desde Redis:", err.message);
+  }
 
   // Pre-cargar el token de Zoho al arrancar para detectar errores de configuración
   try {
