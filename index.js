@@ -33,6 +33,14 @@ const botActivo = {};
 // { [telefono]: { ultimoMensaje, ultimaActividad, mensajesTotal } }
 const actividad = {};
 
+// ── Nombres conocidos de agentes internos ───────────────────
+const NOMBRES_AGENTES = {
+  "34664658254": "Isabel",
+  "34674163818": "Jose",
+  "34674163817": "Mari",
+  "34663303461": "Nieves",
+};
+
 // ── Token de Zoho en memoria ────────────────────────────────
 let zohoAccessToken = null;
 let zohoTokenExpira = 0; // timestamp en ms cuando expira
@@ -645,13 +653,15 @@ app.get("/admin", authAdmin, (req, res) => {
       }
 
       lista.innerHTML = data.map(c => {
-        const inicial = c.telefono.slice(-2).toUpperCase();
+        const etiqueta = c.nombre || c.telefono;
+        const inicial = c.nombre ? c.nombre[0].toUpperCase() : c.telefono.slice(-2).toUpperCase();
         return \`
           <div class="card">
             <div class="avatar \${c.botActivo ? '' : 'inactivo'}">\${inicial}</div>
             <div class="info">
               <div class="tel">
-                \${c.telefono}
+                \${etiqueta}
+                \${c.nombre ? '<span style="font-size:0.8rem;color:#888;font-weight:400;margin-left:6px;">+\${c.telefono}</span>' : ''}
                 <span class="badge \${c.botActivo ? 'activo' : 'pausado'}">\${c.botActivo ? '🤖 Bot activo' : '👤 Agente'}</span>
               </div>
               <div class="msg">\${c.ultimoMensaje || 'Sin mensajes aún'}</div>
@@ -693,6 +703,7 @@ app.get("/admin", authAdmin, (req, res) => {
 app.get("/admin/api/contactos", authAdmin, (req, res) => {
   const lista = Object.keys(actividad).map((telefono) => ({
     telefono,
+    nombre: NOMBRES_AGENTES[telefono] || null,
     botActivo: botActivo[telefono] !== false, // true por defecto
     ultimoMensaje: actividad[telefono]?.ultimoMensaje || null,
     ultimaActividad: actividad[telefono]?.ultimaActividad || null,
@@ -882,6 +893,21 @@ app.get("/zoho/test", async (req, res) => {
     res.json({ token_primeros_20: token?.slice(0, 20), resultados });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Test: ver todos los campos de un Case real ───────────────
+app.get("/zoho/campos-case", async (req, res) => {
+  try {
+    const token = await obtenerTokenZoho();
+    const result = await axios.get("https://www.zohoapis.eu/crm/v2/Cases?per_page=1", {
+      headers: { Authorization: `Zoho-oauthtoken ${token}` },
+    });
+    const caso = result.data.data?.[0];
+    if (!caso) return res.json({ mensaje: "No hay Cases en Zoho" });
+    res.json({ campos: Object.keys(caso), valores: caso });
+  } catch (err) {
+    res.status(500).json({ error: err.message, detail: err.response?.data });
   }
 });
 
