@@ -198,7 +198,7 @@ async function consultarPartePorTelefono(telefono) {
 
   try {
     const res = await axios.get("https://www.zohoapis.eu/crm/v2/Cases/search", {
-      params: { criteria: `(Phone:contains:${tel9})` },
+      params: { criteria: `(Phone:equals:${tel9})` },
       headers: { Authorization: `Zoho-oauthtoken ${token}` },
     });
 
@@ -968,7 +968,7 @@ app.get("/zoho/test-phone/:tel", async (req, res) => {
     const token = await obtenerTokenZoho();
     const tel9 = req.params.tel.slice(-9);
     const result = await axios.get("https://www.zohoapis.eu/crm/v2/Cases/search", {
-      params: { criteria: `(Phone:contains:${tel9})` },
+      params: { criteria: `(Phone:equals:${tel9})` },
       headers: { Authorization: `Zoho-oauthtoken ${token}` },
     });
     res.json({ tel9, total: result.data.data?.length, casos: result.data.data?.map(c => ({ ref: c.ref_Parte, subject: c.Subject, phone: c.Phone, status: c.Status })) });
