@@ -188,36 +188,55 @@ async function consultarParteZoho(numeroParte) {
 const ESTADOS_CERRADOS = ["Cerrado", "Facturado", "Solucionado", "Acabado", "Resuelto", "Closed"];
 
 /**
- * Busca todos los partes de Zoho asociados a un teléfono y los devuelve ordenados.
- * Activos primero, luego por fecha de creación descendente.
+ * Busca todos los partes de un cliente buscando primero su Contacto en Zoho
+ * (por Phone o Mobile) y luego obteniendo los Cases relacionados.
+ * Devuelve los partes ordenados: activos primero, luego por Fecha_Hora_Inicio desc.
  * @param {string} telefono - Número en formato Woztell (ej: "34633765620")
- * @returns {Array} - Lista de partes ordenada (puede estar vacía)
+ * @returns {Array}
  */
-async function consultarPartesPorTelefono(telefono) {
+async function consultarPartesPorContacto(telefono) {
   const token = await obtenerTokenZoho();
   const tel9 = telefono.slice(-9);
 
-  try {
-    const res = await axios.get("https://www.zohoapis.eu/crm/v2/Cases/search", {
-      params: { criteria: `(Phone:equals:${tel9})` },
-      headers: { Authorization: `Zoho-oauthtoken ${token}` },
-    });
+  // 1. Buscar contacto por Phone o Mobile
+  let contactoId = null;
+  for (const campo of ["Phone", "Mobile"]) {
+    try {
+      const res = await axios.get("https://www.zohoapis.eu/crm/v2/Contacts/search", {
+        params: { criteria: `(${campo}:equals:${tel9})` },
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+      });
+      if (res.data.data?.length > 0) {
+        contactoId = res.data.data[0].id;
+        break;
+      }
+    } catch (e) {
+      if (e.response?.status !== 204) throw e;
+    }
+  }
 
-    const casos = res.data.data;
-    if (!casos || casos.length === 0) return [];
+  if (!contactoId) return [];
+
+  // 2. Obtener partes relacionados con ese contacto
+  try {
+    const res = await axios.get(
+      `https://www.zohoapis.eu/crm/v2/Contacts/${contactoId}/Cases`,
+      { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+    );
+    const casos = res.data.data || [];
 
     casos.sort((a, b) => {
       const activo = (s) => !ESTADOS_CERRADOS.includes(s);
       if (activo(a.Status) && !activo(b.Status)) return -1;
       if (!activo(a.Status) && activo(b.Status)) return 1;
-      return new Date(b.Created_Time) - new Date(a.Created_Time);
+      return new Date(b.Fecha_Hora_Inicio || b.Created_Time) - new Date(a.Fecha_Hora_Inicio || a.Created_Time);
     });
 
     return casos;
   } catch (err) {
     if (err.response?.status === 204) return [];
-    console.error("[Zoho] Error buscando por teléfono:", err.response?.data || err.message);
-    throw new Error("Error al consultar el parte en Zoho");
+    console.error("[Zoho] Error obteniendo partes del contacto:", err.response?.data || err.message);
+    throw new Error("Error al consultar los partes en Zoho");
   }
 }
 
@@ -471,7 +490,7 @@ async function procesarMensaje(telefono, texto) {
     if (["4", "estado", "expediente", "parte"].includes(msgLower)) {
       await enviarMensaje(telefono, "🔍 Consultando tus partes...");
       try {
-        const partes = await consultarPartesPorTelefono(telefono);
+        const partes = await consultarPartesPorContacto(telefono);
         if (partes.length === 0) {
           await enviarMensaje(
             telefono,
