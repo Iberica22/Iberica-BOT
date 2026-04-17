@@ -724,12 +724,15 @@ app.get("/health", (req, res) => {
 // ── Webhook de Woztell ───────────────────────────────────────
 app.post("/webhook", async (req, res) => {
   try {
-    const tipo = req.body?.type;
+    const tipo       = req.body?.type;
+    const eventType  = req.body?.eventType;
 
-    // Ignorar silenciosamente eventos que no son mensajes de texto:
-    // READ, DELIVERED, SENT, etc. Solo procesar type === "TEXT"
-    if (tipo !== "TEXT") {
-      console.log(`[Webhook] Evento ignorado (type: ${tipo})`);
+    // Ignorar eventos que no son mensajes de texto entrantes del cliente:
+    // - type !== "TEXT": READ, DELIVERED, SENT, etc.
+    // - eventType !== "INBOUND": mensajes OUTBOUND (los que el propio bot envía)
+    //   Woztell los refleja de vuelta al webhook y causarían un bucle infinito
+    if (tipo !== "TEXT" || eventType !== "INBOUND") {
+      console.log(`[Webhook] Evento ignorado (type: ${tipo}, eventType: ${eventType})`);
       return res.sendStatus(200);
     }
 
