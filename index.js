@@ -1027,6 +1027,53 @@ app.get("/zoho/test", async (req, res) => {
 
 // ── Test: ver todos los campos de un Case real ───────────────
 // ── Test: buscar parte por teléfono ──────────────────────────
+// ── Test: buscar partes via Contacto ─────────────────────────
+app.get("/zoho/test-contacto/:tel", async (req, res) => {
+  try {
+    const token = await obtenerTokenZoho();
+    const tel9 = req.params.tel.slice(-9);
+    const resultado = { tel9, contacto: null, partes: [] };
+
+    // Buscar contacto por Phone o Mobile
+    for (const campo of ["Phone", "Mobile"]) {
+      try {
+        const res = await axios.get("https://www.zohoapis.eu/crm/v2/Contacts/search", {
+          params: { criteria: `(${campo}:equals:${tel9})` },
+          headers: { Authorization: `Zoho-oauthtoken ${token}` },
+        });
+        if (res.data.data?.length > 0) {
+          const c = res.data.data[0];
+          resultado.contacto = { id: c.id, nombre: c.Full_Name, campo };
+          break;
+        }
+      } catch (e) {
+        if (e.response?.status !== 204) resultado[`error_${campo}`] = e.response?.data;
+      }
+    }
+
+    if (!resultado.contacto) {
+      return res.json({ ...resultado, mensaje: "No se encontró contacto con ese teléfono" });
+    }
+
+    // Obtener partes del contacto
+    try {
+      const casesRes = await axios.get(
+        `https://www.zohoapis.eu/crm/v2/Contacts/${resultado.contacto.id}/Cases`,
+        { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+      );
+      resultado.partes = casesRes.data.data?.map(c => ({
+        ref: c.ref_Parte, subject: c.Subject, status: c.Status, fecha: c.Fecha_Hora_Inicio
+      })) || [];
+    } catch (e) {
+      resultado.error_cases = { status: e.response?.status, detail: e.response?.data };
+    }
+
+    res.json(resultado);
+  } catch (err) {
+    res.status(500).json({ error: err.message, detail: err.response?.data });
+  }
+});
+
 app.get("/zoho/test-phone/:tel", async (req, res) => {
   try {
     const token = await obtenerTokenZoho();
