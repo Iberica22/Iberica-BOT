@@ -155,8 +155,8 @@ async function crearParteZoho(datos) {
 }
 
 /**
- * Consulta el estado de un parte en Zoho CRM por número/referencia.
- * @param {string} numeroParte - Número o texto de búsqueda
+ * Consulta el estado de un parte en Zoho CRM por ref_Parte (ej: "2026-9866").
+ * @param {string} numeroParte - Referencia del parte
  * @returns {object|null} - Datos del parte o null si no se encuentra
  */
 async function consultarParteZoho(numeroParte) {
@@ -167,7 +167,7 @@ async function consultarParteZoho(numeroParte) {
       "https://www.zohoapis.eu/crm/v2/Cases/search",
       {
         params: {
-          criteria: `(Subject:contains:${numeroParte})`,
+          criteria: `(ref_Parte:equals:${numeroParte})`,
         },
         headers: {
           Authorization: `Zoho-oauthtoken ${token}`,
@@ -179,11 +179,62 @@ async function consultarParteZoho(numeroParte) {
     if (!casos || casos.length === 0) return null;
     return casos[0];
   } catch (err) {
-    // 204 No Content = no hay resultados, no es un error real
     if (err.response?.status === 204) return null;
     console.error("[Zoho] Error consultando parte:", err.response?.data || err.message);
     throw new Error("Error al consultar el parte en Zoho");
   }
+}
+
+/**
+ * Usa OpenAI para generar una respuesta amigable sobre el estado de un parte,
+ * interpretando los campos más relevantes del Case de Zoho.
+ * @param {object} caso - Objeto Case devuelto por Zoho CRM
+ * @returns {string} - Mensaje natural para enviar al cliente
+ */
+async function interpretarParteConIA(caso) {
+  const formatFecha = (iso) => {
+    if (!iso) return "no especificada";
+    const d = new Date(iso);
+    return d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" }) +
+      " a las " + d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const datosParte = {
+    referencia: caso.ref_Parte || "N/D",
+    asunto: caso.Subject || "N/D",
+    estado: caso.Status || "N/D",
+    subestado: caso.Subestado || null,
+    prioridad: caso.Priority || "N/D",
+    operario: caso.Operario || null,
+    fechaInicio: formatFecha(caso.Fecha_Hora_Inicio),
+    fechaFinal: formatFecha(caso.Fecha_Hora_Final),
+    descripcion: caso.Description || null,
+    anotaciones: caso.Anotaciones || null,
+    solucion: caso.Solution || null,
+    comentariosFinales: caso.Comentarios_Finales || null,
+  };
+
+  const prompt = `Eres el asistente de atención al cliente de Ibérica Seguridad.
+Un cliente pregunta por el estado de su parte de trabajo.
+Con los siguientes datos del parte, genera un mensaje claro, amable y profesional en español (máximo 5 líneas) que le explique:
+- En qué punto está su parte
+- Cuándo está prevista la intervención (si la hay)
+- Quién lo va a atender (si hay operario asignado)
+- Cualquier información relevante sobre el avance
+
+NO incluyas datos técnicos internos ni campos vacíos. Si hay solución o comentarios finales, menciónalos.
+Usa formato WhatsApp (negrita con *asteriscos*). No uses emojis en exceso.
+
+Datos del parte:
+${JSON.stringify(datosParte, null, 2)}`;
+
+  const respuesta = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{ role: "user", content: prompt }],
+    max_tokens: 300,
+  });
+
+  return respuesta.choices[0].message.content.trim();
 }
 
 // ============================================================
@@ -382,7 +433,7 @@ async function procesarMensaje(telefono, texto) {
     }
     if (["4", "estado", "expediente", "parte"].includes(msgLower)) {
       estado.step = "estado_numero";
-      await enviarMensaje(telefono, "Por favor, indícame el número de tu parte o expediente.");
+      await enviarMensaje(telefono, "Por favor, indícame la referencia de tu parte (ej: *2026-9866*).");
       return;
     }
     if (["5", "agente", "persona", "humano"].includes(msgLower)) {
@@ -508,7 +559,7 @@ async function procesarMensaje(telefono, texto) {
     const numeroParte = msg;
     estado.step = "estado_consultar";
 
-    await enviarMensaje(telefono, `🔍 Buscando el parte *${numeroParte}*...`);
+    await enviarMensaje(telefono, `🔍 Consultando tu parte *${numeroParte}*...`);
 
     try {
       const parte = await consultarParteZoho(numeroParte);
@@ -519,17 +570,11 @@ async function procesarMensaje(telefono, texto) {
           `No hemos encontrado ningún parte con la referencia *${numeroParte}*.\n\nComprueba el número e inténtalo de nuevo, o contacta con nosotros directamente.`
         );
       } else {
-        await enviarMensaje(
-          telefono,
-          `📋 *Información del parte ${numeroParte}*\n\n` +
-            `📌 *Asunto:* ${parte.Subject || "N/D"}\n` +
-            `🔄 *Estado:* ${parte.Status || "N/D"}\n` +
-            `⚡ *Prioridad:* ${parte.Priority || "N/D"}\n` +
-            `📅 *Fecha de creación:* ${parte.Created_Time ? new Date(parte.Created_Time).toLocaleDateString("es-ES") : "N/D"}\n` +
-            `📝 *Descripción:* ${parte.Description || "Sin descripción"}`
-        );
+        const respuestaIA = await interpretarParteConIA(parte);
+        await enviarMensaje(telefono, respuestaIA);
       }
     } catch (err) {
+      console.error("[Bot] Error en consulta de parte:", err.message);
       await enviarMensaje(
         telefono,
         "Ha ocurrido un error al consultar el parte. Por favor, inténtalo más tarde o contacta con nosotros directamente."
