@@ -185,14 +185,15 @@ async function consultarParteZoho(numeroParte) {
   }
 }
 
+const ESTADOS_CERRADOS = ["Cerrado", "Facturado", "Solucionado", "Acabado", "Resuelto", "Closed"];
+
 /**
- * Busca todos los partes de Zoho asociados a un teléfono.
- * Usa los últimos 9 dígitos para compatibilidad con distintos formatos.
- * Devuelve el parte más reciente (priorizando los abiertos).
+ * Busca todos los partes de Zoho asociados a un teléfono y los devuelve ordenados.
+ * Activos primero, luego por fecha de creación descendente.
  * @param {string} telefono - Número en formato Woztell (ej: "34633765620")
- * @returns {object|null}
+ * @returns {Array} - Lista de partes ordenada (puede estar vacía)
  */
-async function consultarPartePorTelefono(telefono) {
+async function consultarPartesPorTelefono(telefono) {
   const token = await obtenerTokenZoho();
   const tel9 = telefono.slice(-9);
 
@@ -203,19 +204,18 @@ async function consultarPartePorTelefono(telefono) {
     });
 
     const casos = res.data.data;
-    if (!casos || casos.length === 0) return null;
+    if (!casos || casos.length === 0) return [];
 
-    // Ordenar: primero los no cerrados, luego por fecha de creación desc
     casos.sort((a, b) => {
-      const abierto = (s) => !["Cerrado", "Closed", "Resuelto"].includes(s);
-      if (abierto(a.Status) && !abierto(b.Status)) return -1;
-      if (!abierto(a.Status) && abierto(b.Status)) return 1;
+      const activo = (s) => !ESTADOS_CERRADOS.includes(s);
+      if (activo(a.Status) && !activo(b.Status)) return -1;
+      if (!activo(a.Status) && activo(b.Status)) return 1;
       return new Date(b.Created_Time) - new Date(a.Created_Time);
     });
 
-    return casos[0];
+    return casos;
   } catch (err) {
-    if (err.response?.status === 204) return null;
+    if (err.response?.status === 204) return [];
     console.error("[Zoho] Error buscando por teléfono:", err.response?.data || err.message);
     throw new Error("Error al consultar el parte en Zoho");
   }
@@ -414,8 +414,9 @@ function resetearConversacion(telefono) {
     direccion: null,
     descripcion: null,
     thread_id: threadAnterior,
-    memberId:  memberAnterior,    // ID interno de Woztell para enviar mensajes
-    channelId: channelAnterior,   // canal real del que llega el mensaje (req.body.channel)
+    memberId:  memberAnterior,
+    channelId: channelAnterior,
+    partesCandidatos: null,
   };
 }
 
@@ -470,21 +471,31 @@ async function procesarMensaje(telefono, texto) {
     if (["4", "estado", "expediente", "parte"].includes(msgLower)) {
       await enviarMensaje(telefono, "🔍 Consultando tus partes...");
       try {
-        const parte = await consultarPartePorTelefono(telefono);
-        if (!parte) {
+        const partes = await consultarPartesPorTelefono(telefono);
+        if (partes.length === 0) {
           await enviarMensaje(
             telefono,
             "No hemos encontrado ningún parte asociado a tu número de teléfono.\n\nSi crees que es un error, contacta con nosotros directamente."
           );
+          await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
         } else {
-          const respuestaIA = await interpretarParteConIA(parte);
-          await enviarMensaje(telefono, respuestaIA);
+          const principal = partes[0];
+          estado.partesCandidatos = partes;
+          estado.step = "estado_confirmar";
+          const activo = !ESTADOS_CERRADOS.includes(principal.Status);
+          await enviarMensaje(
+            telefono,
+            `Hemos encontrado tu parte más reciente${activo ? " en curso" : ""}:\n\n` +
+            `📋 *${principal.ref_Parte}* — ${principal.Subject}\n` +
+            `🔄 Estado: *${principal.Status}*\n\n` +
+            `¿Quieres consultar el estado de este parte? Responde *sí* o *no*.`
+          );
         }
       } catch (err) {
-        console.error("[Bot] Error consultando parte por teléfono:", err.message);
+        console.error("[Bot] Error consultando partes por teléfono:", err.message);
         await enviarMensaje(telefono, "Ha ocurrido un error al consultar el parte. Por favor, inténtalo más tarde.");
+        await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
       }
-      await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
       return;
     }
     if (["5", "agente", "persona", "humano"].includes(msgLower)) {
@@ -605,6 +616,59 @@ async function procesarMensaje(telefono, texto) {
     return;
   }
 
+
+  // ── RAMA 4: CONFIRMAR PARTE SUGERIDO ────────────────────
+  if (estado.step === "estado_confirmar") {
+    if (["si", "sí", "s", "yes"].includes(msgLower)) {
+      const parte = estado.partesCandidatos[0];
+      await enviarMensaje(telefono, "⏳ Analizando tu parte...");
+      try {
+        const respuestaIA = await interpretarParteConIA(parte);
+        await enviarMensaje(telefono, respuestaIA);
+      } catch (err) {
+        await enviarMensaje(telefono, "Ha ocurrido un error al analizar el parte. Inténtalo más tarde.");
+      }
+      resetearConversacion(telefono);
+      await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
+    } else if (["no", "n"].includes(msgLower)) {
+      const otros = estado.partesCandidatos.slice(1);
+      if (otros.length === 0) {
+        await enviarMensaje(telefono, "No hay más partes registrados con tu número de teléfono.");
+        resetearConversacion(telefono);
+        await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
+      } else {
+        const lista = otros.map((p, i) =>
+          `${i + 1}. *${p.ref_Parte}* — ${p.Subject} (${p.Status})`
+        ).join("\n");
+        estado.step = "estado_elegir";
+        await enviarMensaje(telefono, `Aquí tienes el resto de tus partes:\n\n${lista}\n\nResponde con el número del que quieres consultar.`);
+      }
+    } else {
+      await enviarMensaje(telefono, "Por favor responde *sí* o *no*.");
+    }
+    return;
+  }
+
+  // ── RAMA 4: ELEGIR PARTE DE LA LISTA ────────────────────
+  if (estado.step === "estado_elegir") {
+    const otros = estado.partesCandidatos.slice(1);
+    const idx = parseInt(msg) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= otros.length) {
+      await enviarMensaje(telefono, `Por favor responde con un número del 1 al ${otros.length}.`);
+      return;
+    }
+    const parte = otros[idx];
+    await enviarMensaje(telefono, "⏳ Analizando tu parte...");
+    try {
+      const respuestaIA = await interpretarParteConIA(parte);
+      await enviarMensaje(telefono, respuestaIA);
+    } catch (err) {
+      await enviarMensaje(telefono, "Ha ocurrido un error al analizar el parte. Inténtalo más tarde.");
+    }
+    resetearConversacion(telefono);
+    await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
+    return;
+  }
 
   // ── Fallback: mensaje no reconocido ─────────────────────
   console.warn(`[Bot] Step desconocido o mensaje no manejado. step: ${estado.step}`);
