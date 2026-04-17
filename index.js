@@ -383,7 +383,7 @@ async function procesarMensaje(telefono, texto) {
         "Perfecto, te pongo en contacto con uno de nuestros agentes. En breve alguien del equipo atenderá tu conversación."
       );
       resetearConversacion(telefono);
-      await enviarMensaje(telefono, MENU_PRINCIPAL);
+      await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
       return;
     }
     // Opción no reconocida
@@ -443,7 +443,7 @@ async function procesarMensaje(telefono, texto) {
     }
 
     resetearConversacion(telefono);
-    await enviarMensaje(telefono, MENU_PRINCIPAL);
+    await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
     return;
   }
 
@@ -470,7 +470,7 @@ async function procesarMensaje(telefono, texto) {
     );
 
     resetearConversacion(telefono);
-    await enviarMensaje(telefono, MENU_PRINCIPAL);
+    await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
     return;
   }
 
@@ -529,7 +529,7 @@ async function procesarMensaje(telefono, texto) {
     }
 
     resetearConversacion(telefono);
-    await enviarMensaje(telefono, MENU_PRINCIPAL);
+    await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
     return;
   }
 
