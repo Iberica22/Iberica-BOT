@@ -44,7 +44,7 @@ const NOMBRES_AGENTES = {
 
 // ── Canales Woztell → agente ─────────────────────────────────
 const CANALES_AGENTES = {
-  "69af0932bd6b88aaf5da3887": "General",
+  "69af0932bd6b88aaf5da3887": "Noe",
   "69a6981752ac843492cb9ed5": "Mari",
   "69af0e9ee1c709083b065b8a": "Jose",
   "69bd11ce7614bf4b4d6f2d3c": "Isabel",
@@ -952,7 +952,7 @@ app.get("/admin", authAdmin, (req, res) => {
 
 <script>
   const CANALES = {
-    "69af0932bd6b88aaf5da3887": { nombre: "General",  tel: null },
+    "69af0932bd6b88aaf5da3887": { nombre: "Noe",      tel: null },
     "69a6981752ac843492cb9ed5": { nombre: "Mari",     tel: "34674163817" },
     "69af0e9ee1c709083b065b8a": { nombre: "Jose",     tel: "34674163818" },
     "69bd11ce7614bf4b4d6f2d3c": { nombre: "Isabel",   tel: "34664658254" },
