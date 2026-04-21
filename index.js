@@ -1047,7 +1047,7 @@ app.get("/admin", authAdmin, (req, res) => {
             <div class="info-meta">Último: \${hora(c.ultimaActividad)} &middot; \${c.mensajesTotal} mensaje\${c.mensajesTotal !== 1 ? 's' : ''} &middot; \${c.canalNombre}</div>
           </div>
           <label class="toggle">
-            <input type="checkbox" \${on ? 'checked' : ''} onchange="toggleBot('\${c.telefono}', this.checked)">
+            <input type="checkbox" \${on ? 'checked' : ''} onchange="toggleBot('\${c.telefono}', this.checked, '\${c.canalId}')">
             <span class="slider"></span>
           </label>
         </div>\`;
@@ -1071,11 +1071,11 @@ app.get("/admin", authAdmin, (req, res) => {
     renderLista(todosContactos);
   }
 
-  async function toggleBot(telefono, activo) {
+  async function toggleBot(telefono, activo, canalId) {
     await fetch('/admin/api/toggle/' + encodeURIComponent(telefono), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activo })
+      body: JSON.stringify({ activo, canalId })
     });
     cargar();
   }
@@ -1099,16 +1099,20 @@ app.get("/admin", authAdmin, (req, res) => {
 
 // ── API: lista de contactos para el panel ─────────────────────
 app.get("/admin/api/contactos", authAdmin, (req, res) => {
-  const lista = Object.keys(actividad).map((telefono) => ({
-    telefono,
-    nombre: NOMBRES_AGENTES[telefono] || null,
-    canalId: actividad[telefono]?.canalId || null,
-    canalNombre: CANALES_AGENTES[actividad[telefono]?.canalId] || "Desconocido",
-    botActivo: botActivo[telefono] !== false,
-    ultimoMensaje: actividad[telefono]?.ultimoMensaje || null,
-    ultimaActividad: actividad[telefono]?.ultimaActividad || null,
-    mensajesTotal: actividad[telefono]?.mensajesTotal || 0,
-  }));
+  const lista = Object.keys(actividad).map((telefono) => {
+    const canalId = actividad[telefono]?.canalId || null;
+    const clave = canalId ? `${canalId}_${telefono}` : telefono;
+    return {
+      telefono,
+      nombre: NOMBRES_AGENTES[telefono] || null,
+      canalId,
+      canalNombre: CANALES_AGENTES[canalId] || "Desconocido",
+      botActivo: botActivo[clave] !== false,
+      ultimoMensaje: actividad[telefono]?.ultimoMensaje || null,
+      ultimaActividad: actividad[telefono]?.ultimaActividad || null,
+      mensajesTotal: actividad[telefono]?.mensajesTotal || 0,
+    };
+  });
   lista.sort((a, b) => (b.ultimaActividad || 0) - (a.ultimaActividad || 0));
   res.json(lista);
 });
@@ -1116,13 +1120,16 @@ app.get("/admin/api/contactos", authAdmin, (req, res) => {
 // ── API: activar/pausar bot para un cliente ───────────────────
 app.post("/admin/api/toggle/:telefono", authAdmin, async (req, res) => {
   const telefono = decodeURIComponent(req.params.telefono);
-  const activo = req.body?.activo;
-  const estabaActivo = botActivo[telefono] !== false;
-  botActivo[telefono] = activo;
-  redisSet("iberica:botActivo", botActivo);
-  console.log(`[Admin] Bot ${activo ? "activado" : "pausado"} para ${telefono}`);
+  const activo   = req.body?.activo;
+  const canalId  = req.body?.canalId || null;
+  const clave    = canalId ? `${canalId}_${telefono}` : telefono;
 
-  // Si se acaba de pausar, avisar al cliente que un agente le atenderá
+  const estabaActivo = botActivo[clave] !== false;
+  botActivo[clave] = activo;
+  redisSet("iberica:botActivo", botActivo);
+  console.log(`[Admin] Bot ${activo ? "activado" : "pausado"} para ${telefono} (canal: ${canalId})`);
+
+  // Si se acaba de pausar, avisar al cliente
   if (estabaActivo && !activo && conversaciones[telefono]?.memberId) {
     await enviarMensaje(
       telefono,
@@ -1137,7 +1144,7 @@ app.post("/admin/api/toggle/:telefono", authAdmin, async (req, res) => {
     await enviarMensaje(telefono, MENU_PRINCIPAL);
   }
 
-  res.json({ ok: true, telefono, botActivo: activo });
+  res.json({ ok: true, telefono, canalId, botActivo: activo });
 });
 
 // ── Health check ─────────────────────────────────────────────
@@ -1181,9 +1188,10 @@ app.post("/webhook", async (req, res) => {
     actividad[telefono].canalId = channelId;
     redisSet("iberica:actividad", actividad);
 
-    // ── Comprobar si el bot está pausado para este cliente ──
-    if (botActivo[telefono] === false) {
-      console.log(`[Webhook] Bot pausado para ${telefono} — mensaje ignorado`);
+    // ── Comprobar si el bot está pausado para este cliente en este canal ──
+    const claveBot = `${channelId}_${telefono}`;
+    if (botActivo[claveBot] === false) {
+      console.log(`[Webhook] Bot pausado para ${telefono} en canal ${channelId} — mensaje ignorado`);
       return res.sendStatus(200);
     }
 
