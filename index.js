@@ -166,7 +166,8 @@ async function crearParteZoho(datos) {
     data: [
       {
         Subject: asunto,
-        Description: `Contacto: ${datos.nombre}\nTeléfono: ${datos.telefono}\nDirección: ${datos.direccion}\n\nDescripción: ${datos.descripcion}`,
+        Description: datos.descripcion,
+        Phone: datos.telefono,
         Street: datos.direccion,
         Status: "Open",
         Priority: "High",
@@ -473,6 +474,23 @@ const MENU_PRINCIPAL =
 /**
  * Comprueba si el mensaje del usuario es un comando de vuelta al menú.
  */
+/**
+ * Valida que el texto sea un número de teléfono español aceptable.
+ * Acepta: 9 dígitos (con o sin espacios/guiones), o con prefijo +34 / 0034.
+ * Devuelve el teléfono limpio (solo dígitos, sin prefijo) o null si no es válido.
+ */
+function validarTelefono(texto) {
+  const soloDigitos = texto.replace(/[\s\-().+]/g, "");
+  // Quitar prefijo internacional si lo trae
+  const numero = soloDigitos.startsWith("0034")
+    ? soloDigitos.slice(4)
+    : soloDigitos.startsWith("34") && soloDigitos.length === 11
+    ? soloDigitos.slice(2)
+    : soloDigitos;
+  // Teléfono español válido: 9 dígitos empezando por 6, 7, 8 o 9
+  return /^[6-9]\d{8}$/.test(numero) ? numero : null;
+}
+
 function esComandoMenu(texto) {
   const normalized = texto.toLowerCase().trim();
   return ["menu", "menú", "volver", "inicio", "hola"].includes(normalized);
@@ -600,7 +618,15 @@ async function procesarMensaje(telefono, texto) {
   }
 
   if (estado.step === "urg_telefono") {
-    estado.telefono = msg;
+    const telLimpio = validarTelefono(msg);
+    if (!telLimpio) {
+      await enviarMensaje(
+        telefono,
+        "⚠️ El número de teléfono no parece correcto.\n\nPor favor, indícame un teléfono español válido de 9 dígitos (ej: *612 345 678*)."
+      );
+      return;
+    }
+    estado.telefono = telLimpio;
     estado.step = "urg_direccion";
     await enviarMensaje(telefono, "¿Cuál es la dirección exacta donde se ha producido la avería?");
     return;
