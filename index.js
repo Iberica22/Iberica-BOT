@@ -192,8 +192,16 @@ async function crearParteZoho(datos) {
     console.log(`[Zoho] HTTP ${res.status} | Response:`, JSON.stringify(res.data));
 
     const parte = res.data.data?.[0];
+
+    // Zoho devuelve HTTP 200 incluso cuando hay errores de validación
+    if (!parte || parte.status === "error" || parte.code !== "SUCCESS") {
+      console.error(`[Zoho] ❌ Creación rechazada: code=${parte?.code} message=${parte?.message}`);
+      console.error(`[Zoho] ❌ Detalles:`, JSON.stringify(parte?.details));
+      throw new Error(`Zoho rechazó el parte: ${parte?.message || "error desconocido"} (${parte?.code})`);
+    }
+
     const id = parte?.details?.id || parte?.id || "N/D";
-    console.log(`[Zoho] Parte creado con ID: ${id}`);
+    console.log(`[Zoho] ✅ Parte creado con ID: ${id}`);
     return id;
   } catch (err) {
     console.error("[Zoho] ❌ HTTP status:", err.response?.status);
