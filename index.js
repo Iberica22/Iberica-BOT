@@ -166,8 +166,7 @@ async function crearParteZoho(datos) {
     data: [
       {
         Subject: asunto,
-        Description: datos.descripcion,
-        Phone: datos.telefono,
+        Description: `Contacto: ${datos.nombre}\nTeléfono: ${datos.telefono}\nDirección: ${datos.direccion}\n\nDescripción: ${datos.descripcion}`,
         Street: datos.direccion,
         Status: "Open",
         Priority: "High",
