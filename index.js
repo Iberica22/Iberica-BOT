@@ -130,7 +130,7 @@ const NOTIFICACIONES_CONFIG = {
   nieves: {
     nombre: "Nieves",
     channelId: CANAL_NOTIFICACIONES,         // Canal de Noe
-    memberId: process.env.WOZTELL_MEMBER_NIEVES, // Pendiente: Nieves escribe al canal de Noe
+    memberId: "69af09f1eb88709353922dbb",   // ✅ Nieves (34663303461) → canal Noe
   },
   guardia: {
     nombre: "Guardia",
