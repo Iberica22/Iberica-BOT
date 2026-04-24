@@ -117,20 +117,22 @@ const CANAL_NOTIFICACIONES = "69af0932bd6b88aaf5da3887";
 // El memberId es el ID que Woztell asigna al agente en ese canal.
 // Se obtiene la primera vez que el agente envíe un mensaje al canal de Noe
 // y se guarda como variable de entorno en Railway.
+// Cada agente recibe la notificación por su propio canal de Woztell.
+// El memberId se obtiene de los logs cuando el agente escribe al bot desde su número.
 const NOTIFICACIONES_CONFIG = {
   mari: {
     nombre: "Mari",
-    channelId: CANAL_NOTIFICACIONES,
+    channelId: "69a6981752ac843492cb9ed5",   // Canal de Mari
     memberId: process.env.WOZTELL_MEMBER_MARI,
   },
   nieves: {
     nombre: "Nieves",
-    channelId: CANAL_NOTIFICACIONES,
-    memberId: process.env.WOZTELL_MEMBER_NIEVES,
+    channelId: "69c3a0276c369daa9f0bbf81",   // Canal de Nieves
+    memberId: "69c3aad256af72de3cb273fa",     // ✅ Confirmado
   },
   guardia: {
     nombre: "Guardia",
-    channelId: "69eb38a636a0436f7146a187",
+    channelId: "69eb38a636a0436f7146a187",   // Canal de Guardia
     memberId: process.env.WOZTELL_MEMBER_GUARDIA,
   },
 };
