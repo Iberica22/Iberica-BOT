@@ -119,21 +119,23 @@ const CANAL_NOTIFICACIONES = "69af0932bd6b88aaf5da3887";
 // y se guarda como variable de entorno en Railway.
 // Cada agente recibe la notificación por su propio canal de Woztell.
 // El memberId se obtiene de los logs cuando el agente escribe al bot desde su número.
+// Todos los avisos salen desde el canal de Noe (siempre activo).
+// El memberId es el del agente cuando escribe desde SU número al canal de Noe.
 const NOTIFICACIONES_CONFIG = {
   mari: {
     nombre: "Mari",
-    channelId: "69a6981752ac843492cb9ed5",   // Canal de Mari
-    memberId: "69a69bf9d95d9a03b3517316",    // ✅ Confirmado
+    channelId: CANAL_NOTIFICACIONES,         // Canal de Noe
+    memberId: "69af09efc4b8eeaf96583f6e",   // ✅ Mari (34674163817) → canal Noe
   },
   nieves: {
     nombre: "Nieves",
-    channelId: "69c3a0276c369daa9f0bbf81",   // Canal de Nieves
-    memberId: "69c3aad256af72de3cb273fa",     // ✅ Confirmado
+    channelId: CANAL_NOTIFICACIONES,         // Canal de Noe
+    memberId: process.env.WOZTELL_MEMBER_NIEVES, // Pendiente: Nieves escribe al canal de Noe
   },
   guardia: {
     nombre: "Guardia",
-    channelId: "69eb38a636a0436f7146a187",   // Canal de Guardia
-    memberId: "69eb39b88de9c6482075d941",    // ✅ Confirmado
+    channelId: CANAL_NOTIFICACIONES,         // Canal de Noe
+    memberId: process.env.WOZTELL_MEMBER_GUARDIA, // Pendiente: Guardia escribe al canal de Noe
   },
 };
 
