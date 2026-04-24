@@ -51,6 +51,57 @@ const CANALES_AGENTES = {
   "69c3a0276c369daa9f0bbf81": "Nieves",
 };
 
+// ── Horarios de activación del bot por canal ──────────────────
+// El bot solo responde automáticamente en las franjas indicadas.
+// Sin horario = siempre activo (ej: Noe).
+// cruzaMedianoche: true → la franja va de inicio hasta el día siguiente a fin.
+const HORARIOS_CANALES = {
+  "69a6981752ac843492cb9ed5": [ // Mari: 15:00 → 07:30
+    { inicio: 15 * 60, fin: 7 * 60 + 30, cruzaMedianoche: true },
+  ],
+  "69af0e9ee1c709083b065b8a": [ // Jose: 15:00 → 07:30
+    { inicio: 15 * 60, fin: 7 * 60 + 30, cruzaMedianoche: true },
+  ],
+  "69bd11ce7614bf4b4d6f2d3c": [ // Isabel: 15:00 → 07:30
+    { inicio: 15 * 60, fin: 7 * 60 + 30, cruzaMedianoche: true },
+  ],
+  "69c3a0276c369daa9f0bbf81": [ // Nieves: 14:00-17:00 y 20:00-09:00
+    { inicio: 14 * 60, fin: 17 * 60,     cruzaMedianoche: false },
+    { inicio: 20 * 60, fin: 9 * 60,      cruzaMedianoche: true  },
+  ],
+};
+
+/**
+ * Devuelve los minutos desde medianoche en la zona horaria de Madrid.
+ */
+function minutosActualesMadrid() {
+  const partes = new Intl.DateTimeFormat("es-ES", {
+    timeZone: "Europe/Madrid",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const h = parseInt(partes.find(p => p.type === "hour").value);
+  const m = parseInt(partes.find(p => p.type === "minute").value);
+  return h * 60 + m;
+}
+
+/**
+ * Comprueba si el bot debe estar activo ahora para un canal dado.
+ * Sin horario configurado → siempre activo.
+ */
+function dentroDeHorario(channelId) {
+  const franjas = HORARIOS_CANALES[channelId];
+  if (!franjas) return true; // Sin restricción (Noe)
+  const minutos = minutosActualesMadrid();
+  return franjas.some(f => {
+    if (f.cruzaMedianoche) {
+      return minutos >= f.inicio || minutos < f.fin;
+    }
+    return minutos >= f.inicio && minutos < f.fin;
+  });
+}
+
 // ── Token de Zoho en memoria ────────────────────────────────
 let zohoAccessToken = null;
 let zohoTokenExpira = 0; // timestamp en ms cuando expira
@@ -1194,6 +1245,26 @@ app.post("/webhook", async (req, res) => {
       console.log(`[Webhook] Bot pausado para ${telefono} en canal ${channelId} — mensaje ignorado`);
       return res.sendStatus(200);
     }
+
+    // ── Comprobar horario de activación del canal ─────────────
+    if (!dentroDeHorario(channelId)) {
+      const agente = CANALES_AGENTES[channelId] || "un agente";
+      console.log(`[Webhook] Fuera de horario para canal ${channelId} (${agente}) — mensaje ignorado`);
+      // Solo avisamos al cliente si es su primer mensaje fuera de horario
+      if (!conversaciones[telefono]?.avisadoFueraHorario) {
+        if (!conversaciones[telefono]) resetearConversacion(telefono);
+        conversaciones[telefono].memberId  = memberId;
+        conversaciones[telefono].channelId = channelId;
+        conversaciones[telefono].avisadoFueraHorario = true;
+        await enviarMensaje(
+          telefono,
+          `Gracias por contactar con *Ibérica Seguridad*. 🛡️\n\nEn este momento nuestro equipo está disponible para atenderte personalmente. En breve ${agente} se pondrá en contacto contigo.\n\nSi tu consulta es urgente, escríbenos y te atenderemos lo antes posible.`
+        );
+      }
+      return res.sendStatus(200);
+    }
+    // Al entrar en horario, resetear el aviso para que la próxima vez fuera lo reciba de nuevo
+    if (conversaciones[telefono]) conversaciones[telefono].avisadoFueraHorario = false;
 
     // Inicializar conversación si no existe y mostrar menú en primer contacto
     if (!conversaciones[telefono]) {
