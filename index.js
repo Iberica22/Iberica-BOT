@@ -133,7 +133,7 @@ const NOTIFICACIONES_CONFIG = {
   guardia: {
     nombre: "Guardia",
     channelId: "69eb38a636a0436f7146a187",   // Canal de Guardia
-    memberId: process.env.WOZTELL_MEMBER_GUARDIA,
+    memberId: "69eb39b88de9c6482075d941",    // ✅ Confirmado
   },
 };
 
