@@ -102,6 +102,95 @@ function dentroDeHorario(channelId) {
   });
 }
 
+// ============================================================
+// NOTIFICACIONES A AGENTES - Configuración
+// ============================================================
+
+// Canal de Noe (siempre activo) → desde aquí salen los avisos a Mari y Nieves
+const CANAL_NOTIFICACIONES = "69af0932bd6b88aaf5da3887";
+
+// Destinatarios según horario:
+//   Mari:    lunes-viernes 07:30–15:00
+//   Nieves:  lunes-viernes 17:00–20:00
+//   Guardia: resto del tiempo y fines de semana
+//
+// El memberId es el ID que Woztell asigna al agente en ese canal.
+// Se obtiene la primera vez que el agente envíe un mensaje al canal de Noe
+// y se guarda como variable de entorno en Railway.
+const NOTIFICACIONES_CONFIG = {
+  mari: {
+    nombre: "Mari",
+    channelId: CANAL_NOTIFICACIONES,
+    memberId: process.env.WOZTELL_MEMBER_MARI,
+  },
+  nieves: {
+    nombre: "Nieves",
+    channelId: CANAL_NOTIFICACIONES,
+    memberId: process.env.WOZTELL_MEMBER_NIEVES,
+  },
+  guardia: {
+    nombre: "Guardia",
+    channelId: "69eb38a636a0436f7146a187",
+    memberId: process.env.WOZTELL_MEMBER_GUARDIA,
+  },
+};
+
+/**
+ * Devuelve el destinatario correcto de la notificación según el día y la hora.
+ * - Lunes-Viernes 07:30-15:00 → Mari
+ * - Lunes-Viernes 17:00-20:00 → Nieves
+ * - Resto (noche/madrugada) y fines de semana → Guardia
+ */
+function determinarDestinatarioNotificacion() {
+  const ahora = new Date();
+  const diaSemana = new Intl.DateTimeFormat("es-ES", {
+    timeZone: "Europe/Madrid",
+    weekday: "long",
+  }).format(ahora).toLowerCase();
+
+  const esFinDeSemana = ["sábado", "domingo"].includes(diaSemana);
+  if (esFinDeSemana) return NOTIFICACIONES_CONFIG.guardia;
+
+  const min = minutosActualesMadrid();
+  const MARI_INI   = 7 * 60 + 30;  // 07:30
+  const MARI_FIN   = 15 * 60;      // 15:00
+  const NIEVES_INI = 17 * 60;      // 17:00
+  const NIEVES_FIN = 20 * 60;      // 20:00
+
+  if (min >= MARI_INI   && min < MARI_FIN)   return NOTIFICACIONES_CONFIG.mari;
+  if (min >= NIEVES_INI && min < NIEVES_FIN) return NOTIFICACIONES_CONFIG.nieves;
+  return NOTIFICACIONES_CONFIG.guardia;
+}
+
+/**
+ * Envía un mensaje de notificación a un agente (Mari, Nieves o Guardia)
+ * usando la API de Woztell con su memberId configurado.
+ */
+async function enviarNotificacionAgente(destinatario, mensaje) {
+  if (!destinatario.memberId) {
+    console.warn(`[Notificación] ⚠️ Sin memberId para ${destinatario.nombre} — revisa la variable WOZTELL_MEMBER_${destinatario.nombre.toUpperCase()} en Railway.`);
+    return;
+  }
+  const body = {
+    channelId: destinatario.channelId,
+    memberId: destinatario.memberId,
+    response: [{ type: "TEXT", text: mensaje }],
+  };
+  try {
+    const res = await axios.post(
+      `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
+      body
+    );
+    if (res.data?.ok === 1) {
+      console.log(`[Notificación] ✅ Aviso enviado a ${destinatario.nombre}`);
+    } else {
+      console.error(`[Notificación] ❌ ok:0 — ${JSON.stringify(res.data)}`);
+    }
+  } catch (err) {
+    console.error(`[Notificación] ❌ Error enviando a ${destinatario.nombre}:`, err.response?.data || err.message);
+  }
+}
+
 // ── Token de Zoho en memoria ────────────────────────────────
 let zohoAccessToken = null;
 let zohoTokenExpira = 0; // timestamp en ms cuando expira
@@ -205,25 +294,103 @@ async function obtenerTokenZoho() {
 // ============================================================
 
 /**
+ * Busca un contacto en Zoho por teléfono (9 dígitos).
+ * Si existe → devuelve su ID. Si no existe → lo crea y devuelve el nuevo ID.
+ * @param {object} datos - { nombre, telefono (9 dígitos), direccion }
+ * @returns {string} - ID del contacto en Zoho
+ */
+async function buscarOCrearContactoZoho(datos) {
+  const token = await obtenerTokenZoho();
+  const tel9 = datos.telefono.slice(-9);
+
+  // 1. Buscar contacto existente por Phone o Mobile
+  for (const campo of ["Phone", "Mobile"]) {
+    try {
+      const res = await axios.get("https://www.zohoapis.eu/crm/v2/Contacts/search", {
+        params: { criteria: `(${campo}:equals:${tel9})` },
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+      });
+      if (res.data.data?.length > 0) {
+        const contacto = res.data.data[0];
+        console.log(`[Zoho] Contacto existente encontrado: ${contacto.id} (${contacto.Full_Name})`);
+        return contacto.id;
+      }
+    } catch (e) {
+      if (e.response?.status !== 204) throw e;
+    }
+  }
+
+  // 2. Crear contacto nuevo
+  console.log(`[Zoho] Contacto no encontrado — creando nuevo para ${datos.nombre} (${tel9})`);
+  const bodyContacto = {
+    data: [{
+      Last_Name: datos.nombre,
+      Phone: tel9,
+      Mobile: tel9,
+      Mailing_Street: datos.direccion,
+    }],
+  };
+
+  const res = await axios.post(
+    "https://www.zohoapis.eu/crm/v2/Contacts",
+    bodyContacto,
+    { headers: { Authorization: `Zoho-oauthtoken ${token}`, "Content-Type": "application/json" } }
+  );
+
+  const contactoNuevo = res.data.data?.[0];
+  if (!contactoNuevo || contactoNuevo.code !== "SUCCESS") {
+    console.error("[Zoho] ❌ No se pudo crear el contacto:", JSON.stringify(contactoNuevo));
+    throw new Error(`Zoho rechazó el contacto: ${contactoNuevo?.message || "error desconocido"}`);
+  }
+
+  const contactoId = contactoNuevo.details?.id;
+  console.log(`[Zoho] ✅ Contacto creado: ${contactoId}`);
+  return contactoId;
+}
+
+/**
  * Crea un parte (Case) en Zoho CRM.
- * @param {object} datos - { nombre, telefono, direccion, descripcion }
- * @returns {string} - Número / ID del parte creado
+ * @param {object} datos - { nombre, telefono, direccion, descripcion, agente }
+ * @returns {{ id: string, refParte: string }}
  */
 async function crearParteZoho(datos) {
   const token = await obtenerTokenZoho();
-  const asunto = `Urgencia - ${datos.nombre} - ${new Date().toLocaleDateString("es-ES")}`;
+
+  // 1. Buscar o crear el contacto en Zoho
+  const contactoId = await buscarOCrearContactoZoho(datos);
+
+  // 2. Preparar fechas en hora de Madrid
+  const ahora = new Date();
+  const unHoraDespues = new Date(ahora.getTime() + 60 * 60 * 1000);
+
+  const formatFechaZoho = (date) => {
+    const p = new Intl.DateTimeFormat("es-ES", {
+      timeZone: "Europe/Madrid",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hour12: false,
+    }).formatToParts(date);
+    const g = (type) => p.find(x => x.type === type).value;
+    return `${g("year")}-${g("month")}-${g("day")}T${g("hour")}:${g("minute")}:${g("second")}`;
+  };
+
+  const tel9 = datos.telefono.slice(-9);
+  const agente = datos.agente || "Bot";
+  const asunto = `Urgencia - ${datos.nombre} - ${ahora.toLocaleDateString("es-ES")}`;
+  const descripcionCompleta = `${datos.descripcion}\n\n📲 Canal: ${agente}`;
 
   const body = {
-    data: [
-      {
-        Subject: asunto,
-        Description: datos.descripcion,
-        Phone: datos.telefono,
-        Street: datos.direccion,
-        Status: "Open",
-        Priority: "High",
-      },
-    ],
+    data: [{
+      Subject:          asunto,
+      Description:      descripcionCompleta,
+      Phone:            tel9,
+      Street:           datos.direccion,
+      Status:           "Open",
+      Priority:         "Urgencia",
+      Fecha_Hora_Inicio: formatFechaZoho(ahora),
+      Fecha_Hora_Final:  formatFechaZoho(unHoraDespues),
+      Contact_Name:     { id: contactoId },
+    }],
   };
 
   console.log("[Zoho] Creando parte con body:", JSON.stringify(body));
@@ -232,28 +399,36 @@ async function crearParteZoho(datos) {
     const res = await axios.post(
       "https://www.zohoapis.eu/crm/v2/Cases",
       body,
-      {
-        headers: {
-          Authorization: `Zoho-oauthtoken ${token}`,
-          "Content-Type": "application/json",
-        },
-      }
+      { headers: { Authorization: `Zoho-oauthtoken ${token}`, "Content-Type": "application/json" } }
     );
 
     console.log(`[Zoho] HTTP ${res.status} | Response:`, JSON.stringify(res.data));
 
     const parte = res.data.data?.[0];
 
-    // Zoho devuelve HTTP 200 incluso cuando hay errores de validación
     if (!parte || parte.status === "error" || parte.code !== "SUCCESS") {
       console.error(`[Zoho] ❌ Creación rechazada: code=${parte?.code} message=${parte?.message}`);
       console.error(`[Zoho] ❌ Detalles:`, JSON.stringify(parte?.details));
       throw new Error(`Zoho rechazó el parte: ${parte?.message || "error desconocido"} (${parte?.code})`);
     }
 
-    const id = parte?.details?.id || parte?.id || "N/D";
-    console.log(`[Zoho] ✅ Parte creado con ID: ${id}`);
-    return id;
+    const id = parte?.details?.id || parte?.id;
+    console.log(`[Zoho] ✅ Parte creado con ID interno: ${id}`);
+
+    // 3. Obtener la Ref. Parte (campo auto-asignado por Zoho, no viene en la respuesta de creación)
+    let refParte = "N/D";
+    try {
+      const detalle = await axios.get(
+        `https://www.zohoapis.eu/crm/v2/Cases/${id}`,
+        { headers: { Authorization: `Zoho-oauthtoken ${token}` } }
+      );
+      refParte = detalle.data.data?.[0]?.ref_Parte || "N/D";
+      console.log(`[Zoho] ✅ Ref. Parte: ${refParte}`);
+    } catch (e) {
+      console.warn("[Zoho] No se pudo obtener ref_Parte tras creación:", e.message);
+    }
+
+    return { id, refParte };
   } catch (err) {
     console.error("[Zoho] ❌ HTTP status:", err.response?.status);
     console.error("[Zoho] ❌ Response body:", JSON.stringify(err.response?.data));
@@ -697,22 +872,42 @@ async function procesarMensaje(telefono, texto) {
     await enviarMensaje(telefono, "⏳ Estamos registrando tu urgencia, un momento...");
 
     try {
-      const idParte = await crearParteZoho({
-        nombre: estado.nombre,
-        telefono: estado.telefono,
-        direccion: estado.direccion,
+      const agente = CANALES_AGENTES[channelId] || "Bot";
+      const { id, refParte } = await crearParteZoho({
+        nombre:      estado.nombre,
+        telefono:    estado.telefono,
+        direccion:   estado.direccion,
         descripcion: estado.descripcion,
+        agente,
       });
 
+      // Mensaje de confirmación al cliente
       await enviarMensaje(
         telefono,
         `✅ Tu parte de urgencia ha sido registrado correctamente.\n\n` +
-          `📋 *Número de parte:* ${idParte}\n` +
-          `👤 Nombre: ${estado.nombre}\n` +
-          `📍 Dirección: ${estado.direccion}\n\n` +
-          `Un técnico se pondrá en contacto contigo lo antes posible. Guarda el número de parte para futuras consultas.`
+        `📋 *Ref. Parte:* ${refParte}\n` +
+        `👤 Nombre: ${estado.nombre}\n` +
+        `📞 Teléfono: ${estado.telefono}\n` +
+        `📍 Dirección: ${estado.direccion}\n\n` +
+        `Un técnico se pondrá en contacto contigo lo antes posible. Guarda la referencia del parte para futuras consultas.`
       );
+
+      // Notificación al agente de turno
+      const destinatario = determinarDestinatarioNotificacion();
+      const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+      const mensajeNotif =
+        `🔔 *Nuevo parte creado*\n` +
+        `👤 Cliente: ${estado.nombre}\n` +
+        `📞 Teléfono: ${estado.telefono}\n` +
+        `📍 Dirección: ${estado.direccion}\n` +
+        `📝 Descripción: ${estado.descripcion}\n` +
+        `🕐 Apertura: ${ahoraStr}\n` +
+        `📋 Ref. Parte: ${refParte}\n` +
+        `📲 Canal: ${agente}`;
+      await enviarNotificacionAgente(destinatario, mensajeNotif);
+
     } catch (err) {
+      console.error("[Bot] Error en creación de parte:", err.message);
       await enviarMensaje(
         telefono,
         "Lo sentimos, hubo un problema al registrar tu parte. Por favor, llámanos directamente para atenderte."
