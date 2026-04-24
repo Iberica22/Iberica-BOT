@@ -874,7 +874,7 @@ async function procesarMensaje(telefono, texto) {
     await enviarMensaje(telefono, "⏳ Estamos registrando tu urgencia, un momento...");
 
     try {
-      const agente = CANALES_AGENTES[channelId] || "Bot";
+      const agente = CANALES_AGENTES[estado.channelId] || "Bot";
       const { id, refParte } = await crearParteZoho({
         nombre:      estado.nombre,
         telefono:    estado.telefono,
