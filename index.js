@@ -1454,7 +1454,10 @@ app.post("/webhook", async (req, res) => {
     // ── Comprobar horario de activación del canal ─────────────
     // En horario comercial el bot está apagado (los agentes atienden en persona)
     // Fuera de horario comercial el bot responde con normalidad
-    if (!dentroDeHorario(channelId)) {
+    const minutosMadrid = minutosActualesMadrid();
+    const activo = dentroDeHorario(channelId);
+    console.log(`[Horario] Canal: ${channelId} | Minutos Madrid: ${minutosMadrid} | Bot activo: ${activo}`);
+    if (!activo) {
       console.log(`[Webhook] Horario comercial — bot inactivo para canal ${channelId}, mensaje ignorado`);
       return res.sendStatus(200);
     }
@@ -1631,6 +1634,33 @@ app.get("/zoho/test-phone/:tel", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message, status: err.response?.status, detail: err.response?.data });
   }
+});
+
+// ── Diagnóstico de horarios ────────────────────────────────
+app.get("/horario", (req, res) => {
+  const ahora = new Date();
+  const minutos = minutosActualesMadrid();
+  const horasMadrid = new Intl.DateTimeFormat("es-ES", {
+    timeZone: "Europe/Madrid",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    weekday: "long", hour12: false,
+  }).format(ahora);
+
+  const estado = {};
+  for (const [canalId, nombre] of Object.entries(CANALES_AGENTES)) {
+    estado[nombre] = {
+      canalId,
+      botActivo: dentroDeHorario(canalId),
+      horario: HORARIOS_CANALES[canalId] || "siempre activo",
+    };
+  }
+
+  res.json({
+    ahoraUTC: ahora.toISOString(),
+    ahoraMadrid: horasMadrid,
+    minutosMadrid: minutos,
+    canales: estado,
+  });
 });
 
 app.get("/zoho/campos-case", async (req, res) => {
