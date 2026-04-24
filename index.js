@@ -123,7 +123,7 @@ const NOTIFICACIONES_CONFIG = {
   mari: {
     nombre: "Mari",
     channelId: "69a6981752ac843492cb9ed5",   // Canal de Mari
-    memberId: process.env.WOZTELL_MEMBER_MARI,
+    memberId: "69a69bf9d95d9a03b3517316",    // ✅ Confirmado
   },
   nieves: {
     nombre: "Nieves",
