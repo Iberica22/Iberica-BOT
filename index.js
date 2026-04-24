@@ -135,7 +135,7 @@ const NOTIFICACIONES_CONFIG = {
   guardia: {
     nombre: "Guardia",
     channelId: CANAL_NOTIFICACIONES,         // Canal de Noe
-    memberId: process.env.WOZTELL_MEMBER_GUARDIA, // Pendiente: Guardia escribe al canal de Noe
+    memberId: "69af09f1be5f7a26df1c2d32",   // ✅ Guardia (34674891529) → canal Noe
   },
 };
 
