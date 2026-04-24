@@ -1438,6 +1438,12 @@ app.post("/webhook", async (req, res) => {
     actividad[telefono].canalId = channelId;
     redisSet("iberica:actividad", actividad);
 
+    // ── Ignorar mensajes de agentes internos (no son clientes) ──────────
+    if (NOMBRES_AGENTES[telefono]) {
+      console.log(`[Webhook] Mensaje de agente interno ${NOMBRES_AGENTES[telefono]} (${telefono}) — ignorado`);
+      return res.sendStatus(200);
+    }
+
     // ── Comprobar si el bot está pausado para este cliente en este canal ──
     const claveBot = `${channelId}_${telefono}`;
     if (botActivo[claveBot] === false) {
