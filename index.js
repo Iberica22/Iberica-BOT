@@ -386,12 +386,12 @@ async function crearParteZoho(datos) {
       Subject:          asunto,
       Description:      descripcionCompleta,
       Phone:            tel9,
-      Street:           datos.direccion,
+      Direccion:        datos.direccion,
       Status:           "Open",
       Priority:         "Urgencia",
       Fecha_Hora_Inicio: formatFechaZoho(ahora),
       Fecha_Hora_Final:  formatFechaZoho(unHoraDespues),
-      Contact_Name:     { id: contactoId },
+      Related_To:       { id: contactoId },
     }],
   };
 
