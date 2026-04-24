@@ -1247,24 +1247,12 @@ app.post("/webhook", async (req, res) => {
     }
 
     // ── Comprobar horario de activación del canal ─────────────
+    // En horario comercial el bot está apagado (los agentes atienden en persona)
+    // Fuera de horario comercial el bot responde con normalidad
     if (!dentroDeHorario(channelId)) {
-      const agente = CANALES_AGENTES[channelId] || "un agente";
-      console.log(`[Webhook] Fuera de horario para canal ${channelId} (${agente}) — mensaje ignorado`);
-      // Solo avisamos al cliente si es su primer mensaje fuera de horario
-      if (!conversaciones[telefono]?.avisadoFueraHorario) {
-        if (!conversaciones[telefono]) resetearConversacion(telefono);
-        conversaciones[telefono].memberId  = memberId;
-        conversaciones[telefono].channelId = channelId;
-        conversaciones[telefono].avisadoFueraHorario = true;
-        await enviarMensaje(
-          telefono,
-          `Gracias por contactar con *Ibérica Seguridad*. 🛡️\n\nEn este momento nuestro equipo está disponible para atenderte personalmente. En breve ${agente} se pondrá en contacto contigo.\n\nSi tu consulta es urgente, escríbenos y te atenderemos lo antes posible.`
-        );
-      }
+      console.log(`[Webhook] Horario comercial — bot inactivo para canal ${channelId}, mensaje ignorado`);
       return res.sendStatus(200);
     }
-    // Al entrar en horario, resetear el aviso para que la próxima vez fuera lo reciba de nuevo
-    if (conversaciones[telefono]) conversaciones[telefono].avisadoFueraHorario = false;
 
     // Inicializar conversación si no existe y mostrar menú en primer contacto
     if (!conversaciones[telefono]) {
