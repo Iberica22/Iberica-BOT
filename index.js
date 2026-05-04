@@ -167,26 +167,49 @@ function determinarDestinatarioNotificacion() {
 }
 
 /**
- * Envía un mensaje de notificación a un agente (Mari, Nieves o Guardia)
- * usando la API de Woztell con su memberId configurado.
+ * Envía una notificación de parte a un agente usando la plantilla aprobada
+ * "nuevo_parte_urgencia" de WhatsApp. Funciona aunque hayan pasado más de
+ * 24h desde el último mensaje del agente (no tiene restricción de sesión).
+ *
+ * @param {object} destinatario - { nombre, channelId, memberId }
+ * @param {object} datos - { nombre, telefono, direccion, descripcion, apertura, refParte, agente }
  */
-async function enviarNotificacionAgente(destinatario, mensaje) {
+async function enviarNotificacionAgente(destinatario, datos) {
   if (!destinatario.memberId) {
-    console.warn(`[Notificación] ⚠️ Sin memberId para ${destinatario.nombre} — revisa la variable WOZTELL_MEMBER_${destinatario.nombre.toUpperCase()} en Railway.`);
+    console.warn(`[Notificación] ⚠️ Sin memberId para ${destinatario.nombre}`);
     return;
   }
   const body = {
     channelId: destinatario.channelId,
-    memberId: destinatario.memberId,
-    response: [{ type: "TEXT", text: mensaje }],
+    memberId:  destinatario.memberId,
+    response: [{
+      type: "template",
+      template: {
+        name:     "nuevo_parte_urgencia",
+        language: { code: "es" },
+        components: [{
+          type: "body",
+          parameters: [
+            { type: "text", text: datos.nombre      },
+            { type: "text", text: datos.telefono    },
+            { type: "text", text: datos.direccion   },
+            { type: "text", text: datos.descripcion },
+            { type: "text", text: datos.apertura    },
+            { type: "text", text: datos.refParte    },
+            { type: "text", text: datos.agente      },
+          ],
+        }],
+      },
+    }],
   };
   try {
     const res = await axios.post(
       `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
       body
     );
+    console.log(`[Notificación] Woztell response:`, JSON.stringify(res.data));
     if (res.data?.ok === 1) {
-      console.log(`[Notificación] ✅ Aviso enviado a ${destinatario.nombre}`);
+      console.log(`[Notificación] ✅ Plantilla enviada a ${destinatario.nombre}`);
     } else {
       console.error(`[Notificación] ❌ ok:0 — ${JSON.stringify(res.data)}`);
     }
@@ -896,19 +919,18 @@ async function procesarMensaje(telefono, texto) {
         `Un técnico se pondrá en contacto contigo lo antes posible. Guarda la referencia del parte para futuras consultas.`
       );
 
-      // Notificación al agente de turno
+      // Notificación al agente de turno (plantilla aprobada por Meta)
       const destinatario = determinarDestinatarioNotificacion();
       const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
-      const mensajeNotif =
-        `🔔 *Nuevo parte creado*\n` +
-        `👤 Cliente: ${estado.nombre}\n` +
-        `📞 Teléfono: ${estado.telefono}\n` +
-        `📍 Dirección: ${estado.direccion}\n` +
-        `📝 Descripción: ${estado.descripcion}\n` +
-        `🕐 Apertura: ${ahoraStr}\n` +
-        `📋 Ref. Parte: ${refParte}\n` +
-        `📲 Canal: ${agente}`;
-      await enviarNotificacionAgente(destinatario, mensajeNotif);
+      await enviarNotificacionAgente(destinatario, {
+        nombre:      estado.nombre,
+        telefono:    estado.telefono,
+        direccion:   estado.direccion,
+        descripcion: estado.descripcion,
+        apertura:    ahoraStr,
+        refParte:    refParte,
+        agente:      agente,
+      });
 
     } catch (err) {
       console.error("[Bot] Error en creación de parte:", err.message);
