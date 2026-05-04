@@ -202,16 +202,45 @@ async function enviarNotificacionAgente(destinatario, datos) {
       },
     }],
   };
+  const enviar = async (payload) => axios.post(
+    `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
+    payload
+  );
+
   try {
-    const res = await axios.post(
-      `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
-      body
-    );
+    const res = await enviar(body);
+    const sendResult = res.data?.sendResult?.result?.[0];
+    const templateOk = sendResult?.ok !== 0;
+
     console.log(`[Notificación] Woztell response:`, JSON.stringify(res.data));
-    if (res.data?.ok === 1) {
+
+    if (res.data?.ok === 1 && templateOk) {
       console.log(`[Notificación] ✅ Plantilla enviada a ${destinatario.nombre}`);
+      return;
+    }
+
+    // Plantilla no soportada por este endpoint — fallback a texto normal
+    console.warn(`[Notificación] ⚠️ Plantilla rechazada (code ${sendResult?.error?.code}), usando texto plano como fallback`);
+    const textoFallback =
+      `🔔 *Nuevo parte creado*\n` +
+      `👤 Cliente: ${datos.nombre}\n` +
+      `📞 Teléfono: ${datos.telefono}\n` +
+      `📍 Dirección: ${datos.direccion}\n` +
+      `📝 Descripción: ${datos.descripcion}\n` +
+      `🕐 Apertura: ${datos.apertura}\n` +
+      `📋 Ref. Parte: ${datos.refParte}\n` +
+      `📲 Canal: ${datos.agente}`;
+
+    const bodyTexto = {
+      channelId: destinatario.channelId,
+      memberId:  destinatario.memberId,
+      response:  [{ type: "TEXT", text: textoFallback }],
+    };
+    const res2 = await enviar(bodyTexto);
+    if (res2.data?.ok === 1) {
+      console.log(`[Notificación] ✅ Texto plano enviado a ${destinatario.nombre}`);
     } else {
-      console.error(`[Notificación] ❌ ok:0 — ${JSON.stringify(res.data)}`);
+      console.error(`[Notificación] ❌ Fallback también falló:`, JSON.stringify(res2.data));
     }
   } catch (err) {
     console.error(`[Notificación] ❌ Error enviando a ${destinatario.nombre}:`, err.response?.data || err.message);
