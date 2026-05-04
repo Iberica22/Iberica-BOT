@@ -183,23 +183,23 @@ async function enviarNotificacionAgente(destinatario, datos) {
     channelId: destinatario.channelId,
     memberId:  destinatario.memberId,
     response: [{
-      type: "hsm",
-      hsm: {
-        element_name: "nuevo_parte_urgencia",
-        language: {
-          policy: "deterministic",
-          code:   "es",
+      type: "TEMPLATE",
+      elementName: "nuevo_parte_urgencia",
+      languageCode: "es",
+      components: [
+        {
+          type: "body",
+          parameters: [
+            { type: "text", text: datos.nombre      },
+            { type: "text", text: datos.telefono    },
+            { type: "text", text: datos.direccion   },
+            { type: "text", text: datos.descripcion },
+            { type: "text", text: datos.apertura    },
+            { type: "text", text: datos.refParte    },
+            { type: "text", text: datos.agente      },
+          ],
         },
-        localizable_params: [
-          { default: datos.nombre      },
-          { default: datos.telefono    },
-          { default: datos.direccion   },
-          { default: datos.descripcion },
-          { default: datos.apertura    },
-          { default: datos.refParte    },
-          { default: datos.agente      },
-        ],
-      },
+      ],
     }],
   };
   const enviar = async (payload) => axios.post(
