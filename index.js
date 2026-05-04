@@ -829,6 +829,9 @@ async function procesarMensaje(telefono, texto) {
 
   // ── Selección del menú principal ────────────────────────
   if (estado.step === "menu_principal") {
+    // Resetear aviso de opción inválida cuando el cliente interactúa de nuevo
+    estado.avisadoOpcionInvalida = false;
+
     if (["1", "urgencia", "averia", "avería", "emergencia"].includes(msgLower)) {
       estado.step = "urg_nombre";
       await enviarMensaje(telefono, "¿Cuál es tu nombre completo?");
@@ -886,7 +889,11 @@ async function procesarMensaje(telefono, texto) {
       await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
       return;
     }
-    // Opción no reconocida
+    // Opción no reconocida — avisar solo la primera vez, luego ignorar
+    if (estado.avisadoOpcionInvalida) {
+      return; // Ya se avisó antes, ignorar silenciosamente
+    }
+    estado.avisadoOpcionInvalida = true;
     await enviarMensaje(telefono, "No he entendido tu opción. Por favor, responde con un número del 1 al 5.");
     return;
   }
