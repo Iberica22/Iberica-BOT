@@ -183,22 +183,22 @@ async function enviarNotificacionAgente(destinatario, datos) {
     channelId: destinatario.channelId,
     memberId:  destinatario.memberId,
     response: [{
-      type: "template",
-      template: {
-        name:     "nuevo_parte_urgencia",
-        language: { code: "es" },
-        components: [{
-          type: "body",
-          parameters: [
-            { type: "text", text: datos.nombre      },
-            { type: "text", text: datos.telefono    },
-            { type: "text", text: datos.direccion   },
-            { type: "text", text: datos.descripcion },
-            { type: "text", text: datos.apertura    },
-            { type: "text", text: datos.refParte    },
-            { type: "text", text: datos.agente      },
-          ],
-        }],
+      type: "hsm",
+      hsm: {
+        element_name: "nuevo_parte_urgencia",
+        language: {
+          policy: "deterministic",
+          code:   "es",
+        },
+        localizable_params: [
+          { default: datos.nombre      },
+          { default: datos.telefono    },
+          { default: datos.direccion   },
+          { default: datos.descripcion },
+          { default: datos.apertura    },
+          { default: datos.refParte    },
+          { default: datos.agente      },
+        ],
       },
     }],
   };
