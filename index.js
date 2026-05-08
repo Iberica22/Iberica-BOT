@@ -49,6 +49,7 @@ const CANALES_AGENTES = {
   "69af0e9ee1c709083b065b8a": "Jose",
   "69bd11ce7614bf4b4d6f2d3c": "Isabel",
   "69c3a0276c369daa9f0bbf81": "Nieves",
+  "69fda40ba6876fcf26d5407f": "Soporte",  // Canal oficial 24h (661665929)
 };
 
 // ── Horarios de activación del bot por canal ──────────────────
@@ -1297,7 +1298,8 @@ app.get("/admin", authAdmin, (req, res) => {
     "69a6981752ac843492cb9ed5": { nombre: "Mari",     tel: "34674163817" },
     "69af0e9ee1c709083b065b8a": { nombre: "Jose",     tel: "34674163818" },
     "69bd11ce7614bf4b4d6f2d3c": { nombre: "Isabel",   tel: "34664658254" },
-    "69c3a0276c369daa9f0bbf81": { nombre: "Nieves",   tel: "34663303461" }
+    "69c3a0276c369daa9f0bbf81": { nombre: "Nieves",   tel: "34663303461" },
+    "69fda40ba6876fcf26d5407f": { nombre: "Soporte",  tel: "34661665929" }
   };
   function nombreCanal(id) { return CANALES[id]?.nombre || id; }
 
