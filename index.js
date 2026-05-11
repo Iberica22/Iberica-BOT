@@ -16,7 +16,9 @@ app.use('/static', require('express').static(require('path').join(__dirname, 'pu
 
 // ── Diagnóstico: loguear TODAS las peticiones entrantes ──────
 app.use((req, res, next) => {
-  console.log(`[DEBUG] ${req.method} ${req.path} | channel: ${req.body?.channel || '-'} | from: ${req.body?.from || '-'} | type: ${req.body?.type || '-'}`);
+  if (req.path === '/webhook') {
+    console.log(`[DEBUG] FULL BODY: ${JSON.stringify(req.body)}`);
+  }
   next();
 });
 
