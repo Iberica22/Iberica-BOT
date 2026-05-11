@@ -14,6 +14,12 @@ app.use(express.json({ type: "*/*" }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/static', require('express').static(require('path').join(__dirname, 'public')));
 
+// ── Diagnóstico: loguear TODAS las peticiones entrantes ──────
+app.use((req, res, next) => {
+  console.log(`[DEBUG] ${req.method} ${req.path} | channel: ${req.body?.channel || '-'} | from: ${req.body?.from || '-'} | type: ${req.body?.type || '-'}`);
+  next();
+});
+
 const PORT = process.env.PORT || 3000;
 
 // ── Cliente OpenAI ──────────────────────────────────────────
