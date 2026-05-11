@@ -14,13 +14,6 @@ app.use(express.json({ type: "*/*" }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/static', require('express').static(require('path').join(__dirname, 'public')));
 
-// ── Diagnóstico: loguear TODAS las peticiones entrantes ──────
-app.use((req, res, next) => {
-  if (req.path === '/webhook') {
-    console.log(`[DEBUG] FULL BODY: ${JSON.stringify(req.body)}`);
-  }
-  next();
-});
 
 const PORT = process.env.PORT || 3000;
 
