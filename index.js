@@ -831,9 +831,6 @@ async function procesarMensaje(telefono, texto) {
 
   // ── Selección del menú principal ────────────────────────
   if (estado.step === "menu_principal") {
-    // Resetear aviso de opción inválida cuando el cliente interactúa de nuevo
-    estado.avisadoOpcionInvalida = false;
-
     if (["1", "urgencia", "averia", "avería", "emergencia"].includes(msgLower)) {
       estado.step = "urg_nombre";
       await enviarMensaje(telefono, "¿Cuál es tu nombre completo?");
