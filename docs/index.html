@@ -1231,23 +1231,9 @@ function mostrarToast(msg) {
 function enviarEmail() {
   if (numUnidades() === 0) { alert('El presupuesto está vacío.'); return; }
   const cli = datosCliente();
-
-  // Paso 1: abrir PDF para que el usuario lo guarde y lo adjunte
-  generarPDF();
-
-  // Paso 2: abrir el cliente de correo con texto de venta
-  setTimeout(() => {
-    const asunto = `Tu presupuesto de seguridad — Ibérica Seguridad`;
-    const cuerpo = textoEmailVenta();
-    const url = `mailto:${encodeURIComponent(cli.email)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
-
-    const win = window.open(url, '_blank');
-    if (!win) {
-      try { window.location.href = url; } catch (e) {}
-    }
-
-    mostrarToast('📎 Guarda el PDF y adjúntalo al email que se ha abierto');
-  }, 700);
+  const asunto = `Tu presupuesto de seguridad — Ibérica Seguridad`;
+  const cuerpo = textoEmailVenta();
+  window.location.href = `mailto:${encodeURIComponent(cli.email)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
 }
 
 </script>
