@@ -1509,6 +1509,45 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    // ── Canal Soporte (encuestas/reseñas) — derivar siempre a agente humano ──
+    // Este canal se usa para envíos automáticos. Si un cliente responde,
+    // pausamos el bot, avisamos al agente de turno y le decimos que le llamamos.
+    const CANAL_SOPORTE = "69fda40ba6876fcf26d5407f";
+    if (channelId === CANAL_SOPORTE) {
+      console.log(`[Webhook] Mensaje en canal Soporte de ${telefono} — derivando a agente`);
+
+      // Inicializar conversación si no existe (para poder enviar mensajes)
+      if (!conversaciones[telefono]) resetearConversacion(telefono);
+      conversaciones[telefono].memberId  = memberId;
+      conversaciones[telefono].channelId = channelId;
+
+      // Pausar el bot para este cliente
+      const claveBot = `${channelId}_${telefono}`;
+      botActivo[claveBot] = false;
+      redisSet("iberica:botActivo", botActivo);
+
+      // Notificar al agente de turno
+      const destinatario = determinarDestinatarioNotificacion();
+      const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+      await enviarNotificacionAgente(destinatario, {
+        nombre:      telefono,
+        telefono:    telefono.slice(-9),
+        direccion:   "—",
+        descripcion: `Respuesta en canal Soporte: "${texto}"`,
+        apertura:    ahoraStr,
+        refParte:    "—",
+        agente:      "Soporte (encuestas)",
+      });
+
+      // Mensaje al cliente
+      await enviarMensaje(
+        telefono,
+        "Gracias por contactar con *Ibérica Seguridad* 🔐\n\nHemos recibido tu mensaje y un agente se pondrá en contacto contigo en breve.\n\nSi necesitas ayuda urgente, llámanos al *661 665 929*."
+      );
+
+      return res.sendStatus(200);
+    }
+
     // ── Comprobar horario de activación del canal ─────────────
     // En horario comercial el bot está apagado (los agentes atienden en persona)
     // Fuera de horario comercial el bot responde con normalidad
