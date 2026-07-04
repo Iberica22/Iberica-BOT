@@ -1,6 +1,11 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="no-js">
 <head>
+<script>
+  if ('IntersectionObserver' in window) {
+    document.documentElement.classList.replace('no-js', 'js-ready');
+  }
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ibérica Seguridad — ¿Tu puerta te protege de verdad?</title>
@@ -202,9 +207,13 @@
   /* ---------- reveal-on-scroll sections ---------- */
   section{ position: relative; padding: 160px 0; }
   .reveal{
+    transition: opacity 1.1s var(--ease), transform 1.1s var(--ease);
+  }
+  /* Only hidden once JS confirms it can reveal them again on scroll;
+     without JS (or if it fails to run) content stays fully visible. */
+  html.js-ready .reveal{
     opacity: 0;
     transform: translateY(28px);
-    transition: opacity 1.1s var(--ease), transform 1.1s var(--ease);
   }
   .reveal.is-visible{ opacity:1; transform:none; }
   .reveal.d1{ transition-delay: .1s; }
