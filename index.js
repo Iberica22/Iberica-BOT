@@ -14,6 +14,12 @@ app.use(express.json({ type: "*/*" }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/static', require('express').static(require('path').join(__dirname, 'public')));
 
+// Landing pública (docs/landing.html) servida en la raíz de la app
+app.get('/', (req, res) => {
+  res.sendFile(require('path').join(__dirname, 'docs', 'landing.html'));
+});
+app.use(require('express').static(require('path').join(__dirname, 'docs')));
+
 
 const PORT = process.env.PORT || 3000;
 
