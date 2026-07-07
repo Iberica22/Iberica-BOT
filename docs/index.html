@@ -1032,6 +1032,11 @@ function numeroPresupuesto() {
 function fechaHoy() {
   return new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
+function fechaValidez() {
+  const d = new Date();
+  d.setDate(d.getDate() + 30);
+  return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+}
 
 /* ---------- PDF (vía impresión del navegador) ---------- */
 function generarPDF() {
@@ -1046,7 +1051,7 @@ function generarPDF() {
     const qty = carrito[idx];
     const baseUd = precioBase(p.precio);
     filas += `<tr>
-      <td>${escHtml(p.descripcion)}<br><span style="color:#999;font-size:10px;">Cód: ${escHtml(p.codigo)} · Ref: ${escHtml(p.ref)}</span></td>
+      <td>${escHtml(p.descripcion)}</td>
       <td class="num">${qty}</td>
       <td class="num">${formatPrecio(baseUd)}</td>
       <td class="num">${formatPrecio(baseUd * qty)}</td>
@@ -1074,23 +1079,43 @@ function generarPDF() {
 
   const cuerpoHTML = `
     <div class="pa-head">
-      <div class="pa-marca">${logoTag}Ibérica Seguridad<span>Asesores en Seguridad</span></div>
-      <div class="pa-meta"><strong>PRESUPUESTO</strong><br>Nº ${num}<br>${fechaHoy()}</div>
+      <div class="pa-marca">
+        ${logoTag}
+        Ibérica Seguridad
+        <span>Asesores en Seguridad · Almería</span>
+        <span class="pa-contacto">📞 950 088 086 · pedidos@ibericaseguridad.com</span>
+      </div>
+      <div class="pa-meta">
+        <strong>PRESUPUESTO</strong><br>
+        Nº ${num}<br>
+        Fecha: ${fechaHoy()}<br>
+        <span class="validez">Válido hasta: ${fechaValidez()}</span>
+      </div>
     </div>
     ${clienteBloque}
-    <h3>Detalle</h3>
+    <h3>Solución propuesta</h3>
     <table>
-      <thead><tr><th>Concepto</th><th class="num">Ud.</th><th class="num">Precio</th><th class="num">Importe</th></tr></thead>
+      <thead><tr><th>Concepto</th><th class="num">Ud.</th><th class="num">Precio ud.</th><th class="num">Importe</th></tr></thead>
       <tbody>${filas}</tbody>
     </table>
+    <div class="pa-garantias">
+      <div class="ga-item">✔ Instalación por técnicos certificados — no subcontratamos</div>
+      <div class="ga-item">✔ Garantía de instalación 2 años · materiales con garantía de fabricante</div>
+      <div class="ga-item">✔ Empresa local en Almería con seguro de responsabilidad civil</div>
+      <div class="ga-item">✔ Servicio técnico propio · respuesta en 24–48 h</div>
+    </div>
     <div class="pa-tot">
       <div class="f"><span>Base imponible</span><span>${formatPrecio(t.base)}</span></div>
       <div class="f"><span>IVA (21%)</span><span>${formatPrecio(t.iva)}</span></div>
-      <div class="f big"><span>TOTAL</span><span>${formatPrecio(t.total)}</span></div>
+      <div class="f big"><span>TOTAL (IVA incl.)</span><span>${formatPrecio(t.total)}</span></div>
+    </div>
+    <div class="pa-cta">
+      Para aceptar este presupuesto llámenos al <strong>950 088 086</strong> o responda a este email.<br>
+      Estaremos encantados de resolver cualquier duda antes de confirmar.
     </div>
     <div class="pa-foot">
-      Presupuesto válido durante 30 días. Precios con IVA incluido en el total.<br>
-      Ibérica Seguridad · Almería · Cerrajería, automatismos, domótica y seguridad.
+      Presupuesto válido hasta el ${fechaValidez()}. Precios sujetos a cambio tras esa fecha.<br>
+      Ibérica Seguridad · pedidos@ibericaseguridad.com · 950 088 086 · Almería
     </div>`;
 
   const docHTML = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
@@ -1115,7 +1140,13 @@ function generarPDF() {
   .pa-tot { margin-left:auto; width:260px; font-size:13px; }
   .pa-tot .f { display:flex; justify-content:space-between; padding:4px 0; }
   .pa-tot .f.big { font-size:17px; font-weight:800; color:#2f7a28; border-top:2px solid #4fa845; padding-top:8px; margin-top:4px; }
-  .pa-foot { margin-top:24px; font-size:11px; color:#777; border-top:1px solid #ddd; padding-top:10px; line-height:1.5; }
+  .pa-contacto { display:block; font-size:11px; font-weight:400; color:#555; margin-top:2px; }
+  .validez { color:#c0392b; font-weight:700; }
+  .pa-garantias { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 16px; padding:12px 14px; background:#f0f7f0; border-left:3px solid #4fa845; border-radius:0 6px 6px 0; }
+  .ga-item { font-size:11px; color:#2f5f27; width:100%; line-height:1.5; }
+  .pa-cta { background:#2f7a28; color:#fff; border-radius:8px; padding:14px 16px; margin:16px 0; font-size:13px; line-height:1.6; }
+  .pa-cta strong { font-size:15px; }
+  .pa-foot { margin-top:16px; font-size:10px; color:#999; border-top:1px solid #ddd; padding-top:8px; line-height:1.5; }
   @media print { .toolbar { display:none; } body { padding:0; } @page { margin:16mm; } }
 </style></head><body>
   <div class="toolbar">
@@ -1184,34 +1215,36 @@ function textoEmailVenta() {
     lineas += `   • ${e.concepto} — ${formatPrecio(e.importe * (1 + IVA))}\n`;
   }
 
+  const fv = fechaValidez();
+
   return `Hola${nombre ? ' ' + nombre : ''},
 
-Ha sido un placer asesorarte. Como acordamos, te envío tu presupuesto personalizado con las soluciones que mejor se adaptan a lo que necesitas (lo tienes adjunto en PDF).
+Como acordamos, aquí tienes la solución que te propongo. Te la envío por escrito para que lo tengas todo claro antes de decidir.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PRESUPUESTO Nº ${num} — ${fechaHoy()}
+PRESUPUESTO Nº ${num} · ${fechaHoy()}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${lineas}
    Base imponible:  ${formatPrecio(t.base)}
    IVA (21 %):      ${formatPrecio(t.iva)}
-   TOTAL:           ${formatPrecio(t.total)}
+   ► TOTAL:         ${formatPrecio(t.total)} (IVA incluido)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-¿Por qué confiar en Ibérica Seguridad?
-  ✔ Instalación profesional por técnicos certificados
-  ✔ Materiales de primera calidad con garantía incluida
-  ✔ Asesoramiento personalizado sin ningún compromiso
-  ✔ Servicio técnico local y respuesta rápida en Almería
+Qué incluye este servicio:
+  ✔ Instalación por nuestros propios técnicos certificados (no subcontratamos)
+  ✔ Garantía de instalación de 2 años — si algo falla, lo resolvemos sin coste
+  ✔ Empresa local en Almería con seguro de responsabilidad civil
+  ✔ Materiales con garantía de fabricante
 
-Este presupuesto es válido durante 30 días. Si quieres ajustar algo o tienes cualquier duda, responde a este email o llámanos y lo resolvemos enseguida.
+Este presupuesto está reservado hasta el ${fv}. Después los precios pueden variar por cambios de tarifa.
 
-¿Cuándo te viene bien para hacer la instalación?
+¿Lo hacemos esta semana o la que viene? Dime qué día te va mejor y lo cuadramos sin compromiso.
 
 Un saludo,
-
 Ibérica Seguridad
-Cerrajería · Automatismos · Domótica · Seguridad
-Almería`;
+📞 950 088 086
+📧 pedidos@ibericaseguridad.com
+Almería · Cerrajería · Automatismos · Domótica · Seguridad`;
 }
 
 function mostrarToast(msg) {
