@@ -83,6 +83,15 @@
   .panel-precio { font-size:11px; color:var(--dorado); font-weight:700; }
   .panel-desc { font-size:10px; color:var(--gris-medio); }
 
+  /* ESTEGA SUB-PICKER */
+  .estegat-zona { display:none; margin-top:14px; border-top:1px solid var(--acero); padding-top:14px; }
+  .estegat-titulo { font-size:12px; color:var(--dorado); font-weight:800; text-transform:uppercase; letter-spacing:.06em; margin-bottom:10px; }
+  .estegat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:700px; }
+  .estegat-full { grid-column:1/-1; }
+  .estegat-label { font-size:11px; color:var(--gris-medio); margin-bottom:5px; }
+  .estegat-select, .estegat-input { width:100%; background:var(--acero); color:var(--blanco); border:1px solid #555; border-radius:6px; padding:7px 10px; font-size:13px; box-sizing:border-box; }
+  .estegat-select:focus, .estegat-input:focus { outline:none; border-color:var(--dorado); }
+
   .panel-opciones { background:var(--grafito); border-top:1px solid var(--acero);
     border-bottom:1px solid var(--acero); padding:16px; display:none; }
   .panel-opciones.visible { display:block; }
@@ -168,6 +177,37 @@
   <h2>Tipo de panel / acabado</h2>
   <p class="panel-nota">El precio base incluye panel liso estándar (sapelly o blanco) + tapajuntas. Paneles especiales pueden modificar el precio final.</p>
   <div class="panel-grid" id="panelGrid"></div>
+  <div class="estegat-zona" id="estegatZona">
+    <div class="estegat-titulo">🔩 Configurar panel Estega aluminio</div>
+    <div class="estegat-grid">
+      <div>
+        <div class="estegat-label">Colección</div>
+        <select id="estegatCol" class="estegat-select" onchange="estegatColeccion=this.value">
+          <option value="Líneas">Líneas (HALGA, ISOCA, CINCEL...)</option>
+          <option value="Geométrica">Geométrica (ARGEL, BERLÍN...)</option>
+          <option value="Tradición / Estampación">Tradición / Estampación (BAKRA, DRAGO, MALMO...)</option>
+        </select>
+      </div>
+      <div>
+        <div class="estegat-label">Acabado</div>
+        <select id="estegatAcab" class="estegat-select" onchange="estegatAcabado=this.value">
+          <option value="A consultar">A consultar</option>
+          <option value="Lacado blanco">Lacado blanco</option>
+          <option value="Lacado color estándar">Lacado color estándar</option>
+          <option value="Lacado color especial">Lacado color especial</option>
+          <option value="Folio 1 – Imitación madera (Embero / Nogal)">Folio 1 – Imitación madera (Embero / Nogal)</option>
+          <option value="Folio 2 – Honey Oak / Nutmeg Oak">Folio 2 – Honey Oak / Nutmeg Oak</option>
+          <option value="Folio 3 – Film colores especiales">Folio 3 – Film colores especiales</option>
+        </select>
+      </div>
+      <div class="estegat-full">
+        <div class="estegat-label">Referencia de diseño (opcional — ej: HALGA 4R, ISOCA 3R...)</div>
+        <input type="text" id="estegatDis" class="estegat-input"
+          placeholder="Ej: HALGA 4R · ISOCA 3R 200 · DRAGO · BAKRA..."
+          oninput="estegatDiseno=this.value">
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="panel-opciones" id="panelOpciones">
@@ -380,6 +420,7 @@ const PANELES = [
   { id:'liso',      nombre:'Panel liso estándar (sapelly o blanco)', precio:0,    desc:'Incluido en el precio base' },
   { id:'moldurado-s', nombre:'Panel moldurado sencillo',             precio:150,  desc:'Moldura simple, varios colores disponibles' },
   { id:'moldurado-d', nombre:'Panel moldurado doble / bicolor',      precio:300,  desc:'Mayor detalle decorativo y personalización' },
+  { id:'estega',    nombre:'Panel aluminio Estega',                  precio:null, desc:'Colecciones Líneas, Geométrica y Tradición · Consultar precio según diseño' },
   { id:'especial',  nombre:'Acabado especial (lacado, RAL, diseño...)', precio:null, desc:'Precio a consultar con técnico según diseño' },
 ];
 
@@ -399,6 +440,11 @@ const PANEL_PDF = {
     desc: 'Doble moldura con mayor profundidad visual. Permite acabado bicolor: un color para el marco exterior y otro para el panel central. El mayor impacto decorativo de la gama, para quien cuida cada detalle.',
     colores: 'Bicolor disponible · Amplia gama',
     swatch: 'background:#e8e2d5;border:2px solid #b8a880;box-shadow:inset 7px 7px 0 rgba(0,0,0,.07),inset -7px -7px 0 rgba(255,255,255,.35),inset 16px 16px 0 rgba(0,0,0,.04),inset -16px -16px 0 rgba(255,255,255,.25);',
+  },
+  'estega': {
+    desc: 'Panel de aluminio estampado de alta durabilidad fabricado por Estega (Pontevedra). Sin mantenimiento, resiste golpes, humedad y cambios de temperatura. Tres colecciones: Líneas (HALGA, ISOCA, CINCEL...), Geométrica y Tradición / Estampación (BAKRA, DRAGO, MALMO...). Disponible en lacado blanco, colores RAL e imitación madera natural.',
+    colores: 'Lacado blanco · Lacados RAL estándar y especial · Imitación madera (Embero, Nogal, Honey Oak...)',
+    swatch: 'background:linear-gradient(135deg,#8b5e1a 0%,#a0721e 35%,#7a5010 70%,#5a3a08 100%);border:2px solid #4a2e06;',
   },
   'especial': {
     desc: 'Lacado en cualquier color RAL, acabados texturizados, madera técnica u otros diseños a medida. Si tiene en mente un acabado concreto que no aparece en el catálogo estándar, consúltenos sin compromiso.',
@@ -450,6 +496,9 @@ let modeloSeleccionado = null;
 let panelSeleccionado  = PANELES[0];
 let opcionesActivas    = new Set();
 let catActiva          = 'fichet';
+let estegatColeccion   = 'Líneas';
+let estegatDiseno      = '';
+let estegatAcabado     = 'A consultar';
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function renderModelos() {
@@ -508,6 +557,8 @@ function seleccionar(id) {
   modeloSeleccionado = MODELOS.find(m=>m.id===id);
   panelSeleccionado  = PANELES[0];
   opcionesActivas.clear();
+  estegatColeccion = 'Líneas'; estegatDiseno = ''; estegatAcabado = 'A consultar';
+  document.getElementById('estegatZona').style.display = 'none';
   renderModelos(); renderPaneles();
   document.getElementById('panelOpciones').classList.add('visible');
   document.getElementById('clienteZona').style.display = 'block';
@@ -531,6 +582,7 @@ function filtrar(cat, btn) {
 
 function seleccionarPanel(id) {
   panelSeleccionado = PANELES.find(p=>p.id===id);
+  document.getElementById('estegatZona').style.display = (id==='estega') ? 'block' : 'none';
   actualizarTotal();
 }
 
@@ -605,7 +657,11 @@ function generarPDF() {
   const total      = totalCalculado();
   const notas      = document.getElementById('notasPresupuesto').value.trim();
   const logoTag    = LOGO_DATA_URL ? `<img src="${LOGO_DATA_URL}" style="height:110px;width:auto;display:block;align-self:flex-start;" alt="Ibérica Seguridad">` : '';
-  const panelLabel = catActiva!=='metalica' ? panelSeleccionado?.nombre : modeloSeleccionado.nivel;
+  const panelLabel = catActiva!=='metalica'
+    ? (panelSeleccionado?.id==='estega'
+        ? `Panel aluminio Estega – Col. ${estegatColeccion}${estegatDiseno?' ('+estegatDiseno+')':''}${estegatAcabado!=='A consultar' ? ' – '+estegatAcabado:''}`
+        : panelSeleccionado?.nombre)
+    : modeloSeleccionado.nivel;
   const opcionesSel = [...opcionesActivas].map(id=>OPCIONES.find(o=>o.id===id)).filter(Boolean);
 
   const precioRef  = total!==null ? Math.ceil(total*1.15/50)*50 : null;
@@ -867,7 +923,12 @@ ${clienteBloque}
 <!-- 3b. PANEL / ACABADO -->
 ${(()=>{
   if(catActiva==='metalica') return '';
-  const pd = PANEL_PDF[panelSeleccionado?.id] || PANEL_PDF['liso'];
+  const isEstega = panelSeleccionado?.id === 'estega';
+  const pd = isEstega
+    ? { ...PANEL_PDF['estega'],
+        desc: PANEL_PDF['estega'].desc + (estegatDiseno ? ` Diseño seleccionado: ${estegatDiseno}.` : ''),
+        colores: `Colección ${estegatColeccion} · ${estegatAcabado}` }
+    : (PANEL_PDF[panelSeleccionado?.id] || PANEL_PDF['liso']);
   const precioTag = panelSeleccionado?.precio===null
     ? `<span class="panel-card-precio consul">Precio a consultar</span>`
     : panelSeleccionado?.precio===0
@@ -1012,7 +1073,11 @@ function enviarWhatsApp() {
   const cli        = datosCliente();
   const t          = totalCalculado();
   const fv         = fechaValidez();
-  const panelLabel = catActiva!=='metalica' ? panelSeleccionado?.nombre : modeloSeleccionado.nivel;
+  const panelLabel = catActiva!=='metalica'
+    ? (panelSeleccionado?.id==='estega'
+        ? `Panel aluminio Estega – Col. ${estegatColeccion}${estegatDiseno?' ('+estegatDiseno+')':''}${estegatAcabado!=='A consultar' ? ' – '+estegatAcabado:''}`
+        : panelSeleccionado?.nombre)
+    : modeloSeleccionado.nivel;
   const opcionesLista = [...opcionesActivas].map(id=>{
     const o = OPCIONES.find(x=>x.id===id);
     return o ? `· ${o.nombre}${o.precio?' (+'+formatPrecio(o.precio)+')':' (a consultar)'}` : '';
@@ -1048,7 +1113,11 @@ function enviarEmail() {
   if (!cli.email) { alert('Introduce el email del cliente primero.'); return; }
   const t   = totalCalculado();
   const fv  = fechaValidez();
-  const panelLabel = catActiva!=='metalica' ? panelSeleccionado?.nombre : modeloSeleccionado.nivel;
+  const panelLabel = catActiva!=='metalica'
+    ? (panelSeleccionado?.id==='estega'
+        ? `Panel aluminio Estega – Col. ${estegatColeccion}${estegatDiseno?' ('+estegatDiseno+')':''}${estegatAcabado!=='A consultar' ? ' – '+estegatAcabado:''}`
+        : panelSeleccionado?.nombre)
+    : modeloSeleccionado.nivel;
   const opcionesLista = [...opcionesActivas].map(id=>{
     const o = OPCIONES.find(x=>x.id===id);
     return o ? `  · ${o.nombre}${o.precio?' (+'+formatPrecio(o.precio)+')':' (a consultar)'}` : '';
