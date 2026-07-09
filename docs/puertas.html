@@ -580,7 +580,7 @@ function generarPDF() {
   const num        = numeroPresupuesto();
   const total      = totalCalculado();
   const notas      = document.getElementById('notasPresupuesto').value.trim();
-  const logoTag    = LOGO_DATA_URL ? `<img src="${LOGO_DATA_URL}" style="height:90px;width:auto;display:block;" alt="Ibérica Seguridad">` : '';
+  const logoTag    = LOGO_DATA_URL ? `<img src="${LOGO_DATA_URL}" style="height:110px;width:auto;display:block;background:#fff;padding:4px;border-radius:6px;" alt="Ibérica Seguridad">` : '';
   const panelLabel = catActiva!=='metalica' ? panelSeleccionado?.nombre : modeloSeleccionado.nivel;
   const opcionesSel = [...opcionesActivas].map(id=>OPCIONES.find(o=>o.id===id)).filter(Boolean);
 
@@ -643,10 +643,9 @@ function generarPDF() {
 
   /* CABECERA */
   .hdr{display:flex;justify-content:space-between;align-items:flex-start;padding:16px 0 14px;border-bottom:3px solid #4fa845;margin-bottom:18px;gap:16px}
-  .hdr-empresa{display:flex;flex-direction:column;gap:3px}
-  .hdr-empresa img{max-height:90px;max-width:240px;width:auto;height:auto;display:block;margin-bottom:2px}
-  .hdr-empresa .empresa-nombre{font-size:17px;font-weight:900;color:#0e1f15;margin-top:2px}
-  .hdr-empresa .tagline{font-size:11px;color:#4fa845;font-weight:700}
+  .hdr-empresa{display:flex;flex-direction:column;gap:4px}
+  .hdr-empresa img{max-height:130px;max-width:280px;width:auto;height:auto;display:block;}
+  .hdr-empresa .tagline{font-size:11.5px;color:#4fa845;font-weight:700;margin-top:8px}
   .hdr-empresa .contacto{font-size:11px;color:#666;margin-top:1px}
   .hdr-meta{text-align:right;min-width:165px}
   .hdr-meta .pres-badge{display:inline-block;background:#0e1f15;color:#7ed957;padding:2px 9px;border-radius:3px;font-size:9px;font-weight:900;letter-spacing:.15em;text-transform:uppercase;margin-bottom:5px}
@@ -767,8 +766,8 @@ function generarPDF() {
 <div class="hdr">
   <div class="hdr-empresa">
     ${logoTag}
-    <div class="tagline" style="margin-top:6px">Especialistas en seguridad del hogar · Almería</div>
-    <div class="contacto">950 088 086 · pedidos@ibericaseguridad.com · Almería</div>
+    <div class="tagline">Especialistas en seguridad del hogar · Almería</div>
+    <div class="contacto">950 088 086 · pedidos@ibericaseguridad.com</div>
   </div>
   <div class="hdr-meta">
     <div class="pres-badge">Presupuesto</div>
