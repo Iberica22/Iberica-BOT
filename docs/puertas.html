@@ -580,7 +580,7 @@ function generarPDF() {
   const num        = numeroPresupuesto();
   const total      = totalCalculado();
   const notas      = document.getElementById('notasPresupuesto').value.trim();
-  const logoTag    = LOGO_DATA_URL ? `<img src="${LOGO_DATA_URL}" style="height:55px;width:auto;display:block;" alt="Ibérica Seguridad">` : '';
+  const logoTag    = LOGO_DATA_URL ? `<img src="${LOGO_DATA_URL}" style="max-height:80px;max-width:220px;width:auto;height:auto;display:block;" alt="Ibérica Seguridad">` : '';
   const panelLabel = catActiva!=='metalica' ? panelSeleccionado?.nombre : modeloSeleccionado.nivel;
   const opcionesSel = [...opcionesActivas].map(id=>OPCIONES.find(o=>o.id===id)).filter(Boolean);
 
@@ -644,7 +644,8 @@ function generarPDF() {
   /* CABECERA */
   .hdr{display:flex;justify-content:space-between;align-items:flex-start;padding:16px 0 14px;border-bottom:3px solid #4fa845;margin-bottom:18px;gap:16px}
   .hdr-empresa{display:flex;flex-direction:column;gap:3px}
-  .hdr-empresa .empresa-nombre{font-size:17px;font-weight:900;color:#0e1f15;margin-top:4px}
+  .hdr-empresa img{max-height:90px;max-width:240px;width:auto;height:auto;display:block;margin-bottom:2px}
+  .hdr-empresa .empresa-nombre{font-size:17px;font-weight:900;color:#0e1f15;margin-top:2px}
   .hdr-empresa .tagline{font-size:11px;color:#4fa845;font-weight:700}
   .hdr-empresa .contacto{font-size:11px;color:#666;margin-top:1px}
   .hdr-meta{text-align:right;min-width:165px}
