@@ -398,6 +398,38 @@ const OPCIONES = [
   { id:'alarma-cit', nombre:'Alarma Citadelle',                     precio:null,nota:'Precio a consultar según instalación',            cats:['fichet','kiuso','blindada','metalica'] },
 ];
 
+// ── Pitches comerciales por modelo ───────────────────────────────────────────
+const PITCHES = {
+  'foxeo-s':        `La mayoría de los intentos de robo duran menos de 3 minutos. La FOXEO S los convierte en 3 minutos infranqueables. Mirilla digital para ver quién llama antes de abrir, retenedor para abrirle sin riesgo si no lo conoce, y el cilindro Fichet con tarjeta de propiedad: solo usted puede pedir copias de su llave. Una puerta que disuade al ladrón antes de que pruebe suerte. Y si prueba, no entra.`,
+  'foxeo-his':      `RC3 es la certificación que recomienda la Guardia Civil para viviendas en zonas de riesgo. La FOXEO HIS no solo la cumple: su sistema HIS (High Intrusion Security) blinda activamente los puntos más vulnerables de la puerta. Cualquier intento de forzado topará con una resistencia que la mayoría de ladrones no está preparada para superar. Si busca la tranquilidad de quien más sabe de seguridad, esta es su puerta.`,
+  'spheris-s':      `Los ladrones buscan la rendija, el punto débil. El cierre multipunto de la SPHERIS S los elimina todos. Cada punto de anclaje adicional en el marco multiplica la resistencia al forzado de forma exponencial. RC3 certificado con el diseño exclusivo de la gama SPHERIS: protección real con una estética que enorgullece. Porque su puerta también es la primera imagen de su hogar.`,
+  'spheris-his':    `¿Por qué elegir entre diseño exclusivo y la protección más avanzada? La SPHERIS HIS combina el cierre multipunto de la gama SPHERIS con el sistema HIS de alta intrusión: dos capas de protección activa que trabajan juntas. RC3/RC4 certificado. La puerta elegida por quien no acepta compromisos. Si su hogar lo merece, este es el nivel.`,
+  'spheris-xp':     `RC4 es el pico más alto de la resistencia certificada en el mercado residencial. La SPHERIS XP es, sin más, la mejor puerta de seguridad que puede instalar en su vivienda. El Multipunto XP de Fichet es el mecanismo de cierre más resistente que fabrica la marca. Sin escalón superior, sin compromisos. Si quiere la certeza absoluta de que nadie va a entrar sin su permiso, la elección es esta.`,
+  'k100':           `Una puerta acorazada es otra categoría. La K100 Ibérica llega con 10 bulones laterales de acero y 8 pivotes antipalanca: 18 puntos de resistencia física contra las herramientas más usadas en los robos con fuerza. Cilindro SECUREMME o ABUS con escudo anti-taladro. Grado 3 certificado, el nivel que los seguros de hogar ya reconocen y valoran. Protección seria a precio serio.`,
+  'k-xxi':          `Todo lo que hace grande al K100, mejorado. La K-XXI eleva el equipamiento a cilindro premium, refuerza el escudo anti-taladro y mejora el acabado exterior. Mismos 10 bulones y 8 pivotes antipalanca del estándar acorazado, con el plus de una presentación superior. Para quien quiere la mejor versión de una puerta acorazada sin renunciar al detalle.`,
+  'kronos':         `Seguridad de Grado 3 con una estética que no parece una puerta de cuartel. El KRONOS K100 mantiene exactamente la misma protección que el K100 clásico —10 bulones, 8 pivotes, cilindro SECUREMME— pero con una línea contemporánea que encaja en los hogares actuales. La prueba de que no hay que sacrificar el diseño para tener una puerta que disuada a cualquiera.`,
+  'grado-v':        `El Grado 5 es la certificación más alta que existe en puertas acorazadas. La GRADO V es la respuesta cuando la seguridad no admite concesiones: sistema multipunto Grado 5, cilindro Grado 5, escudo blindado de última generación. Diseñada para resistir los ataques más sofisticados durante el mayor tiempo posible. Esto no es seguridad estándar: es el máximo que el mercado puede ofrecerle.`,
+  'blindada':       `Hay situaciones donde la puerta original no está tan mal, pero el cilindro y el escudo son el eslabón débil. La Puerta Blindada M&C resuelve eso de raíz: escudo macizo del mismo nivel que una acorazada, cilindro de alta seguridad con llaves incopiables y tarjeta de propiedad. Instalación por técnicos propios. La mejor relación calidad-precio del mercado para quien quiere protección real sin pagar de más.`,
+  'metalica-blanco':`Cuando la funcionalidad manda. Grado 2 certificado, resistente a golpes y corrosión, en lacado blanco que se integra en cualquier portal o garaje. Instalación limpia y rápida por nuestros técnicos propios, con 2 años de garantía. Para quien necesita una puerta segura y duradera sin complicaciones.`,
+  'metalica-madera':`La estética cálida de la madera con la resistencia de una puerta metálica. Acabado imitación madera de alta calidad, Grado 2 certificado, sin mantenimiento. Una solución práctica y elegante para portales, garajes y accesos secundarios. Instalada por nuestros técnicos propios, con 2 años de garantía detrás.`,
+};
+
+// ── Especificaciones técnicas por modelo ──────────────────────────────────────
+const SPECS_MODELO = {
+  'foxeo-s':        { fab:'Fichet (Francia)',       cert:'RC2 certificado',  cierre:'Cierre multipunto Fichet',              cil:'Cilindro Fichet con tarjeta de propiedad' },
+  'foxeo-his':      { fab:'Fichet (Francia)',       cert:'RC3 certificado',  cierre:'Sistema HIS anti-intrusión',            cil:'Cilindro Fichet RC3 con tarjeta de propiedad' },
+  'spheris-s':      { fab:'Fichet (Francia)',       cert:'RC3 certificado',  cierre:'Multipunto reforzado SPHERIS',          cil:'Cilindro Fichet premium con tarjeta de propiedad' },
+  'spheris-his':    { fab:'Fichet (Francia)',       cert:'RC3 / RC4',        cierre:'Multipunto SPHERIS + Sistema HIS',      cil:'Cilindro Fichet gama alta con tarjeta de propiedad' },
+  'spheris-xp':     { fab:'Fichet (Francia)',       cert:'RC4 certificado',  cierre:'Multipunto XP (máxima resistencia)',    cil:'Cilindro Fichet máxima seguridad con tarjeta de propiedad' },
+  'k100':           { fab:'KIUSO (España)',         cert:'Grado 3',          cierre:'10 bulones + 8 pivotes antipalanca',    cil:'SECUREMME EVO K22 / ABUS VELA 2000' },
+  'k-xxi':          { fab:'KIUSO (España)',         cert:'Grado 3+',         cierre:'10 bulones + 8 pivotes + escudo ref.',  cil:'Cilindro premium SECUREMME / ABUS' },
+  'kronos':         { fab:'KIUSO (España)',         cert:'Grado 3',          cierre:'10 bulones + 8 pivotes antipalanca',    cil:'SECUREMME EVO K22' },
+  'grado-v':        { fab:'KIUSO (España)',         cert:'Grado 5',          cierre:'Multipunto Grado 5',                   cil:'Cilindro Grado 5 certificado' },
+  'blindada':       { fab:'Hoja sapelly / M&C',    cert:'Escudo M&C A.S.',  cierre:'Escudo macizo anti-taladro M&C',        cil:'Cilindro alta seg. M&C con tarjeta de propiedad' },
+  'metalica-blanco':{ fab:'Fabricación nacional',  cert:'Grado 2',          cierre:'Cerradura multipunto de seguridad',     cil:'Cilindro de seguridad estándar' },
+  'metalica-madera':{ fab:'Fabricación nacional',  cert:'Grado 2',          cierre:'Cerradura multipunto de seguridad',     cil:'Cilindro de seguridad estándar' },
+};
+
 let modeloSeleccionado = null;
 let panelSeleccionado  = PANELES[0];
 let opcionesActivas    = new Set();
@@ -540,8 +572,8 @@ function fechaValidez() {
   const d = new Date(); d.setDate(d.getDate()+10);
   return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
 }
-function fechaInstalacion() {
-  const d = new Date(); d.setDate(d.getDate()+70);
+function fechaInstalacion(dias) {
+  const d = new Date(); d.setDate(d.getDate()+(dias||70));
   return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
 }
 function mesLimiteSinConf() {
@@ -551,191 +583,259 @@ function mesLimiteSinConf() {
 
 // ── PDF ───────────────────────────────────────────────────────────────────────
 function generarPDF() {
-  if (!modeloSeleccionado) { alert('Selecciona un modelo primero.'); return; }
+  if (!modeloSeleccionado) { mostrarToast('Selecciona un modelo primero.'); return; }
   const cli        = datosCliente();
   const num        = numeroPresupuesto();
   const total      = totalCalculado();
   const notas      = document.getElementById('notasPresupuesto').value.trim();
-  const logoTag    = LOGO_DATA_URL ? `<img src="${LOGO_DATA_URL}" style="height:55px;width:auto;display:block;margin-bottom:6px;" alt="Ibérica Seguridad">` : '';
+  const logoTag    = LOGO_DATA_URL ? `<img src="${LOGO_DATA_URL}" style="height:55px;width:auto;display:block;" alt="Ibérica Seguridad">` : '';
   const panelLabel = catActiva!=='metalica' ? panelSeleccionado?.nombre : modeloSeleccionado.nivel;
   const opcionesSel = [...opcionesActivas].map(id=>OPCIONES.find(o=>o.id===id)).filter(Boolean);
 
-  // Precio de referencia (15% sobre el total) y cuota mensual
   const precioRef  = total!==null ? Math.ceil(total*1.15/50)*50 : null;
   const cuotaMes   = total!==null ? Math.ceil(total/12) : null;
-  // fechaInst handled inline in PDF with 60/80 day range
-  const mesLimite  = mesLimiteSinConf();
   const fv         = fechaValidez();
+  const waLink     = `https://wa.me/34950088086?text=${encodeURIComponent('Quiero confirmar el presupuesto núm. '+num)}`;
+
+  const pitch  = PITCHES[modeloSeleccionado.id] || modeloSeleccionado.descripcion;
+  const specs  = SPECS_MODELO[modeloSeleccionado.id] || {};
+
+  const certColor = modeloSeleccionado.cat==='fichet'   ? '#2d6da3' :
+                    modeloSeleccionado.cat==='kiuso'    ? '#4fa845' :
+                    modeloSeleccionado.cat==='blindada' ? '#e6a435' : '#6b7280';
 
   const clienteBloque = (cli.nombre||cli.telefono||cli.email||cli.direccion)
-    ? `<div class="pa-cliente">
-        <strong>${escHtml(cli.nombre||'—')}</strong>
-        ${cli.direccion?'<br>'+escHtml(cli.direccion):''}
-        ${cli.telefono?'<br>Tel: '+escHtml(cli.telefono):''}
-        ${cli.email?'<br>'+escHtml(cli.email):''}
+    ? `<div class="cli-wrap">
+        <div>
+          <div class="cli-label">Presupuesto preparado para</div>
+          <div class="cli-data">
+            <strong>${escHtml(cli.nombre||'—')}</strong>
+            ${cli.direccion?'<br>'+escHtml(cli.direccion):''}
+            ${cli.telefono?'<br>Tel: '+escHtml(cli.telefono):''}
+            ${cli.email?'<br>'+escHtml(cli.email):''}
+          </div>
+        </div>
+        <div style="text-align:right;font-size:11px;color:#777">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#4fa845;margin-bottom:4px">Ref. presupuesto</div>
+          <div style="font-size:14px;font-weight:900;color:#0e1f15">${escHtml(num)}</div>
+          <div style="margin-top:2px">Fecha: ${fechaHoy()}</div>
+        </div>
       </div>` : '';
 
   const filasOpciones = opcionesSel.map(o=>`<tr>
-    <td>${escHtml(o.nombre)}</td>
-    <td class="num">1</td>
-    <td class="num">${o.precio!==null?formatPrecio(o.precio):'A consultar'}</td>
-    <td class="num">${o.precio!==null?formatPrecio(o.precio):'A consultar'}</td>
+    <td>${escHtml(o.nombre)}${o.nota?`<br><small style="color:#999">${escHtml(o.nota)}</small>`:''}</td>
+    <td style="text-align:center">1</td>
+    <td style="text-align:right">${o.precio!==null?formatPrecio(o.precio):'A consultar'}</td>
+    <td style="text-align:right;font-weight:700">${o.precio!==null?formatPrecio(o.precio):'A consultar'}</td>
   </tr>`).join('');
 
-  const totalBloque = total!==null
-    ? `<div class="pa-totales">
-        <div class="pa-ref">
-          <span>Precio de referencia en el mercado</span>
-          <span class="pa-ref-val">desde ${formatPrecio(precioRef)}</span>
-        </div>
-        <div class="pa-tot-final">
-          <span>SU PRECIO — IVA incluido</span>
-          <span>${formatPrecio(total)}</span>
-        </div>
-        <div class="pa-fin">
-          O desde <strong>${formatPrecio(cuotaMes)}/mes</strong> en 12 cuotas sin intereses con <strong>Cetelem</strong> · Sin cambiar de banco
-        </div>
-      </div>`
-    : `<div class="pa-totales"><div class="pa-tot-final"><span>TOTAL</span><span>Precio a consultar</span></div></div>`;
-
-  const waLink = `https://wa.me/34950088086?text=${encodeURIComponent('Quiero confirmar el presupuesto núm. '+num)}`;
+  const specRows = [
+    specs.fab    ? ['Fabricante',        specs.fab]    : null,
+    specs.cert   ? ['Certificación',     specs.cert]   : null,
+    specs.cierre ? ['Sistema de cierre', specs.cierre] : null,
+    specs.cil    ? ['Cilindro',          specs.cil]    : null,
+  ].filter(Boolean).map(([k,v])=>`<tr><td class="spec-key">${k}</td><td class="spec-val">${escHtml(v)}</td></tr>`).join('');
 
   const docHTML = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-<title>Presupuesto ${num} — Ibérica Seguridad</title>
+<title>Presupuesto ${escHtml(num)} — Ibérica Seguridad</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Helvetica Neue',Arial,sans-serif;color:#111;background:#fff;font-size:13px;line-height:1.5}
-  @page{margin:12mm 14mm}
+  body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;background:#fff;font-size:13px;line-height:1.55;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{size:A4;margin:11mm 13mm}
   @media print{.toolbar{display:none!important}body{padding:0}}
-  .toolbar{background:#0e1f15;padding:10px 16px;display:flex;gap:10px;justify-content:flex-end;position:sticky;top:0;z-index:99}
-  .tb-btn{background:#4fa845;border:none;color:#06120c;font-weight:700;font-size:12px;padding:8px 18px;border-radius:6px;cursor:pointer;letter-spacing:.03em}
-  /* HEADER */
-  .hdr{display:flex;justify-content:space-between;align-items:flex-end;padding:18px 0 14px;border-bottom:3px solid #4fa845;margin-bottom:20px;gap:16px}
-  .hdr-logo img{height:52px;width:auto;display:block;margin-bottom:6px}
-  .hdr-logo p{font-size:11px;color:#555;margin:1px 0}
-  .hdr-logo .tagline{color:#2d6;font-weight:700;font-size:11px}
-  .hdr-meta{text-align:right;min-width:160px}
-  .hdr-meta .label{font-size:9px;font-weight:800;letter-spacing:.12em;color:#888;text-transform:uppercase;margin-bottom:2px}
-  .hdr-meta .num{font-size:20px;font-weight:900;color:#111;line-height:1}
-  .hdr-meta p{font-size:11px;color:#555;margin:3px 0 0}
-  .hdr-meta .validez{color:#c0392b;font-weight:700}
+
+  /* TOOLBAR */
+  .toolbar{background:#0e1f15;padding:9px 14px;display:flex;gap:8px;justify-content:flex-end;position:sticky;top:0;z-index:99;flex-wrap:wrap}
+  .tb-btn{background:#4fa845;border:none;color:#06120c;font-weight:800;font-size:12px;padding:7px 16px;border-radius:6px;cursor:pointer;letter-spacing:.03em}
+  .tb-btn.sec{background:rgba(255,255,255,.1);color:#fff}
+
+  /* CABECERA */
+  .hdr{display:flex;justify-content:space-between;align-items:flex-start;padding:16px 0 14px;border-bottom:3px solid #4fa845;margin-bottom:18px;gap:16px}
+  .hdr-empresa{display:flex;flex-direction:column;gap:3px}
+  .hdr-empresa .empresa-nombre{font-size:17px;font-weight:900;color:#0e1f15;margin-top:4px}
+  .hdr-empresa .tagline{font-size:11px;color:#4fa845;font-weight:700}
+  .hdr-empresa .contacto{font-size:11px;color:#666;margin-top:1px}
+  .hdr-meta{text-align:right;min-width:165px}
+  .hdr-meta .pres-badge{display:inline-block;background:#0e1f15;color:#7ed957;padding:2px 9px;border-radius:3px;font-size:9px;font-weight:900;letter-spacing:.15em;text-transform:uppercase;margin-bottom:5px}
+  .hdr-meta .num{font-size:22px;font-weight:900;color:#0e1f15;line-height:1}
+  .hdr-meta .fecha{font-size:11px;color:#666;margin-top:5px}
+  .hdr-meta .validez{color:#c0392b;font-weight:700;font-size:11.5px;margin-top:2px}
+  .hdr-meta .inst{font-size:10px;color:#888;margin-top:2px}
+
   /* CLIENTE */
-  .cli{display:flex;gap:12px;margin-bottom:18px;background:#f5fbf5;border:1px solid #cde8cd;border-radius:8px;padding:12px 14px}
-  .cli-label{font-size:9px;font-weight:800;letter-spacing:.12em;color:#2d6;text-transform:uppercase;margin-bottom:6px}
-  .cli-data{font-size:12px;color:#222;line-height:1.7}
-  .cli-data strong{font-size:14px;display:block;margin-bottom:2px}
-  /* PRODUCTO */
-  .producto{border:2px solid #4fa845;border-radius:10px;overflow:hidden;margin-bottom:18px}
-  .producto-head{background:#0e1f15;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start}
-  .producto-head h3{font-size:20px;font-weight:900;margin-bottom:4px}
-  .producto-head .nivel{font-size:11px;color:#7ed957;font-weight:600;line-height:1.4;max-width:340px}
-  .precio-badge{background:#4fa845;color:#06120c;border-radius:8px;padding:8px 14px;text-align:center;flex-shrink:0}
-  .precio-badge .precio-label{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;opacity:.7}
-  .precio-badge .precio-val{font-size:22px;font-weight:900;display:block;line-height:1.1}
-  .precio-badge .precio-iva{font-size:10px;font-weight:600;opacity:.8}
-  .producto-body{padding:14px 16px;background:#fff}
-  .incluye-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-bottom:10px}
-  .incluye-item{font-size:12px;color:#333;display:flex;align-items:flex-start;gap:5px}
-  .incluye-item::before{content:"✓";color:#4fa845;font-weight:800;flex-shrink:0;line-height:1.5}
-  .panel-tag{background:#f0f7f0;border-radius:4px;padding:5px 10px;font-size:11px;color:#555;display:inline-block;margin-top:4px}
-  .panel-tag strong{color:#0e1f15}
-  /* OPCIONES TABLE */
-  .table-wrap{margin-bottom:18px}
-  .section-title{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#888;margin-bottom:8px;border-bottom:1px solid #eee;padding-bottom:5px}
-  table{width:100%;border-collapse:collapse}
-  th{background:#1c3326;color:#fff;padding:8px 10px;text-align:left;font-size:11px;font-weight:700}
-  td{padding:7px 10px;border-bottom:1px solid #f0f0f0;font-size:12px}
-  td.r{text-align:right}
-  tr:last-child td{border-bottom:none}
-  tr:nth-child(even){background:#fafafa}
-  /* TOTALES */
-  .totales-box{background:#fff;border:2px solid #0e1f15;border-radius:10px;overflow:hidden;margin-bottom:18px}
-  .ref-row{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:#f9f9f9;border-bottom:1px solid #eee;font-size:12px;color:#888}
-  .ref-val{text-decoration:line-through;font-weight:600}
-  .precio-final-row{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#0e1f15;color:#fff}
-  .precio-final-label{font-size:13px;font-weight:700}
-  .precio-final-val{font-size:28px;font-weight:900;color:#7ed957}
-  .financ-row{padding:10px 16px;font-size:12px;color:#333;background:#f0f7f0;border-top:1px solid #cde8cd}
+  .cli-wrap{background:#f5fbf5;border:1.5px solid #cde8cd;border-radius:8px;padding:12px 15px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:flex-start}
+  .cli-label{font-size:9px;font-weight:800;letter-spacing:.12em;color:#4fa845;text-transform:uppercase;margin-bottom:4px}
+  .cli-data{font-size:12px;color:#333;line-height:1.65}
+  .cli-data strong{font-size:15px;color:#0e1f15;display:block;margin-bottom:1px}
+
+  /* DOSSIER */
+  .dossier{border:2px solid #0e1f15;border-radius:11px;overflow:hidden;margin-bottom:20px}
+  .dossier-hero{background:#0e1f15;padding:15px 17px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start}
+  .dossier-cat{display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap}
+  .d-cat-badge{font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.14);color:#ccc}
+  .d-cert-badge{font-size:10px;font-weight:800;letter-spacing:.05em;padding:2px 9px;border-radius:20px;color:#fff}
+  .dossier-titulo{font-size:25px;font-weight:900;color:#fff;line-height:1.1;margin-bottom:4px}
+  .dossier-nivel{font-size:11.5px;color:#7ed957;font-weight:600;line-height:1.4}
+  .precio-badge-box{background:#4fa845;border-radius:9px;padding:9px 14px;text-align:center;flex-shrink:0;min-width:126px}
+  .pb-label{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#06120c;opacity:.75;margin-bottom:3px}
+  .pb-val{font-size:25px;font-weight:900;color:#06120c;line-height:1;display:block}
+  .pb-sub{font-size:10px;font-weight:700;color:#06120c;opacity:.8}
+
+  /* PITCH */
+  .dossier-pitch{background:#fffbf0;border-bottom:1px solid #eeddb0;padding:12px 17px;font-size:12.5px;color:#2a2a2a;line-height:1.7;font-style:italic;position:relative;padding-left:28px}
+  .dossier-pitch::before{content:'"';position:absolute;left:12px;top:6px;font-size:32px;color:#e6a435;font-style:normal;line-height:1}
+
+  /* CUERPO DOSSIER */
+  .dossier-body{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .dossier-specs{padding:13px 17px;border-right:1px solid #eee}
+  .dossier-includes{padding:13px 17px;background:#fafffe}
+  .d-sec-title{font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#4fa845;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .d-sec-title::after{content:'';flex:1;height:1px;background:#e0f0e0}
+  table.specs{width:100%;border-collapse:collapse}
+  table.specs td{padding:4.5px 0;font-size:11.5px;border-bottom:1px solid #f2f2f2;vertical-align:top}
+  table.specs .spec-key{color:#888;font-weight:700;width:42%;padding-right:8px;white-space:nowrap}
+  table.specs .spec-val{color:#111;font-weight:500}
+  table.specs tr:last-child td{border-bottom:none}
+  .inc-list{list-style:none;padding:0;margin:0}
+  .inc-list li{font-size:11.5px;color:#2a2a2a;padding:4px 0;border-bottom:1px solid #f5f5f5;display:flex;align-items:flex-start;gap:6px;line-height:1.45}
+  .inc-list li:last-child{border-bottom:none}
+  .inc-chk{color:#4fa845;font-weight:900;font-size:13px;flex-shrink:0;line-height:1.3}
+  .dossier-footer{background:#f5fbf5;border-top:1px solid #cde8cd;padding:7px 17px;font-size:11px;color:#555;display:flex;justify-content:space-between;align-items:center}
+  .dossier-panel{font-weight:700;color:#0e1f15}
+
+  /* EXTRAS TABLE */
+  .section-block{margin-bottom:18px}
+  .sec-title{font-size:9px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#888;margin-bottom:7px;padding-bottom:5px;border-bottom:1.5px solid #eee}
+  table.opt-table{width:100%;border-collapse:collapse}
+  table.opt-table th{background:#1c3326;color:#fff;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.04em}
+  table.opt-table th:not(:first-child){text-align:right}
+  table.opt-table td{padding:7px 10px;border-bottom:1px solid #f0f0f0;font-size:11.5px;vertical-align:top}
+  table.opt-table td:not(:first-child){text-align:right}
+  table.opt-table tr:last-child td{border-bottom:none}
+  table.opt-table tr:nth-child(even) td{background:#fafafa}
+
+  /* CUADRO ECONÓMICO */
+  .totales-box{border:2px solid #0e1f15;border-radius:10px;overflow:hidden;margin-bottom:20px}
+  .ref-row{display:flex;justify-content:space-between;align-items:center;padding:9px 15px;background:#f9f9f9;border-bottom:1px solid #eee;font-size:12px;color:#aaa}
+  .ref-val{text-decoration:line-through;font-weight:600;color:#bbb}
+  .precio-final-row{display:flex;justify-content:space-between;align-items:center;padding:15px 17px;background:#0e1f15}
+  .precio-final-label{font-size:13px;font-weight:800;color:#fff;letter-spacing:.02em}
+  .precio-final-val{font-size:30px;font-weight:900;color:#7ed957;line-height:1}
+  .financ-row{padding:9px 15px;font-size:11.5px;color:#1a1a1a;background:#f0f7f0;border-top:1px solid #cde8cd}
+
   /* CTA */
-  .cta{background:#4fa845;border-radius:10px;padding:18px;text-align:center;margin-bottom:18px;color:#06120c}
-  .cta h4{font-size:17px;font-weight:900;margin-bottom:8px}
-  .cta .urg{font-size:12px;margin-bottom:3px}
-  .cta .urg-sub{font-size:11px;opacity:.75;margin-bottom:12px}
-  .cta-btns{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
-  .cta-btns a{background:rgba(0,0,0,.15);color:#06120c;font-weight:800;padding:9px 16px;border-radius:8px;text-decoration:none;font-size:13px}
-  .cta-nota{font-size:11px;opacity:.7}
+  .cta-box{background:linear-gradient(135deg,#0e1f15 0%,#1c3326 100%);border-radius:11px;padding:18px 20px;margin-bottom:20px;border:2px solid #4fa845}
+  .cta-titulo{font-size:19px;font-weight:900;color:#fff;line-height:1.2;margin-bottom:4px}
+  .cta-sub{font-size:11.5px;color:#7ed957;font-weight:600;margin-bottom:12px}
+  .cta-urg{background:rgba(79,168,69,.12);border:1px solid rgba(79,168,69,.35);border-radius:7px;padding:9px 13px;font-size:11.5px;color:#cde8cd;line-height:1.65;margin-bottom:12px}
+  .cta-urg strong{color:#7ed957}
+  .cta-btns{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:9px}
+  .cta-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:7px;text-decoration:none;font-size:12.5px;font-weight:800}
+  .btn-tel{background:#4fa845;color:#06120c}
+  .btn-wa{background:#25D366;color:#fff}
+  .btn-mail{background:rgba(255,255,255,.09);color:#ddd;border:1px solid rgba(255,255,255,.2)}
+  .cta-nota{font-size:10px;color:rgba(255,255,255,.45)}
+
   /* GARANTÍAS */
-  .garantias{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}
-  .gar-item{display:flex;align-items:flex-start;gap:7px;font-size:12px;color:#333}
-  .gar-icon{font-size:16px;line-height:1;flex-shrink:0}
-  .gar-text strong{display:block;font-size:11px;font-weight:700;color:#0e1f15}
-  .gar-text span{font-size:11px;color:#555}
-  /* SOCIAL PROOF */
-  .social{background:#fffbf0;border:1px solid #f0e0a0;border-radius:8px;padding:12px 14px;margin-bottom:18px;text-align:center}
-  .social .stars{font-size:16px;margin-bottom:4px}
-  .social .rating{font-size:12px;font-weight:700;color:#333}
-  .social .quote{font-size:12px;color:#555;font-style:italic;margin:6px 0}
-  .social .stats{font-size:11px;color:#2d6;font-weight:700}
+  .garantias-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:18px}
+  .gar-card{background:#f5fbf5;border:1.5px solid #cde8cd;border-radius:8px;padding:11px 9px;text-align:center}
+  .gar-icon{font-size:19px;margin-bottom:4px}
+  .gar-title{font-size:11px;font-weight:800;color:#0e1f15;margin-bottom:2px}
+  .gar-desc{font-size:10px;color:#666;line-height:1.4}
+
+  /* TESTIMONIO */
+  .social-box{background:#fffbf0;border:1.5px solid #f0e0a0;border-radius:9px;padding:12px 15px;margin-bottom:18px;display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center}
+  .social-stars{font-size:15px;color:#f5a623;margin-bottom:3px}
+  .social-quote{font-size:12.5px;font-style:italic;color:#333;line-height:1.55;margin-bottom:4px}
+  .social-author{font-size:10.5px;color:#999}
+  .social-stats{text-align:right;flex-shrink:0}
+  .social-rating{font-size:22px;font-weight:900;color:#0e1f15;line-height:1}
+  .social-rating-sub{font-size:10px;color:#888;margin-bottom:7px}
+  .social-badge{background:#0e1f15;color:#7ed957;font-size:10px;font-weight:700;padding:4px 8px;border-radius:4px;display:inline-block;white-space:nowrap}
+
   /* CONDICIONES */
-  .condiciones{border-top:2px solid #eee;padding-top:14px;margin-bottom:14px}
-  .cond-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 20px}
-  .cond-item{font-size:11px;color:#444;line-height:1.6}
-  .cond-item strong{display:block;font-size:11px;font-weight:800;color:#111;margin-bottom:3px}
+  .cond-wrap{border-top:2px solid #eee;padding-top:14px;margin-bottom:14px}
+  .cond-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 22px}
+  .cond-item{font-size:11px;color:#444;line-height:1.65}
+  .cond-item strong{display:block;font-size:10px;font-weight:900;color:#0e1f15;margin-bottom:2px;text-transform:uppercase;letter-spacing:.05em}
   .cond-item.full{grid-column:1/-1}
+  .notas-box{background:#f5f5f5;border-radius:5px;padding:7px 10px;margin-top:4px;font-style:italic;font-size:11px;color:#444}
+
   /* FOOTER */
-  .footer{border-top:1px solid #ddd;padding-top:10px;font-size:10px;color:#999;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px}
+  .doc-footer{border-top:1px solid #ddd;padding-top:9px;font-size:10px;color:#bbb;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px}
 </style></head><body>
+
 <div class="toolbar">
-  <button class="tb-btn" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
-  <button class="tb-btn" onclick="window.close()">✕ Cerrar</button>
+  <button class="tb-btn sec" onclick="window.close()">✕ Cerrar</button>
+  <button class="tb-btn" onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
 </div>
 
+<!-- 1. CABECERA -->
 <div class="hdr">
-  <div class="hdr-logo">
+  <div class="hdr-empresa">
     ${logoTag}
-    <strong style="font-size:14px;font-weight:900;display:block;margin-bottom:2px">Ibérica Seguridad</strong>
-    <p class="tagline">Especialistas en seguridad del hogar · Almería</p>
-    <p>950 088 086 · pedidos@ibericaseguridad.com</p>
+    <div class="empresa-nombre">Ibérica Seguridad</div>
+    <div class="tagline">Especialistas en seguridad del hogar · Almería</div>
+    <div class="contacto">950 088 086 · pedidos@ibericaseguridad.com · Almería</div>
   </div>
   <div class="hdr-meta">
-    <div class="label">Presupuesto</div>
+    <div class="pres-badge">Presupuesto</div>
     <div class="num">${escHtml(num)}</div>
-    <p>Fecha: ${fechaHoy()}</p>
-    <p class="validez">Válido hasta: ${fv}</p>
-    <p style="font-size:10px;color:#888;margin-top:4px">Instalación aprox. ${fechaInstalacion(60)}–${fechaInstalacion(80)}</p>
+    <div class="fecha">Fecha: ${fechaHoy()}</div>
+    <div class="validez">Válido hasta: ${fv}</div>
+    <div class="inst">Instalación estimada: ${fechaInstalacion(60)} – ${fechaInstalacion(80)}</div>
   </div>
 </div>
 
+<!-- 2. DATOS CLIENTE -->
 ${clienteBloque}
 
-<div class="producto">
-  <div class="producto-head">
+<!-- 3. DOSSIER DEL PRODUCTO -->
+<div class="dossier">
+  <div class="dossier-hero">
     <div>
-      <h3>${escHtml(modeloSeleccionado.nombre)}</h3>
-      <div class="nivel">${escHtml(modeloSeleccionado.nivel)}</div>
+      <div class="dossier-cat">
+        <span class="d-cat-badge">${escHtml(modeloSeleccionado.cat.toUpperCase())}</span>
+        <span class="d-cert-badge" style="background:${certColor}">${escHtml(specs.cert||modeloSeleccionado.nivel.split('—')[0].trim())}</span>
+      </div>
+      <div class="dossier-titulo">${escHtml(modeloSeleccionado.nombre)}</div>
+      <div class="dossier-nivel">${escHtml(modeloSeleccionado.nivel)}</div>
     </div>
-    ${total!==null?`<div class="precio-badge">
-      <div class="precio-label">Su precio</div>
-      <span class="precio-val">${formatPrecio(total)}</span>
-      <div class="precio-iva">IVA incluido</div>
+    ${total!==null?`<div class="precio-badge-box">
+      <div class="pb-label">Su precio</div>
+      <span class="pb-val">${formatPrecio(total)}</span>
+      <div class="pb-sub">IVA incluido</div>
     </div>`:''}
   </div>
-  <div class="producto-body">
-    <div class="incluye-grid">
-      ${modeloSeleccionado.incluye.map(i=>`<div class="incluye-item"><span>${escHtml(i)}</span></div>`).join('')}
+  <div class="dossier-pitch">${escHtml(pitch)}</div>
+  <div class="dossier-body">
+    <div class="dossier-specs">
+      <div class="d-sec-title">Ficha técnica</div>
+      <table class="specs"><tbody>${specRows}</tbody></table>
     </div>
-    <div class="panel-tag">Panel / acabado: <strong>${escHtml(panelLabel||'Estándar')}</strong>${panelSeleccionado?.precio===null?' — precio a confirmar con técnico':''}</div>
+    <div class="dossier-includes">
+      <div class="d-sec-title">¿Qué incluye su presupuesto?</div>
+      <ul class="inc-list">
+        ${modeloSeleccionado.incluye.map(i=>`<li><span class="inc-chk">✓</span><span>${escHtml(i)}</span></li>`).join('')}
+      </ul>
+    </div>
+  </div>
+  <div class="dossier-footer">
+    <span>Panel / acabado: <span class="dossier-panel">${escHtml(panelLabel||'Estándar')}</span>${panelSeleccionado?.precio===null?' — precio a confirmar con técnico':''}</span>
+    ${total!==null?`<span style="font-size:12px;font-weight:800;color:#4fa845">${formatPrecio(total)} IVA incl.</span>`:''}
   </div>
 </div>
 
-${opcionesSel.length>0?`<div class="table-wrap">
-  <div class="section-title">Extras y opciones adicionales</div>
-  <table>
-    <thead><tr><th>Extra / Opción</th><th>Ud.</th><th class="r">Precio</th><th class="r">Total</th></tr></thead>
+<!-- 4. EXTRAS Y OPCIONES -->
+${opcionesSel.length>0?`<div class="section-block">
+  <div class="sec-title">Extras y opciones adicionales</div>
+  <table class="opt-table">
+    <thead><tr><th>Extra / Opción</th><th>Ud.</th><th>Precio u.</th><th>Total</th></tr></thead>
     <tbody>${filasOpciones}</tbody>
   </table>
 </div>`:''}
 
+<!-- 5. CUADRO ECONÓMICO -->
 ${total!==null?`<div class="totales-box">
   <div class="ref-row">
     <span>Precio de referencia en el mercado</span>
@@ -745,71 +845,84 @@ ${total!==null?`<div class="totales-box">
     <span class="precio-final-label">SU PRECIO — IVA incluido</span>
     <span class="precio-final-val">${formatPrecio(total)}</span>
   </div>
-  <div class="financ-row">💳 O desde <strong>${formatPrecio(cuotaMes)}/mes</strong> en 12 cuotas sin intereses con <strong>Cetelem</strong> · Sin cambiar de banco</div>
-</div>`:`<div class="totales-box"><div class="precio-final-row"><span class="precio-final-label">PRECIO</span><span style="font-size:18px;font-weight:900;color:#e6a435">A consultar</span></div></div>`}
+  <div class="financ-row">💳 O desde <strong>${formatPrecio(cuotaMes)}/mes</strong> en 12 cuotas sin intereses con <strong>Cetelem</strong> · Sin cambiar de banco · Sin comisiones</div>
+</div>`:`<div class="totales-box"><div class="precio-final-row"><span class="precio-final-label">PRECIO</span><span style="font-size:20px;font-weight:900;color:#e6a435">A consultar con técnico</span></div></div>`}
 
-<div class="cta">
-  <h4>🔒 Su hogar protegido en 60–80 días</h4>
-  <p class="urg">Si confirma antes del <strong>${fv}</strong>, su instalación queda programada lo antes posible.</p>
-  <p class="urg-sub">El plazo de fábrica es de 60-80 días. Le confirmaremos fecha exacta al tramitar el pedido.</p>
-  <div class="cta-btns">
-    <a href="tel:+34950088086">📞 950 088 086</a>
-    <a href="${waLink}">💬 WhatsApp</a>
-    <a href="mailto:pedidos@ibericaseguridad.com">📧 Email</a>
+<!-- 6. CTA — LLAMADA A LA ACCIÓN -->
+<div class="cta-box">
+  <div class="cta-titulo">Su hogar protegido en 60–80 días</div>
+  <div class="cta-sub">Confirme ahora y le reservamos fecha de instalación</div>
+  <div class="cta-urg">
+    ⏳ Este presupuesto es válido hasta el <strong>${fv}</strong>. Tras esa fecha, el precio puede verse afectado por cambios de fábrica.<br>
+    📅 Si confirma esta semana, su instalación queda programada entre el <strong>${fechaInstalacion(60)}</strong> y el <strong>${fechaInstalacion(80)}</strong>.
   </div>
-  <p class="cta-nota">Le respondemos en menos de 2 horas en horario comercial</p>
+  <div class="cta-btns">
+    <a class="cta-btn btn-tel" href="tel:+34950088086">📞 950 088 086</a>
+    <a class="cta-btn btn-wa" href="${waLink}">💬 WhatsApp</a>
+    <a class="cta-btn btn-mail" href="mailto:pedidos@ibericaseguridad.com?subject=${encodeURIComponent('Confirmar presupuesto '+num)}">📧 Email</a>
+  </div>
+  <div class="cta-nota">Le respondemos en menos de 2 horas en horario comercial (lunes a viernes, 9:00–19:00)</div>
 </div>
 
-<div class="section-title" style="margin-bottom:12px">¿Por qué Ibérica Seguridad?</div>
-<div class="garantias">
-  <div class="gar-item"><span class="gar-icon">🔧</span><div class="gar-text"><strong>Técnicos propios</strong><span>Sin subcontratas. Instalación directa.</span></div></div>
-  <div class="gar-item"><span class="gar-icon">🛡️</span><div class="gar-text"><strong>2 años de garantía</strong><span>En instalación y producto.</span></div></div>
-  <div class="gar-item"><span class="gar-icon">⚡</span><div class="gar-text"><strong>Respuesta en &lt;24h</strong><span>Si algo falla, estamos en tu puerta.</span></div></div>
-  <div class="gar-item"><span class="gar-icon">📍</span><div class="gar-text"><strong>Empresa local</strong><span>Más de 20 años en Almería.</span></div></div>
+<!-- 7. POR QUÉ IBÉRICA SEGURIDAD -->
+<div class="sec-title" style="margin-bottom:11px">¿Por qué Ibérica Seguridad?</div>
+<div class="garantias-grid">
+  <div class="gar-card"><div class="gar-icon">🔧</div><div class="gar-title">Técnicos propios</div><div class="gar-desc">Sin subcontratas. Instalación directa, responsabilidad directa.</div></div>
+  <div class="gar-card"><div class="gar-icon">🛡️</div><div class="gar-title">2 años de garantía</div><div class="gar-desc">En instalación y producto. Sin letra pequeña.</div></div>
+  <div class="gar-card"><div class="gar-icon">⚡</div><div class="gar-title">Respuesta &lt;24 h</div><div class="gar-desc">Si algo falla, estamos en su puerta antes de 24 horas.</div></div>
+  <div class="gar-card"><div class="gar-icon">📍</div><div class="gar-title">+20 años en Almería</div><div class="gar-desc">Empresa local. Confianza en más de 1.000 hogares.</div></div>
 </div>
 
-<div class="social">
-  <div class="stars">⭐⭐⭐⭐⭐</div>
-  <div class="rating">4,8 · Google Reviews · Más de 1.000 instalaciones en Almería y provincia</div>
-  <p class="quote">"Rápidos, limpios y sin sorpresas. El precio se mantuvo exacto al del presupuesto."<br><em style="font-size:11px;color:#888">— Cliente verificado, Almería</em></p>
-  <div class="stats">+20 años en el sector · Empresa local · Técnicos certificados</div>
+<!-- 8. TESTIMONIO / PRUEBA SOCIAL -->
+<div class="social-box">
+  <div>
+    <div class="social-stars">★★★★★</div>
+    <div class="social-quote">"Llegaron puntuales, dejaron todo perfecto y el precio fue exactamente el del presupuesto. Sin sorpresas, sin excusas. Muy recomendables."</div>
+    <div class="social-author">— María J., Almería · Cliente verificado · Google Reviews</div>
+  </div>
+  <div class="social-stats">
+    <div class="social-rating">4,8</div>
+    <div class="social-rating-sub">sobre 5 · Google Reviews</div>
+    <div class="social-badge">+1.000 instalaciones</div>
+  </div>
 </div>
 
-<div class="condiciones">
-  <div class="section-title">Condiciones del presupuesto</div>
+<!-- 9. CONDICIONES -->
+<div class="cond-wrap">
+  <div class="sec-title" style="margin-bottom:11px">Condiciones del presupuesto</div>
   <div class="cond-grid">
     <div class="cond-item">
-      <strong>✓ Incluye</strong>
-      Instalación completa por técnicos propios + retirada puerta antigua + terminaciones de carpintería + limpieza de zona.
+      <strong>✓ Qué incluye</strong>
+      Instalación completa por técnicos propios, retirada y gestión de la puerta antigua, terminaciones de carpintería (tapajuntas, paneles) y limpieza de la zona de trabajo.
     </div>
     <div class="cond-item">
       <strong>📐 Verificación previa</strong>
-      Visita técnica gratuita para confirmar medidas exactas. Sin sorpresas antes de fabricar.
+      Visita técnica gratuita para confirmar medidas exactas del hueco. Sin sorpresas antes ni después de fabricar.
     </div>
     <div class="cond-item">
-      <strong>⚠ No incluye</strong>
-      Pintura de paredes o reparación de suelo. Podemos recomendarle profesionales de confianza.
+      <strong>⚠ Qué no incluye</strong>
+      Pintura de paredes colindantes, reparación de suelo o parquet. Si lo necesita, podemos recomendarle profesionales de nuestra red.
     </div>
     <div class="cond-item">
-      <strong>💳 Pago</strong>
-      50% al confirmar · 50% en instalación. Financiación Cetelem 12 cuotas sin intereses.
+      <strong>💳 Forma de pago</strong>
+      50% al confirmar el pedido · 50% en el momento de la instalación. Financiación Cetelem disponible: 12 cuotas sin intereses.
     </div>
     <div class="cond-item">
-      <strong>⏱ Plazo</strong>
-      60–80 días desde confirmación del pedido, según fábrica.
+      <strong>⏱ Plazo de entrega</strong>
+      60–80 días desde la confirmación del pedido, según disponibilidad de fábrica. Le confirmamos fecha exacta al tramitar el pedido.
     </div>
-    ${notas?`<div class="cond-item full"><strong>📝 Notas del técnico</strong>${escHtml(notas)}</div>`:''}
+    ${notas?`<div class="cond-item full"><strong>📝 Notas del técnico</strong><div class="notas-box">${escHtml(notas)}</div></div>`:''}
   </div>
 </div>
 
-<div class="footer">
+<div class="doc-footer">
   <span>Ibérica Seguridad · C/ San Leonardo 34, 04004 Almería · 950 088 086 · pedidos@ibericaseguridad.com</span>
   <span>${escHtml(num)} · Válido hasta ${fv}</span>
 </div>
 </body></html>`;
 
   const win = window.open('', '_blank');
-  if (!win) { alert('Activa las ventanas emergentes para ver el PDF.'); return; }
+  if (!win) { mostrarToast('Activa las ventanas emergentes para ver el PDF.'); return; }
   win.document.write(docHTML);
   win.document.close();
   mostrarToast('PDF generado — usa Imprimir > Guardar como PDF');
