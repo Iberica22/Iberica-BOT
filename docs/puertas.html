@@ -383,6 +383,30 @@ const PANELES = [
   { id:'especial',  nombre:'Acabado especial (lacado, RAL, diseño...)', precio:null, desc:'Precio a consultar con técnico según diseño' },
 ];
 
+// Datos ampliados para PDF
+const PANEL_PDF = {
+  'liso': {
+    desc: 'Acabado plano sin relieves. Disponible en sapelly (tono madera natural cálido) o blanco puro. El acabado más versátil: encaja a la perfección con cualquier estilo de decoración, desde clásico hasta moderno.',
+    colores: 'Sapelly · Blanco',
+    swatch: 'background:linear-gradient(135deg,#faf6f0 0%,#ede5d6 50%,#f5f0e8 100%);border:2px solid #d4c4a8;',
+  },
+  'moldurado-s': {
+    desc: 'Una moldura perimetral que aporta volumen y carácter a la puerta. Disponible en amplia gama de colores lacados. Ideal si en el interior de su vivienda predominan las puertas con moldura.',
+    colores: 'Amplia gama de colores — consultar catálogo',
+    swatch: 'background:#f0ebe0;border:2px solid #c8b896;box-shadow:inset 10px 10px 0 rgba(0,0,0,.06),inset -10px -10px 0 rgba(255,255,255,.45);',
+  },
+  'moldurado-d': {
+    desc: 'Doble moldura con mayor profundidad visual. Permite acabado bicolor: un color para el marco exterior y otro para el panel central. El mayor impacto decorativo de la gama, para quien cuida cada detalle.',
+    colores: 'Bicolor disponible · Amplia gama',
+    swatch: 'background:#e8e2d5;border:2px solid #b8a880;box-shadow:inset 7px 7px 0 rgba(0,0,0,.07),inset -7px -7px 0 rgba(255,255,255,.35),inset 16px 16px 0 rgba(0,0,0,.04),inset -16px -16px 0 rgba(255,255,255,.25);',
+  },
+  'especial': {
+    desc: 'Lacado en cualquier color RAL, acabados texturizados, madera técnica u otros diseños a medida. Si tiene en mente un acabado concreto que no aparece en el catálogo estándar, consúltenos sin compromiso.',
+    colores: 'Cualquier color RAL · Diseño a medida',
+    swatch: 'background:linear-gradient(135deg,#e8d5c4 0%,#c4d5e8 40%,#d5e8c4 70%,#f0e8c4 100%);border:2px dashed #aaa;',
+  },
+};
+
 const OPCIONES = [
   { id:'nivel4',     nombre:'Certificación Clase 4 KIUSO',  precio:260, nota:'Suplemento certificación Clase 4 (solo KIUSO)', cats:['kiuso'] },
   { id:'kit-resina', nombre:'Kit resina para marco',         precio:42,  nota:'Fijación de alta resistencia',                 cats:['fichet','kiuso','blindada','metalica'] },
@@ -695,6 +719,30 @@ function generarPDF() {
   .dossier-footer{background:#f5fbf5;border-top:1px solid #cde8cd;padding:7px 17px;font-size:11px;color:#555;display:flex;justify-content:space-between;align-items:center}
   .dossier-panel{font-weight:700;color:#0e1f15}
 
+  /* PANEL / ACABADO */
+  .panel-card{border:2px solid #d4c4a8;border-radius:11px;overflow:hidden;margin-bottom:20px}
+  .panel-card-hdr{background:#f5f0e8;padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1.5px solid #d4c4a8}
+  .panel-card-badge{font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#9c8a6a;background:rgba(0,0,0,.06);padding:2px 7px;border-radius:20px;white-space:nowrap}
+  .panel-card-nombre{font-size:15px;font-weight:900;color:#0e1f15;flex:1}
+  .panel-card-precio{font-size:13px;font-weight:800;padding:3px 10px;border-radius:6px;white-space:nowrap}
+  .panel-card-precio.incl{background:#e8f5e8;color:#2e7d2e}
+  .panel-card-precio.supl{background:#fff3e0;color:#c07000}
+  .panel-card-precio.consul{background:#fce4ec;color:#b0003a}
+  .panel-card-body{display:flex;gap:16px;padding:15px 16px;align-items:flex-start}
+  .panel-swatch{width:110px;height:90px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+  .panel-swatch-inner{width:80px;height:64px;border-radius:5px}
+  .panel-info{flex:1;min-width:0}
+  .panel-info-desc{font-size:12px;color:#333;line-height:1.65;margin-bottom:7px}
+  .panel-info-row{display:flex;align-items:center;gap:6px;font-size:11px;color:#666;margin-bottom:3px}
+  .panel-info-dot{color:#9c8a6a;font-size:13px}
+  .panel-all-opts{border-top:1.5px solid #e8e0d0;padding:10px 16px;background:#faf8f4;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .panel-opt-mini{text-align:center;padding:8px 6px;border-radius:7px;border:1.5px solid #ddd;background:#fff}
+  .panel-opt-mini.activo{border-color:#4fa845;background:#f0f9f0}
+  .panel-opt-swatch{width:36px;height:28px;border-radius:4px;margin:0 auto 5px}
+  .panel-opt-nombre{font-size:9.5px;font-weight:700;color:#333;line-height:1.3}
+  .panel-opt-precio{font-size:9px;color:#888;margin-top:1px}
+  .panel-opt-activo-badge{font-size:8.5px;font-weight:800;color:#4fa845;margin-top:2px}
+
   /* EXTRAS TABLE */
   .section-block{margin-bottom:18px}
   .sec-title{font-size:9px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#888;margin-bottom:7px;padding-bottom:5px;border-bottom:1.5px solid #eee}
@@ -812,10 +860,49 @@ ${clienteBloque}
     </div>
   </div>
   <div class="dossier-footer">
-    <span>Panel / acabado: <span class="dossier-panel">${escHtml(panelLabel||'Estándar')}</span>${panelSeleccionado?.precio===null?' — precio a confirmar con técnico':''}</span>
-    ${total!==null?`<span style="font-size:12px;font-weight:800;color:#4fa845">${formatPrecio(total)} IVA incl.</span>`:''}
+    ${total!==null?`<span>Total con las opciones seleccionadas</span><span style="font-size:13px;font-weight:900;color:#4fa845">${formatPrecio(total)} IVA incl.</span>`:'<span style="color:#888">Precio a consultar con técnico</span>'}
   </div>
 </div>
+
+<!-- 3b. PANEL / ACABADO -->
+${(()=>{
+  if(catActiva==='metalica') return '';
+  const pd = PANEL_PDF[panelSeleccionado?.id] || PANEL_PDF['liso'];
+  const precioTag = panelSeleccionado?.precio===null
+    ? `<span class="panel-card-precio consul">Precio a consultar</span>`
+    : panelSeleccionado?.precio===0
+    ? `<span class="panel-card-precio incl">✓ Incluido</span>`
+    : `<span class="panel-card-precio supl">+${formatPrecio(panelSeleccionado.precio)}</span>`;
+  const miniOpts = PANELES.map(p=>{
+    const mpd = PANEL_PDF[p.id]||PANEL_PDF['liso'];
+    const isActive = panelSeleccionado?.id===p.id;
+    return `<div class="panel-opt-mini${isActive?' activo':''}">
+      <div class="panel-opt-swatch" style="${mpd.swatch}"></div>
+      <div class="panel-opt-nombre">${escHtml(p.nombre.replace(' estándar (sapelly o blanco)','').replace(' (lacado, RAL, diseño...)',''))}</div>
+      <div class="panel-opt-precio">${p.precio===null?'Consultar':p.precio===0?'Incluido':'+'+formatPrecio(p.precio)}</div>
+      ${isActive?'<div class="panel-opt-activo-badge">▲ SELECCIONADO</div>':''}
+    </div>`;
+  }).join('');
+  return `<div class="panel-card">
+  <div class="panel-card-hdr">
+    <span class="panel-card-badge">🎨 Panel / Acabado</span>
+    <span class="panel-card-nombre">${escHtml(panelSeleccionado?.nombre||'Panel liso estándar')}</span>
+    ${precioTag}
+  </div>
+  <div class="panel-card-body">
+    <div class="panel-swatch" style="${pd.swatch}">
+      <div class="panel-swatch-inner" style="${pd.swatch}"></div>
+    </div>
+    <div class="panel-info">
+      <div class="panel-info-desc">${escHtml(pd.desc)}</div>
+      <div class="panel-info-row"><span class="panel-info-dot">◆</span> <strong>Colores disponibles:</strong> ${escHtml(pd.colores)}</div>
+    </div>
+  </div>
+  <div class="panel-all-opts">
+    ${miniOpts}
+  </div>
+</div>`;
+})()}
 
 <!-- 4. EXTRAS Y OPCIONES -->
 ${opcionesSel.length>0?`<div class="section-block">
