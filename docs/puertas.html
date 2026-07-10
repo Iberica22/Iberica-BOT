@@ -96,6 +96,7 @@
   .estegat-full { grid-column:1/-1; }
   .estegat-label { font-size:11px; color:var(--gris-medio); margin-bottom:5px; }
   .estegat-select, .estegat-input { width:100%; background:var(--acero); color:var(--blanco); border:1px solid #555; border-radius:6px; padding:7px 10px; font-size:13px; box-sizing:border-box; }
+  .panel-foto img { height:200px; width:auto; max-width:100%; border-radius:8px; border:1px solid #555; display:block; background:#fff; }
   .estegat-select:focus, .estegat-input:focus { outline:none; border-color:var(--dorado); }
 
   .panel-opciones { background:var(--grafito); border-top:1px solid var(--acero);
@@ -694,6 +695,23 @@ function resumenLado(l) {
   if (c.id === 'estega')    return `Panel aluminio Estega – Col. ${c.estega.coleccion}${c.estega.diseno ? ' ('+c.estega.diseno+')' : ''}${c.estega.acabado !== 'A consultar' ? ' – '+c.estega.acabado : ''}`;
   return PANELES.find(p => p.id === c.id)?.nombre || 'Panel liso estándar';
 }
+// Imagen del modelo elegido (extraídas de los catálogos a docs/img/paneles/)
+function slugImg(s) {
+  return String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+}
+function imgPanelLado(l) {
+  const c = panelCfg[l];
+  if (c.id === 'blinsur') {
+    const m = c.blinsur.gama === 'aluminio' ? '302 / 303 / 304' : c.blinsur.modelo;
+    return `img/paneles/blinsur-${c.blinsur.gama}__${slugImg(m)}.jpg`;
+  }
+  if (c.id === 'indupanel') {
+    return `img/paneles/${slugImg(c.indu.coleccion)}__${slugImg(c.indu.modelo)}.jpg`;
+  }
+  return null;
+}
+
 function resumenCortoLado(l) {
   const c = panelCfg[l];
   if (c.id === 'blinsur')   return `Blinsur ${c.blinsur.modelo}`;
@@ -766,6 +784,8 @@ function subPickerLado(l) {
   const c = panelCfg[l];
   const ladoTxt = l==='ext' ? 'exterior' : 'interior';
   const precioLinea = `<div class="estegat-full" style="font-size:13px;font-weight:800;color:var(--dorado)" id="precioLado_${l}">${lineaPrecioLado(l)}</div>`;
+  const img = imgPanelLado(l);
+  const fotoLinea = img ? `<div class="estegat-full panel-foto"><img src="${img}" alt="Modelo seleccionado" onerror="this.parentNode.style.display='none'"></div>` : '';
 
   if (c.id === 'estega') {
     const e = c.estega;
@@ -790,6 +810,7 @@ function subPickerLado(l) {
         <div style="display:flex;align-items:flex-end;padding-bottom:2px">
           <div style="font-size:11px;color:var(--gris-medio);line-height:1.4">Consulta la tarifa Estega 2025 y añade el suplemento con tu margen.</div>
         </div>
+        ${fotoLinea}
         ${precioLinea}
       </div>
     </div>`;
@@ -829,6 +850,7 @@ function subPickerLado(l) {
             <input type="checkbox" ${b.medidaEsp?'checked':''} onchange="setBlinsurCfg('${l}','medidaEsp',this.checked)"> Medida especial (+25%)
           </label>
         </div>
+        ${fotoLinea}
         ${precioLinea}
       </div>
     </div>`;
@@ -862,6 +884,7 @@ function subPickerLado(l) {
             <input type="checkbox" ${n.chapa?'checked':''} onchange="setInduCfg('${l}','chapa',this.checked)"> Chapa trasera (+40/50 €)
           </label>
         </div>
+        ${fotoLinea}
         ${precioLinea}
       </div>
     </div>`;
@@ -1376,6 +1399,12 @@ ${(()=>{
       : p
       ? `<span class="panel-card-precio supl">+${formatPrecio(p)}</span>`
       : `<span class="panel-card-precio consul">Precio a consultar</span>`;
+    const img = imgPanelLado(l);
+    const visual = img
+      ? `<img src="${new URL(img, location.href).href}" alt="" style="width:110px;height:auto;border-radius:8px;border:2px solid #d4c4a8;flex-shrink:0;display:block" onerror="this.style.display='none'">`
+      : `<div class="panel-swatch" style="${pd.swatch}">
+      <div class="panel-swatch-inner" style="${pd.swatch}"></div>
+    </div>`;
     return `<div class="panel-card">
   <div class="panel-card-hdr">
     <span class="panel-card-badge">${icono} ${titulo}</span>
@@ -1383,9 +1412,7 @@ ${(()=>{
     ${precioTag}
   </div>
   <div class="panel-card-body">
-    <div class="panel-swatch" style="${pd.swatch}">
-      <div class="panel-swatch-inner" style="${pd.swatch}"></div>
-    </div>
+    ${visual}
     <div class="panel-info">
       <div class="panel-info-desc">${escHtml(pd.desc)}</div>
       <div class="panel-info-row"><span class="panel-info-dot">◆</span> <strong>Colores disponibles:</strong> ${escHtml(pd.colores)}</div>
