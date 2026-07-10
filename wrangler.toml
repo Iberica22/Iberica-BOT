@@ -1,0 +1,8 @@
+# Configuración de despliegue del Worker FACTUSOL (Cloudflare)
+# El código del Worker está en factusol-worker/worker.js
+name = "factusol-iberica"
+main = "factusol-worker/worker.js"
+compatibility_date = "2026-07-01"
+
+# Las credenciales (DELSOL_*) se configuran como SECRETOS en el panel de
+# Cloudflare, nunca en este archivo.
