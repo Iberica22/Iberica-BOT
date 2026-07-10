@@ -72,15 +72,21 @@ export default {
           return json({ ok: false, error: 'Diagnóstico deshabilitado o clave incorrecta' }, 403, cors);
         }
         const token = await autenticar(env);
-        const pre = await consultaSegura(env, token, 'SELECT TOP 1 TIPPRE, CODPRE, FECPRE, CLIPRE, CNOPRE, NET1PRE, BAS1PRE, PIVA1PRE, IIVA1PRE, TOTPRE, ESTPRE FROM F_PRE ORDER BY CODPRE DESC');
-        const cod = Array.isArray(pre) ? pre[0]?.CODPRE : null;
         const sondas = {};
-        sondas.F_LPR_count = await consultaSegura(env, token, 'SELECT COUNT(*) AS N FROM F_LPR');
-        sondas.F_LPR_top3 = await consultaSegura(env, token, 'SELECT TOP 3 * FROM F_LPR');
-        if (cod != null) {
-          sondas[`F_LPR_presupuesto_${cod}`] = await consultaSegura(env, token, `SELECT * FROM F_LPR WHERE CODLPR = ${cod}`);
+        // Control: COUNT sobre una tabla que sabemos que existe
+        sondas.count_F_PRE = await consultaSegura(env, token, 'SELECT COUNT(*) AS N FROM F_PRE');
+        // Catálogo: qué tablas de líneas existen realmente en la base
+        sondas.tablas_lineas = await consultaSegura(env, token,
+          "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME LIKE 'F_L%' ORDER BY TABLE_NAME");
+        // Muestra de cada tabla candidata (para identificar la de presupuestos)
+        if (Array.isArray(sondas.tablas_lineas)) {
+          const nombres = sondas.tablas_lineas.map(f => f.TABLE_NAME).filter(Boolean).slice(0, 10);
+          for (const t of nombres) {
+            if (!/^[A-Za-z0-9_]+$/.test(t)) continue;
+            sondas['top_' + t] = await consultaSegura(env, token, `SELECT TOP 2 * FROM ${t}`);
+          }
         }
-        return json({ ok: true, F_PRE_ultimo: pre, ...sondas }, 200, cors);
+        return json({ ok: true, ...sondas }, 200, cors);
       }
 
       if (url.pathname === '/presupuesto' && request.method === 'POST') {
