@@ -17,7 +17,7 @@
  *   POST /admin/EscribirRegistro → { ejercicio, tabla, registro:[{columna,dato}] }
  *
  * Tablas usadas: F_CLI (clientes), F_PRE (cabecera presupuesto),
- * F_LPR (líneas de presupuesto).
+ * F_LPS (líneas de presupuesto).
  *
  * Esquema verificado contra la base real (via /diag):
  *   - CODPRE usa numeración con prefijo de año: 260116 = año 26, nº 0116.
@@ -323,8 +323,8 @@ async function crearPresupuesto(env, token, { serie, numero, cliente, datos }) {
     { TIPPRE: serie, CODPRE: numero, FECPRE: `${fecha}T00:00:00`, CLIPRE: cliente.codigo },
   ]);
 
-  // Líneas — los nombres exactos de columnas de F_LPR se confirman con /diag;
-  // se intentan las variantes habituales del esquema FACTUSOL.
+  // Líneas — tabla F_LPS, verificada con /diag contra la base real.
+  // El IVA va solo en cabecera: las líneas llevan precio sin IVA e IVALPS=0.
   let nivelLineas = 0;
   for (let i = 0; i < datos.lineas.length; i++) {
     const l = datos.lineas[i];
@@ -332,10 +332,10 @@ async function crearPresupuesto(env, token, { serie, numero, cliente, datos }) {
     const precio = redondear(l.precioBase);
     const totLinea = redondear(precio * cant);
     const desc = String(l.descripcion || '').slice(0, 250);
-    nivelLineas = Math.max(nivelLineas, await insertarConAlternativas(env, token, 'F_LPR', [
-      { TIPLPR: serie, CODLPR: numero, POSLPR: i + 1, ARTLPR: l.codigo || '', DESLPR: desc, CANLPR: cant, PRELPR: precio, TIVLPR: 0, IVALPR: l.ivaPct ?? IVA_PCT_DEFECTO, TOTLPR: totLinea },
-      { TIPLPR: serie, CODLPR: numero, POSLPR: i + 1, ARTLPR: l.codigo || '', DESLPR: desc, CANLPR: cant, PRELPR: precio, TOTLPR: totLinea },
-      { TIPLPR: serie, CODLPR: numero, POSLPR: i + 1, DESLPR: desc, CANLPR: cant, PRELPR: precio },
+    nivelLineas = Math.max(nivelLineas, await insertarConAlternativas(env, token, 'F_LPS', [
+      { TIPLPS: serie, CODLPS: numero, POSLPS: i + 1, ARTLPS: l.codigo || '', DESLPS: desc, CANLPS: cant, DT1LPS: 0, DT2LPS: 0, DT3LPS: 0, PRELPS: precio, TOTLPS: totLinea, IVALPS: 0 },
+      { TIPLPS: serie, CODLPS: numero, POSLPS: i + 1, ARTLPS: l.codigo || '', DESLPS: desc, CANLPS: cant, PRELPS: precio, TOTLPS: totLinea },
+      { TIPLPS: serie, CODLPS: numero, POSLPS: i + 1, DESLPS: desc, CANLPS: cant, PRELPS: precio },
     ]));
   }
 
