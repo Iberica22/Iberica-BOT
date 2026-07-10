@@ -1,0 +1,7 @@
+# Configuración de despliegue del Worker (Cloudflare)
+name = "factusol-iberica"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+# Las credenciales (DELSOL_*) se configuran como SECRETOS en el panel de
+# Cloudflare, nunca en este archivo.
