@@ -11,33 +11,35 @@
  * El cliente se busca primero por teléfono, después por nombre; si no
  * existe, se crea con los datos del formulario.
  *
+ * La API Delsol trabaja directamente sobre las tablas de FACTUSOL:
+ *   POST /login/Autenticar       → token (Bearer)
+ *   POST /admin/LanzarConsulta   → { ejercicio, consulta }  (solo SELECT)
+ *   POST /admin/EscribirRegistro → { ejercicio, tabla, registro:[{columna,dato}] }
+ *
+ * Tablas usadas: F_CLI (clientes), F_PRE (cabecera presupuesto),
+ * F_LPR (líneas de presupuesto).
+ *
  * SECRETOS (Configuración → Variables y secretos del Worker):
  *   DELSOL_FABRICANTE  → código de fabricante (int)
  *   DELSOL_CLIENTE     → código de cliente API (int)
  *   DELSOL_BASEDATOS   → base de datos (ej. FS011)
  *   DELSOL_PASSWORD    → contraseña de la API (en claro; se codifica aquí)
  *
- * VARIABLE opcional:
- *   ALLOWED_ORIGIN     → origen permitido para CORS
- *                        (por defecto https://iberica22.github.io)
+ * VARIABLES opcionales:
+ *   ALLOWED_ORIGIN → origen CORS permitido (defecto https://iberica22.github.io)
+ *   DIAG_KEY       → si se define, habilita GET /diag?k=<clave> para
+ *                    inspeccionar columnas reales de las tablas
  */
 
 const DELSOL_BASE = 'https://api.sdelsol.com';
-
-/* ═══════════════════════════════════════════════════════════════════════
- * ⚠️ ENDPOINTS PENDIENTES DE VALIDAR con https://apidoc.sdelsol.com
- * Solo /login/autenticar está confirmado. El resto se rellenará con la
- * documentación oficial (sección FACTUSOL → Clientes / Presupuestos).
- * ═══════════════════════════════════════════════════════════════════════ */
 const EP = {
-  login:               '/login/autenticar',
-  obtenerClientes:     'PENDIENTE',   // listar/filtrar clientes
-  nuevoCliente:        'PENDIENTE',   // alta de cliente
-  obtenerPresupuestos: 'PENDIENTE',   // para calcular el siguiente número de la serie
-  nuevoPresupuesto:    'PENDIENTE',   // alta de presupuesto (cabecera + líneas)
+  login: '/login/Autenticar',
+  consulta: '/admin/LanzarConsulta',
+  escribir: '/admin/EscribirRegistro',
 };
 
 const SERIES = { puertas: 5, tarifas: 7 };
+const IVA_PCT_DEFECTO = 21;
 
 export default {
   async fetch(request, env) {
@@ -53,10 +55,24 @@ export default {
     const url = new URL(request.url);
 
     try {
-      // Diagnóstico: comprueba credenciales sin tocar datos
       if (url.pathname === '/ping') {
         const token = await autenticar(env);
         return json({ ok: true, mensaje: 'Autenticación correcta contra la API Delsol', tokenRecibido: Boolean(token) }, 200, cors);
+      }
+
+      // Diagnóstico de esquema: muestra el último presupuesto, sus líneas y
+      // el último cliente para verificar nombres de columnas y formatos.
+      if (url.pathname === '/diag') {
+        if (!env.DIAG_KEY || url.searchParams.get('k') !== env.DIAG_KEY) {
+          return json({ ok: false, error: 'Diagnóstico deshabilitado o clave incorrecta' }, 403, cors);
+        }
+        const token = await autenticar(env);
+        const [pre, lpr, cli] = await Promise.all([
+          consultaSegura(env, token, 'SELECT TOP 1 * FROM F_PRE ORDER BY CODPRE DESC'),
+          consultaSegura(env, token, 'SELECT TOP 5 * FROM F_LPR ORDER BY CODLPR DESC'),
+          consultaSegura(env, token, 'SELECT TOP 1 * FROM F_CLI ORDER BY CODCLI DESC'),
+        ]);
+        return json({ ok: true, F_PRE: pre, F_LPR: lpr, F_CLI: cli }, 200, cors);
       }
 
       if (url.pathname === '/presupuesto' && request.method === 'POST') {
@@ -79,7 +95,11 @@ function json(obj, status, cors) {
   });
 }
 
-/* ───────────────────────── Autenticación ───────────────────────── */
+function ejercicioActual() {
+  return String(new Date().getFullYear());
+}
+
+/* ───────────────────────── API Delsol ───────────────────────── */
 
 async function autenticar(env) {
   const body = {
@@ -102,21 +122,61 @@ async function autenticar(env) {
   return token;
 }
 
-/** Llama a la API con el token; si devuelve 401 con el token en crudo,
- *  reintenta con el prefijo "Bearer" (el formato exacto depende de la doc). */
-async function llamadaApi(token, endpoint, payload) {
-  if (endpoint === 'PENDIENTE') {
-    throw new Error('Endpoint sin configurar: falta completar la sección EP de worker.js con la documentación de apidoc.sdelsol.com');
-  }
-  const doFetch = (auth) => fetch(DELSOL_BASE + endpoint, {
+async function llamadaApi(env, token, endpoint, payload) {
+  const res = await fetch(DELSOL_BASE + endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: auth },
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify(payload),
   });
-  let res = await doFetch(token);
-  if (res.status === 401) res = await doFetch('Bearer ' + token);
-  if (!res.ok) throw new Error(`API Delsol ${endpoint} falló (HTTP ${res.status}): ${await res.text()}`);
-  return res.json();
+  const texto = await res.text();
+  let j;
+  try { j = JSON.parse(texto); } catch { throw new Error(`${endpoint} devolvió respuesta no-JSON (HTTP ${res.status}): ${texto.slice(0, 300)}`); }
+  if (!res.ok || (j.respuesta && String(j.respuesta).toUpperCase() !== 'OK')) {
+    throw new Error(`${endpoint} falló (HTTP ${res.status}): ${JSON.stringify(j).slice(0, 400)}`);
+  }
+  return j;
+}
+
+/** SELECT vía LanzarConsulta. Devuelve array de filas como objetos {COLUMNA: dato}. */
+async function consulta(env, token, sql) {
+  const j = await llamadaApi(env, token, EP.consulta, { ejercicio: ejercicioActual(), consulta: sql });
+  return filas(j);
+}
+
+async function consultaSegura(env, token, sql) {
+  try { return await consulta(env, token, sql); }
+  catch (e) { return { error: String(e.message || e) }; }
+}
+
+/** Convierte resultado [[{columna,dato},...],...] en [{COL:dato,...},...] */
+function filas(j) {
+  const lista = Array.isArray(j?.resultado) ? j.resultado : [];
+  return lista.map((reg) => {
+    const fila = {};
+    for (const c of reg || []) fila[String(c.columna).toUpperCase()] = c.dato;
+    return fila;
+  });
+}
+
+/** INSERT vía EscribirRegistro. campos = objeto {COLUMNA: valor}. */
+async function insertar(env, token, tabla, campos) {
+  const registro = Object.entries(campos)
+    .filter(([, v]) => v !== undefined && v !== null)
+    .map(([columna, dato]) => ({ columna, dato: String(dato) }));
+  return llamadaApi(env, token, EP.escribir, { ejercicio: ejercicioActual(), tabla, registro });
+}
+
+/** Intenta insertar con varios juegos de columnas, del más completo al mínimo.
+ *  Si una versión falla (p. ej. por una columna inexistente), prueba la siguiente. */
+async function insertarConAlternativas(env, token, tabla, versiones) {
+  let ultimoError;
+  for (let i = 0; i < versiones.length; i++) {
+    try {
+      await insertar(env, token, tabla, versiones[i]);
+      return i; // nivel usado (0 = completo)
+    } catch (e) { ultimoError = e; }
+  }
+  throw new Error(`No se pudo insertar en ${tabla}: ${ultimoError?.message || ultimoError}`);
 }
 
 /* ───────────────────────── Lógica de negocio ───────────────────────── */
@@ -130,14 +190,9 @@ async function grabarPresupuesto(env, datos) {
 
   const token = await autenticar(env);
 
-  // 1) Localizar o crear cliente (por teléfono, luego por nombre)
-  const cliente = await localizarOCrearCliente(token, cli);
-
-  // 2) Siguiente número de la serie según FACTUSOL
-  const numero = await siguienteNumero(token, serie);
-
-  // 3) Crear presupuesto
-  await crearPresupuesto(token, { serie, numero, cliente, datos });
+  const cliente = await localizarOCrearCliente(env, token, cli);
+  const numero = await siguienteNumero(env, token, serie);
+  await crearPresupuesto(env, token, { serie, numero, cliente, datos });
 
   return {
     serie,
@@ -147,83 +202,90 @@ async function grabarPresupuesto(env, datos) {
   };
 }
 
-/* Las tres funciones siguientes dependen de los endpoints PENDIENTES.
- * Su estructura interna (nombres de campos del JSON) se ajustará con la
- * documentación oficial. */
+const soloDigitos = (s) => String(s || '').replace(/\D/g, '');
+const normNombre = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
 
-async function localizarOCrearCliente(token, cli) {
-  const telefono = (cli.telefono || '').replace(/[\s\-.]/g, '');
+async function localizarOCrearCliente(env, token, cli) {
+  // Cargamos código, nombres y teléfono de todos los clientes y comparamos en
+  // JS: evita depender de funciones SQL y de cómo esté formateado el teléfono.
+  const lista = await consulta(env, token, 'SELECT CODCLI, NOFCLI, NOCCLI, TELCLI FROM F_CLI');
 
-  // Búsqueda por teléfono
-  if (telefono) {
-    const porTel = await llamadaApi(token, EP.obtenerClientes, { filtro: { telefono } });
-    const encontrado = extraerPrimerCliente(porTel, telefono, null);
-    if (encontrado) return { ...encontrado, creado: false };
+  const tel = soloDigitos(cli.telefono);
+  if (tel.length >= 9) {
+    const t9 = tel.slice(-9); // últimos 9 dígitos (sin prefijo país)
+    for (const f of lista) {
+      if (soloDigitos(f.TELCLI).slice(-9) === t9 && soloDigitos(f.TELCLI).length >= 9) {
+        return { codigo: Number(f.CODCLI), nombre: f.NOFCLI || f.NOCCLI, creado: false };
+      }
+    }
   }
 
-  // Búsqueda por nombre
-  const porNombre = await llamadaApi(token, EP.obtenerClientes, { filtro: { nombre: cli.nombre } });
-  const encontrado = extraerPrimerCliente(porNombre, null, cli.nombre);
-  if (encontrado) return { ...encontrado, creado: false };
+  const nom = normNombre(cli.nombre);
+  for (const f of lista) {
+    if (normNombre(f.NOFCLI) === nom || normNombre(f.NOCCLI) === nom) {
+      return { codigo: Number(f.CODCLI), nombre: f.NOFCLI || f.NOCCLI, creado: false };
+    }
+  }
 
-  // Alta de cliente nuevo
-  const alta = await llamadaApi(token, EP.nuevoCliente, {
-    nombre: cli.nombre,
-    telefono: cli.telefono || '',
-    email: cli.email || '',
-    domicilio: cli.direccion || '',
-  });
-  const codigo = alta?.resultado?.codigo ?? alta?.codigo;
-  if (codigo == null) throw new Error('El alta de cliente no devolvió código: ' + JSON.stringify(alta).slice(0, 300));
+  // No existe → alta con el siguiente código libre
+  let maxCod = 0;
+  for (const f of lista) { const n = Number(f.CODCLI); if (n > maxCod) maxCod = n; }
+  const codigo = maxCod + 1;
+
+  await insertarConAlternativas(env, token, 'F_CLI', [
+    { CODCLI: codigo, NOFCLI: cli.nombre, NOCCLI: cli.nombre, DOMCLI: cli.direccion || '', TELCLI: cli.telefono || '', EMACLI: cli.email || '' },
+    { CODCLI: codigo, NOFCLI: cli.nombre, NOCCLI: cli.nombre, DOMCLI: cli.direccion || '', TELCLI: cli.telefono || '' },
+    { CODCLI: codigo, NOFCLI: cli.nombre },
+  ]);
   return { codigo, nombre: cli.nombre, creado: true };
 }
 
-function extraerPrimerCliente(respuesta, telefono, nombre) {
-  const lista = respuesta?.resultado?.clientes || respuesta?.resultado || respuesta?.clientes || [];
-  if (!Array.isArray(lista)) return null;
-  const norm = (s) => String(s || '').toLowerCase().replace(/[\s\-.]/g, '');
-  for (const c of lista) {
-    if (telefono && [c.telefono, c.telefono1, c.telefono2, c.movil].some((t) => norm(t) === norm(telefono))) {
-      return { codigo: c.codigo ?? c.codigoCliente, nombre: c.nombre };
-    }
-    if (nombre && norm(c.nombre) === norm(nombre)) {
-      return { codigo: c.codigo ?? c.codigoCliente, nombre: c.nombre };
-    }
+async function siguienteNumero(env, token, serie) {
+  // Nota: si dos presupuestos se grabaran exactamente a la vez podrían
+  // colisionar en número; con el volumen de uso previsto no es un problema.
+  let filasMax;
+  try {
+    filasMax = await consulta(env, token, `SELECT MAX(CODPRE) AS MAXNUM FROM F_PRE WHERE TIPPRE = ${serie}`);
+  } catch {
+    filasMax = await consulta(env, token, `SELECT MAX(CODPRE) AS MAXNUM FROM F_PRE WHERE TIPPRE = '${serie}'`);
   }
-  return null;
-}
-
-async function siguienteNumero(token, serie) {
-  const res = await llamadaApi(token, EP.obtenerPresupuestos, { filtro: { serie } });
-  const lista = res?.resultado?.presupuestos || res?.resultado || res?.presupuestos || [];
-  let max = 0;
-  if (Array.isArray(lista)) {
-    for (const p of lista) {
-      const n = Number(p.numero ?? p.codigo ?? 0);
-      if (n > max) max = n;
-    }
-  }
+  const max = Number(filasMax?.[0]?.MAXNUM) || 0;
   return max + 1;
 }
 
-async function crearPresupuesto(token, { serie, numero, cliente, datos }) {
-  const hoy = new Date().toISOString().slice(0, 10);
-  const lineas = datos.lineas.map((l, i) => ({
-    orden: i + 1,
-    articulo: l.codigo || '',
-    descripcion: l.descripcion,
-    cantidad: l.cantidad || 1,
-    precio: redondear(l.precioBase),       // precio unitario SIN IVA
-    iva: l.ivaPct ?? 21,
-  }));
-  return llamadaApi(token, EP.nuevoPresupuesto, {
-    serie,
-    numero,
-    fecha: hoy,
-    codigoCliente: cliente.codigo,
-    observaciones: datos.notas || '',
-    lineas,
-  });
+async function crearPresupuesto(env, token, { serie, numero, cliente, datos }) {
+  const d = new Date();
+  const fecha = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  // Totales calculados a partir de las líneas (precios sin IVA)
+  let base = 0;
+  for (const l of datos.lineas) base += (Number(l.precioBase) || 0) * (Number(l.cantidad) || 1);
+  base = redondear(base);
+  const cuota = redondear(base * IVA_PCT_DEFECTO / 100);
+  const total = redondear(base + cuota);
+
+  // Cabecera — de más completa a mínima
+  const nivelCab = await insertarConAlternativas(env, token, 'F_PRE', [
+    { TIPPRE: serie, CODPRE: numero, FECPRE: fecha, CLIPRE: cliente.codigo, CNOPRE: cliente.nombre, OBSPRE: datos.notas || '', BA1PRE: base, PI1PRE: IVA_PCT_DEFECTO, CI1PRE: cuota, TOTPRE: total, ESTPRE: 0 },
+    { TIPPRE: serie, CODPRE: numero, FECPRE: fecha, CLIPRE: cliente.codigo, TOTPRE: total },
+    { TIPPRE: serie, CODPRE: numero, FECPRE: fecha, CLIPRE: cliente.codigo },
+  ]);
+
+  // Líneas
+  let nivelLin = 0;
+  for (let i = 0; i < datos.lineas.length; i++) {
+    const l = datos.lineas[i];
+    const cant = Number(l.cantidad) || 1;
+    const precio = redondear(l.precioBase);
+    const totLinea = redondear(precio * cant);
+    nivelLin = Math.max(nivelLin, await insertarConAlternativas(env, token, 'F_LPR', [
+      { TIPLPR: serie, CODLPR: numero, POSLPR: i + 1, ARTLPR: l.codigo || '', DESLPR: l.descripcion, CANLPR: cant, PRELPR: precio, IVALPR: l.ivaPct ?? IVA_PCT_DEFECTO, TOTLPR: totLinea },
+      { TIPLPR: serie, CODLPR: numero, POSLPR: i + 1, ARTLPR: l.codigo || '', DESLPR: l.descripcion, CANLPR: cant, PRELPR: precio },
+      { TIPLPR: serie, CODLPR: numero, POSLPR: i + 1, DESLPR: l.descripcion, CANLPR: cant, PRELPR: precio },
+    ]));
+  }
+
+  return { nivelCabecera: nivelCab, nivelLineas: nivelLin };
 }
 
 function redondear(n) {

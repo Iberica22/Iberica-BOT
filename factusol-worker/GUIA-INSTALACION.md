@@ -22,7 +22,9 @@ viven cifradas dentro del Worker.
 ## Paso 2 — Pegar el código del Worker
 
 1. En el Worker recién creado, pulsa **Editar código**.
-2. Borra todo y pega el contenido completo del archivo [`worker.js`](./worker.js) de esta carpeta.
+2. Borra todo y pega el contenido completo del archivo [`worker.js`](./worker.js)
+   de esta carpeta. Puedes copiarlo directamente desde:
+   <https://raw.githubusercontent.com/Iberica22/Iberica-BOT/main/factusol-worker/worker.js>
 3. Pulsa **Implementar** (arriba a la derecha).
 
 ## Paso 3 — Guardar las credenciales como secretos
@@ -36,6 +38,7 @@ Crea estos 4 secretos (tipo **Secreto**, no texto plano):
 | `DELSOL_CLIENTE` | Código de cliente API |
 | `DELSOL_BASEDATOS` | Base de datos (ej. `FS011`) |
 | `DELSOL_PASSWORD` | Contraseña de la API |
+| `DIAG_KEY` | (Opcional) una clave inventada por ti para habilitar `/diag` |
 
 ## Paso 4 — Probar las credenciales
 
@@ -47,6 +50,18 @@ https://factusol-iberica.<tu-subdominio>.workers.dev/ping
 
 Si devuelve `{"ok":true,...}` la autenticación funciona.
 Si devuelve error, copia el mensaje y pásaselo a Claude.
+
+### Paso 4b — Verificar el esquema (recomendado antes del primer uso)
+
+Si configuraste `DIAG_KEY`, abre:
+
+```
+https://factusol-iberica.<tu-subdominio>.workers.dev/diag?k=TU_CLAVE
+```
+
+Devuelve el último presupuesto, sus líneas y el último cliente tal y como
+están en FACTUSOL. Copia ese resultado y pásaselo a Claude para confirmar
+que los nombres de columna y el formato de fecha coinciden.
 
 ## Paso 5 — Conectar las páginas
 
@@ -71,10 +86,13 @@ muestra — las páginas siguen funcionando como siempre.
 4. Graba el presupuesto (cabecera + líneas, precios sin IVA + 21%).
 5. La página muestra el número real (ej. `5/000123`) y lo usa en el PDF.
 
-## Estado actual
+## Detalles técnicos
 
-- ⚠️ Los endpoints exactos de la API (clientes y presupuestos) están
-  **pendientes de confirmar** con la documentación oficial
-  (<https://apidoc.sdelsol.com>) — están marcados como `PENDIENTE` en la
-  sección `EP` de `worker.js`. Hasta completarlos, `/ping` funciona pero
-  `/presupuesto` devolverá un error explicativo.
+- La API Delsol trabaja directamente sobre las tablas de FACTUSOL:
+  `F_CLI` (clientes), `F_PRE` (cabeceras de presupuesto) y `F_LPR` (líneas).
+- El Worker usa `LanzarConsulta` (SELECT) para buscar clientes y calcular el
+  siguiente número de serie, y `EscribirRegistro` para insertar.
+- Las inserciones prueban primero el juego de columnas completo y, si la
+  base de datos rechaza alguna columna, reintentan con juegos reducidos
+  (el resultado indica el "nivel" usado). Con `/diag` se puede verificar el
+  esquema real y afinar las columnas si hiciera falta.
