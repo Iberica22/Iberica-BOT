@@ -73,18 +73,17 @@ export default {
         }
         const token = await autenticar(env);
         const sondas = {};
-        // Control: COUNT sobre una tabla que sabemos que existe
-        sondas.count_F_PRE = await consultaSegura(env, token, 'SELECT COUNT(*) AS N FROM F_PRE');
-        // Catálogo: qué tablas de líneas existen realmente en la base
-        sondas.tablas_lineas = await consultaSegura(env, token,
-          "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME LIKE 'F_L%' ORDER BY TABLE_NAME");
-        // Muestra de cada tabla candidata (para identificar la de presupuestos)
-        if (Array.isArray(sondas.tablas_lineas)) {
-          const nombres = sondas.tablas_lineas.map(f => f.TABLE_NAME).filter(Boolean).slice(0, 10);
-          for (const t of nombres) {
-            if (!/^[A-Za-z0-9_]+$/.test(t)) continue;
-            sondas['top_' + t] = await consultaSegura(env, token, `SELECT TOP 2 * FROM ${t}`);
-          }
+        // Último presupuesto para buscar sus líneas
+        const pre = await consultaSegura(env, token, 'SELECT TOP 1 TIPPRE, CODPRE FROM F_PRE ORDER BY CODPRE DESC');
+        const cod = Array.isArray(pre) ? Number(pre[0]?.CODPRE) : 0;
+        sondas.ultimo_presupuesto = pre;
+        // Tablas candidatas a "líneas de presupuesto" (F_LPR no existe en esta
+        // base). Las columnas siguen el patrón <CAMPO><SUFIJO>: F_LPP→CODLPP...
+        const candidatas = ['F_LPP', 'F_LPA', 'F_LPC', 'F_LPD', 'F_LPF', 'F_LPG', 'F_LPH', 'F_LPS'];
+        for (const t of candidatas) {
+          const suf = t.slice(2); // "LPP"
+          if (cod) sondas['lineas_' + t] = await consultaSegura(env, token, `SELECT TOP 3 * FROM ${t} WHERE COD${suf} = ${cod}`);
+          sondas['muestra_' + t] = await consultaSegura(env, token, `SELECT TOP 1 * FROM ${t}`);
         }
         return json({ ok: true, ...sondas }, 200, cors);
       }
