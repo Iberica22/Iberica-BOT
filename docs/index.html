@@ -522,6 +522,11 @@
   .btn-wa:hover { filter: brightness(1.1); }
   .btn-email { background: #9b59b6; color: #fff; }
   .btn-email:hover { filter: brightness(1.1); }
+  .btn-fs { background: #2f7dd1; color: #fff; }
+  .btn-fs:hover { filter: brightness(1.1); }
+  .fs-status { padding: 8px 2px 0; font-size: 13px; font-weight: 600; }
+  .fs-status.ok { color: var(--verde, #4fa845); }
+  .fs-status.err { color: #e05555; }
 
   .presu-vacio { text-align: center; color: var(--gris-medio); padding: 50px 20px; }
 
@@ -687,7 +692,9 @@
       <button class="btn-pdf" onclick="generarPDF()"><span class="emoji">📄</span>PDF</button>
       <button class="btn-wa" onclick="enviarWhatsApp()"><span class="emoji">💬</span>WhatsApp</button>
       <button class="btn-email" onclick="enviarEmail()"><span class="emoji">✉️</span>Enviar email</button>
+      <button class="btn-fs" onclick="guardarFactusol()" id="btnFS" style="display:none"><span class="emoji">💾</span>FACTUSOL</button>
     </div>
+    <div class="fs-status" id="fsStatus"></div>
   </div>
 </div>
 
@@ -875,6 +882,52 @@ const carrito = {};
 let extras = [];
 const IVA = 0.21;
 
+// ── FACTUSOL (vía Cloudflare Worker) ─────────────────────────────────────────
+// URL del Worker intermediario. Mientras esté vacía, el botón "FACTUSOL"
+// permanece oculto. Ver factusol-worker/GUIA-INSTALACION.md
+const FACTUSOL_WEBHOOK_URL = '';
+let presuFactusol = null; // {firma, numeroFormateado} del último guardado
+
+function payloadFactusol() {
+  const lineas = [];
+  for (const idx in carrito) {
+    const p = PRODUCTOS[idx];
+    lineas.push({
+      codigo: p.codigo, descripcion: p.descripcion,
+      cantidad: carrito[idx],
+      precioBase: Math.round(precioBase(p.precio) * 100) / 100, ivaPct: 21,
+    });
+  }
+  for (const e of extras) {
+    lineas.push({ descripcion: e.concepto, cantidad: 1, precioBase: Math.round(e.importe * 100) / 100, ivaPct: 21 });
+  }
+  return { origen: 'tarifas', cliente: datosCliente(), lineas, notas: '' };
+}
+
+async function guardarFactusol() {
+  if (!FACTUSOL_WEBHOOK_URL) return;
+  if (numUnidades() === 0) { alert('El presupuesto está vacío.'); return; }
+  const cli = datosCliente();
+  if (!cli.nombre) { alert('Rellena al menos el nombre del cliente para grabar en FACTUSOL.'); return; }
+  const payload = payloadFactusol();
+  const st  = document.getElementById('fsStatus');
+  const btn = document.getElementById('btnFS');
+  btn.disabled = true; st.className = 'fs-status'; st.textContent = 'Grabando en FACTUSOL…';
+  try {
+    const res = await fetch(FACTUSOL_WEBHOOK_URL + '/presupuesto', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || 'Error desconocido');
+    presuFactusol = { firma: JSON.stringify(payload), numeroFormateado: j.numeroFormateado };
+    st.className = 'fs-status ok';
+    st.textContent = `✓ Grabado en FACTUSOL — Presupuesto ${j.numeroFormateado}` + (j.cliente?.creado ? ' · cliente nuevo creado' : '');
+  } catch (e) {
+    st.className = 'fs-status err';
+    st.textContent = '✗ No se pudo grabar en FACTUSOL: ' + e.message;
+  } finally { btn.disabled = false; }
+}
+
 function precioBase(precioConIva) {
   // Los precios de la tarifa incluyen 21% IVA -> sacamos la base
   return precioConIva / (1 + IVA);
@@ -1024,6 +1077,11 @@ function datosCliente() {
   };
 }
 function numeroPresupuesto() {
+  // Si ya se grabó en FACTUSOL y el presupuesto no ha cambiado desde
+  // entonces, usamos el número real asignado por FACTUSOL.
+  if (presuFactusol && numUnidades() > 0) {
+    try { if (presuFactusol.firma === JSON.stringify(payloadFactusol())) return presuFactusol.numeroFormateado; } catch (e) {}
+  }
   const d = new Date();
   const yy = String(d.getFullYear()).slice(2);
   const seq = String(Math.floor(Math.random() * 9000) + 1000);
@@ -1268,6 +1326,8 @@ function enviarEmail() {
   const cuerpo = textoEmailVenta();
   window.location.href = `mailto:${encodeURIComponent(cli.email)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
 }
+
+if (FACTUSOL_WEBHOOK_URL) document.getElementById('btnFS').style.display = '';
 
 </script>
 </body>

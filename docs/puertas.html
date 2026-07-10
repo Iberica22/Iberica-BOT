@@ -145,7 +145,12 @@
   .btn-wa:hover { background:#1ead52; }
   .btn-email { background:#9b59b6; color:#fff; }
   .btn-email:hover { background:#8e44ad; }
+  .btn-fs { background:#2f7dd1; color:#fff; }
+  .btn-fs:hover { background:#2669b3; }
   .btn-action:disabled { opacity:.4; cursor:not-allowed; }
+  .fs-status { text-align:right; padding:6px 24px 12px; font-size:13px; font-weight:600; min-height:0; }
+  .fs-status.ok { color:var(--verde); }
+  .fs-status.err { color:#e05555; }
 
   .toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(20px);
     background:#1c3326; color:var(--blanco); padding:12px 24px; border-radius:10px;
@@ -248,8 +253,10 @@
     <button class="btn-action btn-pdf"   onclick="generarPDF()"     id="btnPDF"   disabled>📄 Generar PDF</button>
     <button class="btn-action btn-wa"    onclick="enviarWhatsApp()" id="btnWA"    disabled>💬 WhatsApp</button>
     <button class="btn-action btn-email" onclick="enviarEmail()"    id="btnEmail" disabled>✉️ Enviar email</button>
+    <button class="btn-action btn-fs"    onclick="guardarFactusol()" id="btnFS"   disabled style="display:none">💾 Guardar en FACTUSOL</button>
   </div>
 </div>
+<div class="fs-status" id="fsStatus"></div>
 <script>
 
 
@@ -510,6 +517,12 @@ let estegatDiseno      = '';
 let estegatAcabado     = 'A consultar';
 let estegatPrecio      = null;
 
+// ── FACTUSOL (vía Cloudflare Worker) ─────────────────────────────────────────
+// URL del Worker intermediario. Mientras esté vacía, el botón "Guardar en
+// FACTUSOL" permanece oculto. Ver factusol-worker/GUIA-INSTALACION.md
+const FACTUSOL_WEBHOOK_URL = '';
+let presuFactusol = null; // {firma, numeroFormateado} del último guardado
+
 // ── Render ────────────────────────────────────────────────────────────────────
 function renderModelos() {
   const grid    = document.getElementById('modelosGrid');
@@ -574,7 +587,7 @@ function seleccionar(id) {
   document.getElementById('panelOpciones').classList.add('visible');
   document.getElementById('clienteZona').style.display = 'block';
   actualizarTotal();
-  ['btnPDF','btnWA','btnEmail'].forEach(id=>document.getElementById(id).disabled=false);
+  ['btnPDF','btnWA','btnEmail','btnFS'].forEach(id=>document.getElementById(id).disabled=false);
 }
 
 function filtrar(cat, btn) {
@@ -584,7 +597,7 @@ function filtrar(cat, btn) {
     document.getElementById('panelZona').classList.remove('visible');
     document.getElementById('panelOpciones').classList.remove('visible');
     document.getElementById('clienteZona').style.display = 'none';
-    ['btnPDF','btnWA','btnEmail'].forEach(id=>document.getElementById(id).disabled=true);
+    ['btnPDF','btnWA','btnEmail','btnFS'].forEach(id=>document.getElementById(id).disabled=true);
   }
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   btn.classList.add('active');
@@ -622,6 +635,60 @@ function totalCalculado() {
   return t;
 }
 
+// ── FACTUSOL: construir payload y grabar ─────────────────────────────────────
+function payloadFactusol() {
+  const base = (p) => Math.round(p / 1.21 * 100) / 100; // los precios de la página incluyen 21% IVA
+  const lineas = [{
+    descripcion: `Puerta ${modeloSeleccionado.cat.toUpperCase()} ${modeloSeleccionado.nombre} — ${modeloSeleccionado.nivel}`,
+    cantidad: 1, precioBase: base(modeloSeleccionado.precio), ivaPct: 21,
+  }];
+  if (catActiva !== 'metalica' && panelSeleccionado) {
+    if (panelSeleccionado.id === 'estega' && estegatPrecio) {
+      lineas.push({
+        descripcion: `Panel aluminio Estega — Col. ${estegatColeccion}${estegatDiseno ? ' (' + estegatDiseno + ')' : ''}${estegatAcabado !== 'A consultar' ? ' — ' + estegatAcabado : ''}`,
+        cantidad: 1, precioBase: base(estegatPrecio), ivaPct: 21,
+      });
+    } else if (panelSeleccionado.precio) {
+      lineas.push({ descripcion: panelSeleccionado.nombre, cantidad: 1, precioBase: base(panelSeleccionado.precio), ivaPct: 21 });
+    }
+  }
+  for (const id of opcionesActivas) {
+    const op = OPCIONES.find(o => o.id === id);
+    if (op?.precio) lineas.push({ descripcion: op.nombre, cantidad: 1, precioBase: base(op.precio), ivaPct: 21 });
+  }
+  return {
+    origen: 'puertas',
+    cliente: datosCliente(),
+    lineas,
+    notas: document.getElementById('notasPresupuesto').value.trim(),
+  };
+}
+
+async function guardarFactusol() {
+  if (!FACTUSOL_WEBHOOK_URL) return;
+  if (!modeloSeleccionado) { alert('Selecciona un modelo primero.'); return; }
+  if (totalCalculado() === null) { alert('Este presupuesto tiene precios "a consultar" y no puede grabarse automáticamente en FACTUSOL.'); return; }
+  const cli = datosCliente();
+  if (!cli.nombre) { alert('Rellena al menos el nombre del cliente para grabar en FACTUSOL.'); return; }
+  const payload = payloadFactusol();
+  const st  = document.getElementById('fsStatus');
+  const btn = document.getElementById('btnFS');
+  btn.disabled = true; st.className = 'fs-status'; st.textContent = 'Grabando en FACTUSOL…';
+  try {
+    const res = await fetch(FACTUSOL_WEBHOOK_URL + '/presupuesto', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || 'Error desconocido');
+    presuFactusol = { firma: JSON.stringify(payload), numeroFormateado: j.numeroFormateado };
+    st.className = 'fs-status ok';
+    st.textContent = `✓ Grabado en FACTUSOL — Presupuesto ${j.numeroFormateado}` + (j.cliente?.creado ? ' · cliente nuevo creado' : '');
+  } catch (e) {
+    st.className = 'fs-status err';
+    st.textContent = '✗ No se pudo grabar en FACTUSOL: ' + e.message;
+  } finally { btn.disabled = false; }
+}
+
 function actualizarTotal() {
   const t = totalCalculado();
   document.getElementById('modeloSelTxt').textContent =
@@ -654,6 +721,11 @@ function datosCliente() {
   };
 }
 function numeroPresupuesto() {
+  // Si ya se grabó en FACTUSOL y el presupuesto no ha cambiado desde
+  // entonces, usamos el número real asignado por FACTUSOL.
+  if (presuFactusol && modeloSeleccionado) {
+    try { if (presuFactusol.firma === JSON.stringify(payloadFactusol())) return presuFactusol.numeroFormateado; } catch (e) {}
+  }
   const d = new Date();
   return `P${String(d.getFullYear()).slice(2)}-${String(Math.floor(Math.random()*9000)+1000)}`;
 }
@@ -1209,6 +1281,7 @@ function mostrarToast(msg) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 renderModelos();
 renderOpciones();
+if (FACTUSOL_WEBHOOK_URL) document.getElementById('btnFS').style.display = '';
 
 
 
