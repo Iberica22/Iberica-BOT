@@ -19,6 +19,12 @@
  * Tablas usadas: F_CLI (clientes), F_PRE (cabecera presupuesto),
  * F_LPR (líneas de presupuesto).
  *
+ * Esquema verificado contra la base real (via /diag):
+ *   - CODPRE usa numeración con prefijo de año: 260116 = año 26, nº 0116.
+ *   - Totales de cabecera: NET1PRE, BAS1PRE, PIVA1PRE, IIVA1PRE, TOTPRE.
+ *   - Observaciones: OB1PRE / OB2PRE. Fechas ISO: "2026-07-08T00:00:00".
+ *   - Cliente: CODCLI, NOFCLI, NOCCLI, DOMCLI, TELCLI, EMACLI, FALCLI...
+ *
  * SECRETOS (Configuración → Variables y secretos del Worker):
  *   DELSOL_FABRICANTE  → código de fabricante (int)
  *   DELSOL_CLIENTE     → código de cliente API (int)
@@ -27,8 +33,7 @@
  *
  * VARIABLES opcionales:
  *   ALLOWED_ORIGIN → origen CORS permitido (defecto https://iberica22.github.io)
- *   DIAG_KEY       → si se define, habilita GET /diag?k=<clave> para
- *                    inspeccionar columnas reales de las tablas
+ *   DIAG_KEY       → si se define, habilita GET /diag?k=<clave>
  */
 
 const DELSOL_BASE = 'https://api.sdelsol.com';
@@ -60,19 +65,22 @@ export default {
         return json({ ok: true, mensaje: 'Autenticación correcta contra la API Delsol', tokenRecibido: Boolean(token) }, 200, cors);
       }
 
-      // Diagnóstico de esquema: muestra el último presupuesto, sus líneas y
-      // el último cliente para verificar nombres de columnas y formatos.
+      // Diagnóstico de esquema: último presupuesto + sus líneas (varias
+      // sondas para localizar la tabla/columnas reales de líneas).
       if (url.pathname === '/diag') {
         if (!env.DIAG_KEY || url.searchParams.get('k') !== env.DIAG_KEY) {
           return json({ ok: false, error: 'Diagnóstico deshabilitado o clave incorrecta' }, 403, cors);
         }
         const token = await autenticar(env);
-        const [pre, lpr, cli] = await Promise.all([
-          consultaSegura(env, token, 'SELECT TOP 1 * FROM F_PRE ORDER BY CODPRE DESC'),
-          consultaSegura(env, token, 'SELECT TOP 5 * FROM F_LPR ORDER BY CODLPR DESC'),
-          consultaSegura(env, token, 'SELECT TOP 1 * FROM F_CLI ORDER BY CODCLI DESC'),
-        ]);
-        return json({ ok: true, F_PRE: pre, F_LPR: lpr, F_CLI: cli }, 200, cors);
+        const pre = await consultaSegura(env, token, 'SELECT TOP 1 TIPPRE, CODPRE, FECPRE, CLIPRE, CNOPRE, NET1PRE, BAS1PRE, PIVA1PRE, IIVA1PRE, TOTPRE, ESTPRE FROM F_PRE ORDER BY CODPRE DESC');
+        const cod = Array.isArray(pre) ? pre[0]?.CODPRE : null;
+        const sondas = {};
+        sondas.F_LPR_count = await consultaSegura(env, token, 'SELECT COUNT(*) AS N FROM F_LPR');
+        sondas.F_LPR_top3 = await consultaSegura(env, token, 'SELECT TOP 3 * FROM F_LPR');
+        if (cod != null) {
+          sondas[`F_LPR_presupuesto_${cod}`] = await consultaSegura(env, token, `SELECT * FROM F_LPR WHERE CODLPR = ${cod}`);
+        }
+        return json({ ok: true, F_PRE_ultimo: pre, ...sondas }, 200, cors);
       }
 
       if (url.pathname === '/presupuesto' && request.method === 'POST') {
@@ -95,8 +103,20 @@ function json(obj, status, cors) {
   });
 }
 
+/* ───────────────────── Fecha/hora local (Madrid) ───────────────────── */
+
+function ahoraMadrid() {
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Europe/Madrid',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(new Date()); // "2026-07-10 12:34:56"
+  const [fecha, hora] = parts.split(' ');
+  return { fecha, hora };
+}
+
 function ejercicioActual() {
-  return String(new Date().getFullYear());
+  return ahoraMadrid().fecha.slice(0, 4);
 }
 
 /* ───────────────────────── API Delsol ───────────────────────── */
@@ -166,8 +186,7 @@ async function insertar(env, token, tabla, campos) {
   return llamadaApi(env, token, EP.escribir, { ejercicio: ejercicioActual(), tabla, registro });
 }
 
-/** Intenta insertar con varios juegos de columnas, del más completo al mínimo.
- *  Si una versión falla (p. ej. por una columna inexistente), prueba la siguiente. */
+/** Intenta insertar con varios juegos de columnas, del más completo al mínimo. */
 async function insertarConAlternativas(env, token, tabla, versiones) {
   let ultimoError;
   for (let i = 0; i < versiones.length; i++) {
@@ -197,7 +216,7 @@ async function grabarPresupuesto(env, datos) {
   return {
     serie,
     numero,
-    numeroFormateado: `${serie}/${String(numero).padStart(6, '0')}`,
+    numeroFormateado: `${serie}/${numero}`,
     cliente: { codigo: cliente.codigo, creado: cliente.creado },
   };
 }
@@ -208,14 +227,17 @@ const normNombre = (s) => String(s || '').toLowerCase().normalize('NFD').replace
 async function localizarOCrearCliente(env, token, cli) {
   // Cargamos código, nombres y teléfono de todos los clientes y comparamos en
   // JS: evita depender de funciones SQL y de cómo esté formateado el teléfono.
-  const lista = await consulta(env, token, 'SELECT CODCLI, NOFCLI, NOCCLI, TELCLI FROM F_CLI');
+  const lista = await consulta(env, token, 'SELECT CODCLI, NOFCLI, NOCCLI, TELCLI, MOVCLI FROM F_CLI');
 
   const tel = soloDigitos(cli.telefono);
   if (tel.length >= 9) {
     const t9 = tel.slice(-9); // últimos 9 dígitos (sin prefijo país)
     for (const f of lista) {
-      if (soloDigitos(f.TELCLI).slice(-9) === t9 && soloDigitos(f.TELCLI).length >= 9) {
-        return { codigo: Number(f.CODCLI), nombre: f.NOFCLI || f.NOCCLI, creado: false };
+      for (const campo of [f.TELCLI, f.MOVCLI]) {
+        const d = soloDigitos(campo);
+        if (d.length >= 9 && d.slice(-9) === t9) {
+          return { codigo: Number(f.CODCLI), nombre: f.NOFCLI || f.NOCCLI, creado: false };
+        }
       }
     }
   }
@@ -231,18 +253,27 @@ async function localizarOCrearCliente(env, token, cli) {
   let maxCod = 0;
   for (const f of lista) { const n = Number(f.CODCLI); if (n > maxCod) maxCod = n; }
   const codigo = maxCod + 1;
+  const { fecha } = ahoraMadrid();
 
   await insertarConAlternativas(env, token, 'F_CLI', [
-    { CODCLI: codigo, NOFCLI: cli.nombre, NOCCLI: cli.nombre, DOMCLI: cli.direccion || '', TELCLI: cli.telefono || '', EMACLI: cli.email || '' },
-    { CODCLI: codigo, NOFCLI: cli.nombre, NOCCLI: cli.nombre, DOMCLI: cli.direccion || '', TELCLI: cli.telefono || '' },
+    {
+      CODCLI: codigo, CCOCLI: codigo, NOFCLI: cli.nombre, NOCCLI: cli.nombre,
+      DOMCLI: cli.direccion || '', TELCLI: cli.telefono || '', EMACLI: cli.email || '',
+      FALCLI: `${fecha}T00:00:00`, PAICLI: '724', ATVCLI: 1,
+    },
+    {
+      CODCLI: codigo, NOFCLI: cli.nombre, NOCCLI: cli.nombre,
+      DOMCLI: cli.direccion || '', TELCLI: cli.telefono || '', EMACLI: cli.email || '',
+    },
     { CODCLI: codigo, NOFCLI: cli.nombre },
   ]);
   return { codigo, nombre: cli.nombre, creado: true };
 }
 
 async function siguienteNumero(env, token, serie) {
-  // Nota: si dos presupuestos se grabaran exactamente a la vez podrían
-  // colisionar en número; con el volumen de uso previsto no es un problema.
+  // La numeración observada lleva prefijo de año: 260116 = año 26, nº 0116.
+  // Tomamos MAX de la serie y garantizamos que al cambiar de año se
+  // arranca en YY0001.
   let filasMax;
   try {
     filasMax = await consulta(env, token, `SELECT MAX(CODPRE) AS MAXNUM FROM F_PRE WHERE TIPPRE = ${serie}`);
@@ -250,12 +281,12 @@ async function siguienteNumero(env, token, serie) {
     filasMax = await consulta(env, token, `SELECT MAX(CODPRE) AS MAXNUM FROM F_PRE WHERE TIPPRE = '${serie}'`);
   }
   const max = Number(filasMax?.[0]?.MAXNUM) || 0;
-  return max + 1;
+  const yy = Number(ejercicioActual().slice(2));
+  return Math.max(max + 1, yy * 10000 + 1);
 }
 
 async function crearPresupuesto(env, token, { serie, numero, cliente, datos }) {
-  const d = new Date();
-  const fecha = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const { fecha, hora } = ahoraMadrid();
 
   // Totales calculados a partir de las líneas (precios sin IVA)
   let base = 0;
@@ -263,29 +294,47 @@ async function crearPresupuesto(env, token, { serie, numero, cliente, datos }) {
   base = redondear(base);
   const cuota = redondear(base * IVA_PCT_DEFECTO / 100);
   const total = redondear(base + cuota);
+  const notas = String(datos.notas || '').slice(0, 250);
+  const cli = datos.cliente || {};
 
-  // Cabecera — de más completa a mínima
-  const nivelCab = await insertarConAlternativas(env, token, 'F_PRE', [
-    { TIPPRE: serie, CODPRE: numero, FECPRE: fecha, CLIPRE: cliente.codigo, CNOPRE: cliente.nombre, OBSPRE: datos.notas || '', BA1PRE: base, PI1PRE: IVA_PCT_DEFECTO, CI1PRE: cuota, TOTPRE: total, ESTPRE: 0 },
-    { TIPPRE: serie, CODPRE: numero, FECPRE: fecha, CLIPRE: cliente.codigo, TOTPRE: total },
-    { TIPPRE: serie, CODPRE: numero, FECPRE: fecha, CLIPRE: cliente.codigo },
+  // Cabecera — columnas verificadas con /diag; de más completa a mínima
+  const nivelCabecera = await insertarConAlternativas(env, token, 'F_PRE', [
+    {
+      TIPPRE: serie, CODPRE: numero, FECPRE: `${fecha}T00:00:00`,
+      HORPRE: `1900-01-01T${hora}`,
+      CLIPRE: cliente.codigo, CNOPRE: cliente.nombre,
+      CDOPRE: cli.direccion || '', TELPRE: cli.telefono || '',
+      ALMPRE: 'GEN',
+      NET1PRE: base, BAS1PRE: base,
+      PIVA1PRE: IVA_PCT_DEFECTO, PIVA2PRE: 10, PIVA3PRE: 4,
+      IIVA1PRE: cuota, TOTPRE: total,
+      ESTPRE: 0, OB1PRE: notas,
+    },
+    {
+      TIPPRE: serie, CODPRE: numero, FECPRE: `${fecha}T00:00:00`,
+      CLIPRE: cliente.codigo, CNOPRE: cliente.nombre,
+      BAS1PRE: base, PIVA1PRE: IVA_PCT_DEFECTO, IIVA1PRE: cuota, TOTPRE: total, ESTPRE: 0,
+    },
+    { TIPPRE: serie, CODPRE: numero, FECPRE: `${fecha}T00:00:00`, CLIPRE: cliente.codigo },
   ]);
 
-  // Líneas
-  let nivelLin = 0;
+  // Líneas — los nombres exactos de columnas de F_LPR se confirman con /diag;
+  // se intentan las variantes habituales del esquema FACTUSOL.
+  let nivelLineas = 0;
   for (let i = 0; i < datos.lineas.length; i++) {
     const l = datos.lineas[i];
     const cant = Number(l.cantidad) || 1;
     const precio = redondear(l.precioBase);
     const totLinea = redondear(precio * cant);
-    nivelLin = Math.max(nivelLin, await insertarConAlternativas(env, token, 'F_LPR', [
-      { TIPLPR: serie, CODLPR: numero, POSLPR: i + 1, ARTLPR: l.codigo || '', DESLPR: l.descripcion, CANLPR: cant, PRELPR: precio, IVALPR: l.ivaPct ?? IVA_PCT_DEFECTO, TOTLPR: totLinea },
-      { TIPLPR: serie, CODLPR: numero, POSLPR: i + 1, ARTLPR: l.codigo || '', DESLPR: l.descripcion, CANLPR: cant, PRELPR: precio },
-      { TIPLPR: serie, CODLPR: numero, POSLPR: i + 1, DESLPR: l.descripcion, CANLPR: cant, PRELPR: precio },
+    const desc = String(l.descripcion || '').slice(0, 250);
+    nivelLineas = Math.max(nivelLineas, await insertarConAlternativas(env, token, 'F_LPR', [
+      { TIPLPR: serie, CODLPR: numero, POSLPR: i + 1, ARTLPR: l.codigo || '', DESLPR: desc, CANLPR: cant, PRELPR: precio, TIVLPR: 0, IVALPR: l.ivaPct ?? IVA_PCT_DEFECTO, TOTLPR: totLinea },
+      { TIPLPR: serie, CODLPR: numero, POSLPR: i + 1, ARTLPR: l.codigo || '', DESLPR: desc, CANLPR: cant, PRELPR: precio, TOTLPR: totLinea },
+      { TIPLPR: serie, CODLPR: numero, POSLPR: i + 1, DESLPR: desc, CANLPR: cant, PRELPR: precio },
     ]));
   }
 
-  return { nivelCabecera: nivelCab, nivelLineas: nivelLin };
+  return { nivelCabecera, nivelLineas };
 }
 
 function redondear(n) {
