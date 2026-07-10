@@ -182,7 +182,7 @@
     <div class="estegat-grid">
       <div>
         <div class="estegat-label">Colección</div>
-        <select id="estegatCol" class="estegat-select" onchange="estegatColeccion=this.value">
+        <select id="estegatCol" class="estegat-select" onchange="setEstegatColeccion(this.value)">
           <option value="Líneas">Líneas (HALGA, ISOCA, CINCEL...)</option>
           <option value="Geométrica">Geométrica (ARGEL, BERLÍN...)</option>
           <option value="Tradición / Estampación">Tradición / Estampación (BAKRA, DRAGO, MALMO...)</option>
@@ -190,7 +190,7 @@
       </div>
       <div>
         <div class="estegat-label">Acabado</div>
-        <select id="estegatAcab" class="estegat-select" onchange="estegatAcabado=this.value">
+        <select id="estegatAcab" class="estegat-select" onchange="setEstegatAcabado(this.value)">
           <option value="A consultar">A consultar</option>
           <option value="Lacado blanco">Lacado blanco</option>
           <option value="Lacado color estándar">Lacado color estándar</option>
@@ -204,13 +204,13 @@
         <div class="estegat-label">Referencia de diseño (opcional — ej: HALGA 4R, ISOCA 3R...)</div>
         <input type="text" id="estegatDis" class="estegat-input"
           placeholder="Ej: HALGA 4R · ISOCA 3R 200 · DRAGO · BAKRA..."
-          oninput="estegatDiseno=this.value">
+          oninput="setEstegatDiseno(this.value)">
       </div>
       <div>
         <div class="estegat-label">Suplemento panel Estega (€ IVA incl.)</div>
         <input type="number" id="estegatPrecioInput" class="estegat-input"
           placeholder="Ej: 450" min="0" step="1"
-          oninput="estegatPrecio=this.value?Number(this.value):null;actualizarTotal()">
+          oninput="setEstegatPrecio(this.value)">
       </div>
       <div style="display:flex;align-items:flex-end;padding-bottom:2px">
         <div style="font-size:11px;color:var(--gris-medio);line-height:1.4">Consulta la tarifa Estega 2025<br>y añade aquí el suplemento con tu margen.</div>
@@ -597,6 +597,11 @@ function seleccionarPanel(id) {
   actualizarTotal();
 }
 
+function setEstegatColeccion(v) { estegatColeccion = v; }
+function setEstegatAcabado(v)   { estegatAcabado   = v; }
+function setEstegatDiseno(v)    { estegatDiseno     = v; }
+function setEstegatPrecio(v)    { estegatPrecio = v ? Number(v) : null; actualizarTotal(); }
+
 function toggleOpcion(id, checked) {
   checked ? opcionesActivas.add(id) : opcionesActivas.delete(id);
   actualizarTotal();
@@ -622,8 +627,12 @@ function actualizarTotal() {
   document.getElementById('modeloSelTxt').textContent =
     modeloSeleccionado ? (modeloSeleccionado.cat.toUpperCase()+' '+modeloSeleccionado.nombre) : 'Selecciona un modelo';
   const panelTxt = document.getElementById('panelSelTxt');
-  panelTxt.textContent = (modeloSeleccionado && catActiva!=='metalica' && panelSeleccionado)
-    ? 'Panel: '+panelSeleccionado.nombre : '';
+  if (modeloSeleccionado && catActiva!=='metalica' && panelSeleccionado) {
+    let ptxt = 'Panel: ' + panelSeleccionado.nombre;
+    if (panelSeleccionado.id==='estega' && estegatPrecio) ptxt += ' · +'+formatPrecio(estegatPrecio);
+    else if (panelSeleccionado.precio) ptxt += ' · +'+formatPrecio(panelSeleccionado.precio);
+    panelTxt.textContent = ptxt;
+  } else { panelTxt.textContent = ''; }
   document.getElementById('importeTxt').innerHTML = t!==null
     ? `${formatPrecio(t)} <span>IVA incl.</span>`
     : `<span style="font-size:16px;color:var(--dorado)">A consultar</span>`;
