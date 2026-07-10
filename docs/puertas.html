@@ -206,6 +206,15 @@
           placeholder="Ej: HALGA 4R · ISOCA 3R 200 · DRAGO · BAKRA..."
           oninput="estegatDiseno=this.value">
       </div>
+      <div>
+        <div class="estegat-label">Suplemento panel Estega (€ IVA incl.)</div>
+        <input type="number" id="estegatPrecioInput" class="estegat-input"
+          placeholder="Ej: 450" min="0" step="1"
+          oninput="estegatPrecio=this.value?Number(this.value):null;actualizarTotal()">
+      </div>
+      <div style="display:flex;align-items:flex-end;padding-bottom:2px">
+        <div style="font-size:11px;color:var(--gris-medio);line-height:1.4">Consulta la tarifa Estega 2025<br>y añade aquí el suplemento con tu margen.</div>
+      </div>
     </div>
   </div>
 </div>
@@ -499,6 +508,7 @@ let catActiva          = 'fichet';
 let estegatColeccion   = 'Líneas';
 let estegatDiseno      = '';
 let estegatAcabado     = 'A consultar';
+let estegatPrecio      = null;
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function renderModelos() {
@@ -557,8 +567,9 @@ function seleccionar(id) {
   modeloSeleccionado = MODELOS.find(m=>m.id===id);
   panelSeleccionado  = PANELES[0];
   opcionesActivas.clear();
-  estegatColeccion = 'Líneas'; estegatDiseno = ''; estegatAcabado = 'A consultar';
+  estegatColeccion = 'Líneas'; estegatDiseno = ''; estegatAcabado = 'A consultar'; estegatPrecio = null;
   document.getElementById('estegatZona').style.display = 'none';
+  if(document.getElementById('estegatPrecioInput')) document.getElementById('estegatPrecioInput').value = '';
   renderModelos(); renderPaneles();
   document.getElementById('panelOpciones').classList.add('visible');
   document.getElementById('clienteZona').style.display = 'block';
@@ -594,7 +605,11 @@ function toggleOpcion(id, checked) {
 function totalCalculado() {
   if (!modeloSeleccionado || modeloSeleccionado.precio===null) return null;
   let t = modeloSeleccionado.precio;
-  if (panelSeleccionado?.precio) t += panelSeleccionado.precio;
+  if (panelSeleccionado?.id==='estega') {
+    if (estegatPrecio) t += estegatPrecio;
+  } else if (panelSeleccionado?.precio) {
+    t += panelSeleccionado.precio;
+  }
   for (const id of opcionesActivas) {
     const op = OPCIONES.find(o=>o.id===id);
     if (op?.precio) t += op.precio;
@@ -929,18 +944,22 @@ ${(()=>{
         desc: PANEL_PDF['estega'].desc + (estegatDiseno ? ` Diseño seleccionado: ${estegatDiseno}.` : ''),
         colores: `Colección ${estegatColeccion} · ${estegatAcabado}` }
     : (PANEL_PDF[panelSeleccionado?.id] || PANEL_PDF['liso']);
-  const precioTag = panelSeleccionado?.precio===null
-    ? `<span class="panel-card-precio consul">Precio a consultar</span>`
-    : panelSeleccionado?.precio===0
-    ? `<span class="panel-card-precio incl">✓ Incluido</span>`
-    : `<span class="panel-card-precio supl">+${formatPrecio(panelSeleccionado.precio)}</span>`;
+  const precioTag = isEstega
+    ? (estegatPrecio
+        ? `<span class="panel-card-precio supl">+${formatPrecio(estegatPrecio)}</span>`
+        : `<span class="panel-card-precio consul">Precio a consultar</span>`)
+    : (panelSeleccionado?.precio===null
+        ? `<span class="panel-card-precio consul">Precio a consultar</span>`
+        : panelSeleccionado?.precio===0
+        ? `<span class="panel-card-precio incl">✓ Incluido</span>`
+        : `<span class="panel-card-precio supl">+${formatPrecio(panelSeleccionado.precio)}</span>`);
   const miniOpts = PANELES.map(p=>{
     const mpd = PANEL_PDF[p.id]||PANEL_PDF['liso'];
     const isActive = panelSeleccionado?.id===p.id;
     return `<div class="panel-opt-mini${isActive?' activo':''}">
       <div class="panel-opt-swatch" style="${mpd.swatch}"></div>
       <div class="panel-opt-nombre">${escHtml(p.nombre.replace(' estándar (sapelly o blanco)','').replace(' (lacado, RAL, diseño...)',''))}</div>
-      <div class="panel-opt-precio">${p.precio===null?'Consultar':p.precio===0?'Incluido':'+'+formatPrecio(p.precio)}</div>
+      <div class="panel-opt-precio">${p.id==='estega'&&estegatPrecio?'+'+formatPrecio(estegatPrecio):p.precio===null?'Consultar':p.precio===0?'Incluido':'+'+formatPrecio(p.precio)}</div>
       ${isActive?'<div class="panel-opt-activo-badge">▲ SELECCIONADO</div>':''}
     </div>`;
   }).join('');
