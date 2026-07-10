@@ -405,7 +405,7 @@ const PANELES = [
   { id:'moldurado-d', nombre:'Panel moldurado doble / bicolor',      precio:300,  desc:'Mayor detalle decorativo y personalización' },
   { id:'blinsur',   nombre:'Tablero DM decorado (Blinsur)',          precio:null, precioTxt:'Según modelo', desc:'Modelos decorados en madera, MDF y con aluminio · Precio automático según modelo y acabado' },
   { id:'indupanel', nombre:'Panel aluminio / PVC (Indupanel)',       precio:null, precioTxt:'Según modelo', desc:'Colecciones Tempo, Estamp, Antiga, +Lido, Natura y Avant · Precio automático según modelo y acabado' },
-  { id:'estega',    nombre:'Panel aluminio Estega',                  precio:null, desc:'Colecciones Líneas, Geométrica y Tradición · Consultar precio según diseño' },
+  { id:'estega',    nombre:'Panel aluminio Estega',                  precio:null, precioTxt:'Según modelo', desc:'Colecciones Líneas, Geométrica y Tradición · Precio automático según tarifa 2025' },
   { id:'especial',  nombre:'Acabado especial (lacado, RAL, diseño...)', precio:null, desc:'Precio a consultar con técnico según diseño' },
 ];
 
@@ -550,6 +550,61 @@ const INDUPANEL_MEDIDAS = [
 ];
 const INDUPANEL_CHAPA_TRASERA = [40, 40, 50]; // por índice de medida
 
+// ── Tarifa Estega — Carátulas acorazadas 2025-1 ──────────────────────────────
+// Precios brutos SIN IVA por carátula (tablero marino + trasera), en 3
+// formatos. Los modelos comparten filas de precio (grupos).
+const ESTEGA_ACABADOS = [
+  'Lacado blanco', 'Lacado estándar', 'Lacado especial',
+  'Folio 1 (Embero / Nogal)', 'Folio 2 (Honey / Nutmeg Oak)', 'Folio 3', 'PVC blanco',
+];
+const ESTEGA_FORMATOS = [
+  { label:'2100×900×6 mm',  corte:20, clavos:150, e9mm:19 },
+  { label:'2200×1000×6 mm', corte:20, clavos:150, e9mm:22 },
+  { label:'2500×1220×6 mm', corte:20, clavos:180, e9mm:22 },
+];
+// [formato][acabado] — null = no disponible
+const ESTEGA_GRUPOS = {
+  lisa:     [[272,300,322,359,382,412,181],[315,348,373,417,443,477,210],[408,450,482,539,573,617,271]],
+  centauro: [[398,426,448,486,508,538,307],[462,494,519,563,590,624,356],[597,639,672,728,763,807,460]],
+  gA:       [[366,394,415,453,476,505,274],[424,457,482,526,552,586,318],[549,590,623,680,714,758,412]],
+  gB:       [[305,333,355,415,438,467,236],[354,387,412,482,508,542,274],[458,500,533,623,657,701,355]],
+  quilla:   [[288,316,338,398,421,450,219],[335,367,392,462,488,522,255],[433,474,507,597,632,676,329]],
+  gC:       [[376,404,425,463,486,515,284],[436,468,493,537,564,598,330],[564,605,638,695,729,773,427]],
+  gD:       [[386,414,435,473,496,525,294],[447,480,505,549,575,609,342],[579,620,653,710,744,788,442]],
+  virgo:    [[352,379,401,439,462,491,260],[408,440,465,509,536,570,302],[527,569,602,659,693,737,390]],
+  trad:     [[294,322,344,419,442,471,null],[341,374,399,486,512,546,null],[441,483,516,628,663,707,null]],
+  cast1:    [[686,789,836,910,992,null,null],[796,915,969,1056,1151,null,null],[1029,1183,1253,1366,1488,null,null]],
+  cast2:    [[713,816,863,938,1024,null,null],[827,946,1001,1089,1188,null,null],[1069,1224,1294,1408,1536,null,null]],
+  cast3:    [[749,852,899,974,1066,null,null],[869,988,1042,1130,1236,null,null],[1123,1278,1348,1462,1598,null,null]],
+  diana:    [[251,251,251,251,251,251,251],[null,null,null,null,null,null,null],[null,null,null,null,null,null,null]],
+};
+const ESTEGA_MODELOS = {
+  'LISA':{col:'Lisos',g:'lisa'},
+  'CENTAURO':{col:'Líneas',g:'centauro'}, 'CINCEL':{col:'Líneas',g:'gA'}, 'CENIT':{col:'Líneas',g:'gA'},
+  'HALGA':{col:'Líneas',g:'gB'}, 'HALGA 2R':{col:'Líneas',g:'gB'}, 'HALGA 2*2R':{col:'Líneas',g:'gB'},
+  'HALGA 3R':{col:'Líneas',g:'gB'}, 'HALGA 3*2R':{col:'Líneas',g:'gB'}, 'HALGA 4R':{col:'Líneas',g:'gB'},
+  'HALGA 6R':{col:'Líneas',g:'gB'}, 'HALGA 8R':{col:'Líneas',g:'gB'},
+  'QUILLA 4R':{col:'Líneas',g:'quilla'},
+  'SAGITARIO 2R':{col:'Líneas',g:'gA'}, 'SAGITARIO 3R':{col:'Líneas',g:'gA'}, 'SAGITARIO 4R':{col:'Líneas',g:'gA'},
+  'SAGITARIO 6R':{col:'Líneas',g:'gC'}, 'SAGITARIO 8R':{col:'Líneas',g:'gC'},
+  'ISOCA':{col:'Líneas',g:'gB'}, 'ISOCA 2R':{col:'Líneas',g:'gB'}, 'ISOCA 3R':{col:'Líneas',g:'gB'},
+  'ISOCA 3R 200':{col:'Líneas',g:'gB'}, 'ISOCA 4R':{col:'Líneas',g:'gB'},
+  'KIMA':{col:'Líneas',g:'gA'}, 'SERPEN 3R':{col:'Líneas',g:'gA'},
+  'ARGEL':{col:'Geométrica',g:'gB'}, 'BERLÍN':{col:'Geométrica',g:'gB'}, 'BOREAL':{col:'Geométrica',g:'gD'},
+  'CAPRICORNIO':{col:'Geométrica',g:'gC'}, 'CASIOPEA':{col:'Geométrica',g:'gC'}, 'CEFEO':{col:'Geométrica',g:'gA'},
+  'DUBLÍN':{col:'Geométrica',g:'gB'}, 'GUATEMALA':{col:'Geométrica',g:'gB'}, 'HELSINKI':{col:'Geométrica',g:'gB'},
+  'INCA':{col:'Geométrica',g:'gD'}, 'KAMPALA':{col:'Geométrica',g:'gB'}, 'KIEV':{col:'Geométrica',g:'gB'},
+  'MOSCÚ':{col:'Geométrica',g:'gB'}, 'OSLO':{col:'Geométrica',g:'gB'}, 'PARÍS':{col:'Geométrica',g:'gB'},
+  'PEKÍN':{col:'Geométrica',g:'gB'}, 'PRAGA':{col:'Geométrica',g:'gB'}, 'QUITO':{col:'Geométrica',g:'gB'},
+  'ROMA':{col:'Geométrica',g:'gB'}, 'TÚNEZ':{col:'Geométrica',g:'gB'}, 'VIENA':{col:'Geométrica',g:'gB'},
+  'VIRGO':{col:'Geométrica',g:'virgo'},
+  'BAKRA':{col:'Tradición',g:'trad'}, 'DRAGO':{col:'Tradición',g:'trad'}, 'JEREZ':{col:'Tradición',g:'trad'},
+  'KORSA':{col:'Tradición',g:'trad'}, 'MALMO':{col:'Tradición',g:'trad'}, 'OLVIA':{col:'Tradición',g:'trad'},
+  'CASTELLANO 1':{col:'Tradición',g:'cast1'}, 'CASTELLANO 2':{col:'Tradición',g:'cast2'}, 'CASTELLANO 3':{col:'Tradición',g:'cast3'},
+  'DIANA':{col:'Tradición',g:'diana'}, 'JÚPITER':{col:'Tradición',g:'diana'}, 'MARTE':{col:'Tradición',g:'diana'},
+  'ORIÓN':{col:'Tradición',g:'diana'}, 'POSEIDÓN':{col:'Tradición',g:'diana'}, 'SEXTANTE':{col:'Tradición',g:'diana'},
+};
+
 // Datos ampliados para PDF
 const PANEL_PDF = {
   'liso': {
@@ -636,7 +691,7 @@ const LADOS = [ ['ext','Cara exterior'], ['int','Cara interior'] ];
 function nuevoPanelCfg() {
   return {
     id: 'liso',
-    estega:  { coleccion:'Líneas', diseno:'', acabado:'A consultar', precio:null },
+    estega:  { modelo:'HALGA 4R', acabado:0, formato:0, corte:false, clavos:false, e9mm:false },
     blinsur: { gama:'decorados', modelo:'LISO', madera:0, acabado:0, medidaEsp:false },
     indu:    { coleccion:'Tempo Aluminio', modelo:'PANEL LISO', acabado:0, medida:0, chapa:false },
   };
@@ -677,6 +732,24 @@ function induResumen(c) {
   return `${c.coleccion} · ${c.modelo} · ${INDUPANEL_ACABADOS[c.acabado]}${c.medida>0 ? ' · '+INDUPANEL_MEDIDAS[c.medida].label : ''}${c.chapa ? ' · Chapa trasera' : ''}`;
 }
 
+// ── Precios Estega (por carátula/cara, SIN IVA) ──────────────────────────────
+function estegaBasePanel(e) {
+  const m = ESTEGA_MODELOS[e.modelo];
+  if (!m) return null;
+  const base = ESTEGA_GRUPOS[m.g]?.[e.formato]?.[e.acabado];
+  if (base == null) return null;
+  const f = ESTEGA_FORMATOS[e.formato];
+  let p = base;
+  if (e.corte) p += f.corte;
+  if (e.clavos && !e.modelo.startsWith('CASTELLANO')) p += f.clavos; // Castellano lleva clavos incluidos
+  if (e.e9mm) p += f.e9mm;
+  return p;
+}
+function estegaResumen(e) {
+  const m = ESTEGA_MODELOS[e.modelo];
+  return `mod. ${e.modelo} (${m?.col || ''}) · ${ESTEGA_ACABADOS[e.acabado]} · ${ESTEGA_FORMATOS[e.formato].label}${e.corte ? ' · Corte a medida' : ''}${e.clavos ? ' · Clavos' : ''}${e.e9mm ? ' · 9 mm' : ''}`;
+}
+
 // ── Precio y resumen por cara ─────────────────────────────────────────────────
 function precioLado(l) { // € IVA incl. · 0 = incluido · null = a consultar
   const c = panelCfg[l];
@@ -685,14 +758,14 @@ function precioLado(l) { // € IVA incl. · 0 = incluido · null = a consultar
   if (c.id === 'moldurado-d') return 300;
   if (c.id === 'blinsur')   { const b = blinsurBaseTablero(c.blinsur); return b == null ? null : Math.round(b * 1.21); }
   if (c.id === 'indupanel') { const b = induBasePanel(c.indu);        return b == null ? null : Math.round(b * 1.21); }
-  if (c.id === 'estega') return c.estega.precio || null;
+  if (c.id === 'estega')    { const b = estegaBasePanel(c.estega);    return b == null ? null : Math.round(b * 1.21); }
   return null; // acabado especial → a consultar
 }
 function resumenLado(l) {
   const c = panelCfg[l];
   if (c.id === 'blinsur')   return `Tablero DM Blinsur ${blinsurResumen(c.blinsur)}`;
   if (c.id === 'indupanel') return `Panel Indupanel ${induResumen(c.indu)}`;
-  if (c.id === 'estega')    return `Panel aluminio Estega – Col. ${c.estega.coleccion}${c.estega.diseno ? ' ('+c.estega.diseno+')' : ''}${c.estega.acabado !== 'A consultar' ? ' – '+c.estega.acabado : ''}`;
+  if (c.id === 'estega')    return `Panel aluminio Estega ${estegaResumen(c.estega)}`;
   return PANELES.find(p => p.id === c.id)?.nombre || 'Panel liso estándar';
 }
 // Imagen del modelo elegido (extraídas de los catálogos a docs/img/paneles/)
@@ -709,6 +782,9 @@ function imgPanelLado(l) {
   if (c.id === 'indupanel') {
     return `img/paneles/${slugImg(c.indu.coleccion)}__${slugImg(c.indu.modelo)}.jpg`;
   }
+  if (c.id === 'estega') {
+    return `img/paneles/estega__${slugImg(c.estega.modelo)}.jpg`;
+  }
   return null;
 }
 
@@ -716,7 +792,7 @@ function resumenCortoLado(l) {
   const c = panelCfg[l];
   if (c.id === 'blinsur')   return `Blinsur ${c.blinsur.modelo}`;
   if (c.id === 'indupanel') return `Indupanel ${c.indu.modelo}`;
-  if (c.id === 'estega')    return `Estega${c.estega.diseno ? ' '+c.estega.diseno : ''}`;
+  if (c.id === 'estega')    return `Estega ${c.estega.modelo}`;
   if (c.id === 'moldurado-s') return 'Moldurado sencillo';
   if (c.id === 'moldurado-d') return 'Moldurado doble';
   if (c.id === 'especial')  return 'Acabado especial';
@@ -789,26 +865,36 @@ function subPickerLado(l) {
 
   if (c.id === 'estega') {
     const e = c.estega;
-    const ops = (arr, sel) => arr.map(o=>`<option value="${o}" ${o===sel?'selected':''}>${o}</option>`).join('');
+    const fila = ESTEGA_GRUPOS[ESTEGA_MODELOS[e.modelo]?.g]?.[e.formato] || [];
+    const disponibles = ESTEGA_ACABADOS.map((a,i)=>({a,i})).filter(x => fila[x.i] != null);
+    const cols = {};
+    for (const [m, info] of Object.entries(ESTEGA_MODELOS)) (cols[info.col] = cols[info.col] || []).push(m);
+    const esCastellano = e.modelo.startsWith('CASTELLANO');
     return `<div class="estegat-zona" style="display:block">
-      <div class="estegat-titulo">🔩 Panel Estega — cara ${ladoTxt}</div>
+      <div class="estegat-titulo">🔩 Panel Estega — cara ${ladoTxt} (tarifa 2025)</div>
       <div class="estegat-grid">
-        <div><div class="estegat-label">Colección</div>
-          <select class="estegat-select" onchange="setEstegaCfg('${l}','coleccion',this.value)">
-            ${ops(['Líneas','Geométrica','Tradición / Estampación'], e.coleccion)}
+        <div><div class="estegat-label">Modelo</div>
+          <select class="estegat-select" onchange="setEstegaCfg('${l}','modelo',this.value)">
+            ${Object.entries(cols).map(([col, ms]) => `<optgroup label="${col}">${ms.map(m=>`<option value="${m}" ${m===e.modelo?'selected':''}>${m}</option>`).join('')}</optgroup>`).join('')}
           </select></div>
         <div><div class="estegat-label">Acabado</div>
           <select class="estegat-select" onchange="setEstegaCfg('${l}','acabado',this.value)">
-            ${ops(['A consultar','Lacado blanco','Lacado color estándar','Lacado color especial','Folio 1 – Imitación madera (Embero / Nogal)','Folio 2 – Honey Oak / Nutmeg Oak','Folio 3 – Film colores especiales'], e.acabado)}
+            ${disponibles.map(x=>`<option value="${x.i}" ${x.i===e.acabado?'selected':''}>${x.a} — ${formatPrecio(Math.round(fila[x.i]*1.21))}</option>`).join('')}
           </select></div>
-        <div class="estegat-full"><div class="estegat-label">Referencia de diseño (opcional — ej: HALGA 4R, ISOCA 3R...)</div>
-          <input type="text" class="estegat-input" placeholder="Ej: HALGA 4R · ISOCA 3R 200 · DRAGO · BAKRA..." value="${escHtml(e.diseno)}"
-            oninput="setEstegaCfg('${l}','diseno',this.value)"></div>
-        <div><div class="estegat-label">Suplemento (€ IVA incl.)</div>
-          <input type="number" class="estegat-input" placeholder="Ej: 450" min="0" step="1" value="${e.precio??''}"
-            oninput="setEstegaCfg('${l}','precio',this.value)"></div>
-        <div style="display:flex;align-items:flex-end;padding-bottom:2px">
-          <div style="font-size:11px;color:var(--gris-medio);line-height:1.4">Consulta la tarifa Estega 2025 y añade el suplemento con tu margen.</div>
+        <div><div class="estegat-label">Formato</div>
+          <select class="estegat-select" onchange="setEstegaCfg('${l}','formato',this.value)">
+            ${ESTEGA_FORMATOS.map((f,i)=>`<option value="${i}" ${i===e.formato?'selected':''}>${f.label}</option>`).join('')}
+          </select></div>
+        <div style="display:flex;flex-direction:column;justify-content:flex-end;gap:4px;padding-bottom:4px">
+          <label style="font-size:12px;color:var(--gris-medio);display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" ${e.corte?'checked':''} onchange="setEstegaCfg('${l}','corte',this.checked)"> Corte a medida (+${ESTEGA_FORMATOS[e.formato].corte} €)
+          </label>
+          <label style="font-size:12px;color:var(--gris-medio);display:flex;align-items:center;gap:6px;cursor:pointer${esCastellano?';opacity:.5':''}">
+            <input type="checkbox" ${e.clavos&&!esCastellano?'checked':''} ${esCastellano?'disabled':''} onchange="setEstegaCfg('${l}','clavos',this.checked)"> Clavos a 1 cara (+${ESTEGA_FORMATOS[e.formato].clavos} €)${esCastellano?' — incluidos':''}
+          </label>
+          <label style="font-size:12px;color:var(--gris-medio);display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" ${e.e9mm?'checked':''} onchange="setEstegaCfg('${l}','e9mm',this.checked)"> Espesor 9 mm (+${ESTEGA_FORMATOS[e.formato].e9mm} €)
+          </label>
         </div>
         ${fotoLinea}
         ${precioLinea}
@@ -895,10 +981,16 @@ function subPickerLado(l) {
 function setPanelLado(l, id) { panelCfg[l].id = id; renderPaneles(); actualizarTotal(); }
 
 function setEstegaCfg(l, campo, v) {
-  panelCfg[l].estega[campo] = campo === 'precio' ? (v ? Number(v) : null) : v;
-  const el = document.getElementById('precioLado_'+l);
-  if (el) el.textContent = lineaPrecioLado(l);
-  actualizarTotal();
+  const e = panelCfg[l].estega;
+  if (campo === 'modelo')       e.modelo = v;
+  else if (campo === 'acabado') e.acabado = Number(v);
+  else if (campo === 'formato') e.formato = Number(v);
+  else e[campo] = Boolean(v); // corte | clavos | e9mm
+  if (campo === 'modelo' || campo === 'formato') {
+    const fila = ESTEGA_GRUPOS[ESTEGA_MODELOS[e.modelo]?.g]?.[e.formato] || [];
+    if (fila[e.acabado] == null) e.acabado = fila.findIndex(x => x != null);
+  }
+  renderPaneles(); actualizarTotal();
 }
 
 function setBlinsurCfg(l, campo, v) {
@@ -1006,6 +1098,7 @@ function payloadFactusol() {
       let pb = null; // precio unitario SIN IVA
       if (c.id === 'blinsur')        pb = blinsurBaseTablero(c.blinsur);
       else if (c.id === 'indupanel') pb = induBasePanel(c.indu);
+      else if (c.id === 'estega')    pb = estegaBasePanel(c.estega);
       else { const p = precioLado(l); pb = p ? base(p) : null; }
       if (pb == null) continue; // "a consultar" → sin línea
       lineas.push({
@@ -1385,9 +1478,7 @@ ${(()=>{
   const cardLado = (l, titulo, icono) => {
     const c = panelCfg[l];
     const pd = c.id==='estega'
-      ? { ...PANEL_PDF['estega'],
-          desc: PANEL_PDF['estega'].desc + (c.estega.diseno ? ` Diseño seleccionado: ${c.estega.diseno}.` : ''),
-          colores: `Colección ${c.estega.coleccion} · ${c.estega.acabado}` }
+      ? { ...PANEL_PDF['estega'], colores: `Selección: ${estegaResumen(c.estega)}` }
       : c.id==='blinsur'
       ? { ...PANEL_PDF['blinsur'], colores: `Selección: ${blinsurResumen(c.blinsur)}` }
       : c.id==='indupanel'
