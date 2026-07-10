@@ -222,6 +222,79 @@
       </div>
     </div>
   </div>
+
+  <div class="estegat-zona" id="blinsurZona">
+    <div class="estegat-titulo">🪵 Configurar tablero Blinsur (tarifa nov. 2025)</div>
+    <div class="estegat-grid">
+      <div>
+        <div class="estegat-label">Gama</div>
+        <select id="blinsurGamaSel" class="estegat-select" onchange="setBlinsurGama(this.value)">
+          <option value="decorados">Decorados y lisos (madera)</option>
+          <option value="mdf">MDF (para lacar)</option>
+          <option value="aluminio">Con aluminio</option>
+        </select>
+      </div>
+      <div>
+        <div class="estegat-label">Modelo</div>
+        <select id="blinsurModeloSel" class="estegat-select" onchange="setBlinsurModelo(this.value)"></select>
+      </div>
+      <div>
+        <div class="estegat-label">Madera / soporte</div>
+        <select id="blinsurMaderaSel" class="estegat-select" onchange="setBlinsurMadera(this.value)"></select>
+      </div>
+      <div>
+        <div class="estegat-label">Acabado</div>
+        <select id="blinsurAcabadoSel" class="estegat-select" onchange="setBlinsurAcabado(this.value)">
+          <option value="0">Natural (sin acabado)</option>
+          <option value="33">Barnizado (+33 € por tablero)</option>
+          <option value="45">Lacado blanco (+45 € por tablero)</option>
+        </select>
+      </div>
+      <div>
+        <div class="estegat-label">Caras decoradas</div>
+        <select id="blinsurCarasSel" class="estegat-select" onchange="setBlinsurCaras(this.value)">
+          <option value="1">1 cara (exterior)</option>
+          <option value="2">2 caras (exterior + interior)</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:6px">
+        <label style="font-size:12px;color:var(--gris-medio);display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="blinsurMedidaChk" onchange="setBlinsurMedida(this.checked)">
+          Medida especial (+25%)
+        </label>
+      </div>
+      <div class="estegat-full" style="font-size:13px;font-weight:800;color:var(--dorado)" id="blinsurPrecioTxt"></div>
+    </div>
+  </div>
+
+  <div class="estegat-zona" id="indupanelZona">
+    <div class="estegat-titulo">🛡️ Configurar panel Indupanel (tarifa acorazadas 2022)</div>
+    <div class="estegat-grid">
+      <div>
+        <div class="estegat-label">Colección</div>
+        <select id="induColSel" class="estegat-select" onchange="setInduColeccion(this.value)"></select>
+      </div>
+      <div>
+        <div class="estegat-label">Modelo</div>
+        <select id="induModeloSel" class="estegat-select" onchange="setInduModelo(this.value)"></select>
+      </div>
+      <div>
+        <div class="estegat-label">Acabado</div>
+        <select id="induAcabadoSel" class="estegat-select" onchange="setInduAcabado(this.value)"></select>
+      </div>
+      <div>
+        <div class="estegat-label">Medida</div>
+        <select id="induMedidaSel" class="estegat-select" onchange="setInduMedida(this.value)"></select>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:6px">
+        <label style="font-size:12px;color:var(--gris-medio);display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="induChapaChk" onchange="setInduChapa(this.checked)">
+          Chapa trasera (+40/50 €)
+        </label>
+      </div>
+      <div class="estegat-full" style="font-size:13px;font-weight:800;color:var(--dorado)" id="induPrecioTxt"></div>
+    </div>
+  </div>
 </div>
 
 <div class="panel-opciones" id="panelOpciones">
@@ -436,9 +509,152 @@ const PANELES = [
   { id:'liso',      nombre:'Panel liso estándar (sapelly o blanco)', precio:0,    desc:'Incluido en el precio base' },
   { id:'moldurado-s', nombre:'Panel moldurado sencillo',             precio:150,  desc:'Moldura simple, varios colores disponibles' },
   { id:'moldurado-d', nombre:'Panel moldurado doble / bicolor',      precio:300,  desc:'Mayor detalle decorativo y personalización' },
+  { id:'blinsur',   nombre:'Tablero DM decorado (Blinsur)',          precio:null, precioTxt:'Según modelo', desc:'Modelos decorados en madera, MDF y con aluminio · Precio automático según modelo y acabado' },
+  { id:'indupanel', nombre:'Panel aluminio / PVC (Indupanel)',       precio:null, precioTxt:'Según modelo', desc:'Colecciones Tempo, Estamp, Antiga, +Lido, Natura y Avant · Precio automático según modelo y acabado' },
   { id:'estega',    nombre:'Panel aluminio Estega',                  precio:null, desc:'Colecciones Líneas, Geométrica y Tradición · Consultar precio según diseño' },
   { id:'especial',  nombre:'Acabado especial (lacado, RAL, diseño...)', precio:null, desc:'Precio a consultar con técnico según diseño' },
 ];
+
+// ── Tarifa Blinsur — Tableros decorados y lisos (noviembre 2025) ─────────────
+// Precios de tarifa por tablero (207x87x6), SIN IVA. El precio de venta es el
+// de tarifa (el margen está en el descuento de proveedor) + 21% IVA.
+const BLINSUR = {
+  maderas: ['Sapely', 'Tea', 'Roble', 'Haya vaporizada'],
+  decorados: { // [Sapely, Tea, Roble, Haya vap.]
+    'LISO':[45,54,62,57],     'TRAVES':[57,61,64,60],   '100':[64,72,79,70],
+    '101':[58,66,73,64],      '102':[69,75,80,72],      '104':[74,78,81,76],
+    '321':[79,82,95,86],      '631':[84,90,101,92],     '112':[84,90,101,92],
+    '635':[123,136,149,140],  '630':[112,124,136,127],  '320':[103,116,127,117],
+    '111':[112,124,136,127],  '520':[118,131,144,135],  '510':[118,131,144,135],
+    '3200-TR':[116,127,143,130], '6300-TR':[125,130,152,138], '111-TR':[125,130,152,138],
+    '6350-TR':[134,147,162,149], '6060-TR':[134,147,162,149], '9090-TR':[174,184,203,190],
+    '6000-TR':[155,172,190,177],
+  },
+  mdf: {
+    'LISO':36, '2RH':48, '2RV':48, '1RV 2RH':54, '104':58, '2RV 4RH':72,
+    '321 PANTÓGRAFO':191, '3C PANTÓGRAFO':191,
+  },
+  aluminioMaderas: ['Sapely', 'Roble', 'MDF'],
+  aluminio: { '302 / 303 / 304':[189,201,173] },
+};
+
+// ── Tarifa Indupanel — Paneles acorazadas 2022 ───────────────────────────────
+// Precios por panel, medida 2080x880, SIN IVA (tarifa recomendada = PVP + IVA).
+// Acabados por columna (null = no disponible para ese modelo):
+const INDUPANEL_ACABADOS = [
+  'Lacado blanco', 'RAL estándar', 'RAL especial', 'Anodizado',
+  'Folio decorativo 1 / Lac. madera 1', 'Folio decorativo 2', 'Folio decorativo 3',
+  'Lacado madera Indupanel', 'PVC blanco',
+];
+const INDUPANEL = {
+  'Tempo Aluminio': {
+    'PANEL LISO':[202,278,289,null,305,332,386,348,null],
+    'AGUA':[274,360,371,371,468,522,565,468,null],
+    'ALTAR':[313,399,410,410,507,561,604,507,null],
+    'ARA':[313,399,410,410,507,561,604,507,null],
+    'ARGOS':[308,395,405,405,503,557,600,503,null],
+    'ARTEMIS':[341,427,438,438,535,589,632,535,null],
+    'CARRO':[358,444,455,455,552,606,650,552,null],
+    'CINOSURA':[274,360,371,371,468,522,565,468,null],
+    'CINOSURA Recta':[274,360,371,371,468,522,565,468,null],
+    'EUROPA':[327,413,424,424,521,575,618,521,null],
+    'HÉLICE':[293,380,390,390,488,542,585,488,null],
+    'ÍCARO':[317,403,414,414,511,565,609,511,null],
+    'IRIS':[329,415,426,426,523,577,620,523,null],
+    'LIRA':[316,402,413,413,510,564,607,510,null],
+    'NORTE':[324,411,422,422,519,573,616,519,null],
+    'PLÉYADES':[279,366,376,376,474,528,571,474,null],
+  },
+  'Tempo PVC blanco': {
+    'PANEL LISO':[null,null,null,null,null,null,null,null,173],
+    'AGUA':[null,null,null,null,null,null,null,null,192],
+    'ALTAR':[null,null,null,null,null,null,null,null,192],
+    'ARA':[null,null,null,null,null,null,null,null,192],
+    'ARGOS':[null,null,null,null,null,null,null,null,192],
+    'ARTEMIS':[null,null,null,null,null,null,null,null,192],
+    'CARRO':[null,null,null,null,null,null,null,null,192],
+    'CINOSURA':[null,null,null,null,null,null,null,null,192],
+    'EUROPA':[null,null,null,null,null,null,null,null,192],
+    'HÉLICE':[null,null,null,null,null,null,null,null,192],
+    'ÍCARO':[null,null,null,null,null,null,null,null,192],
+    'IRIS':[null,null,null,null,null,null,null,null,192],
+    'LIRA':[null,null,null,null,null,null,null,null,192],
+    'NORTE':[null,null,null,null,null,null,null,null,192],
+    'PLÉYADES':[null,null,null,null,null,null,null,null,192],
+    'VEGA':[null,null,null,null,null,null,null,null,192],
+    'TORÁN (Line)':[null,null,null,null,null,null,null,null,253],
+    'TORO (Line)':[null,null,null,null,null,null,null,null,235],
+    'TOURIÑÁN (Line)':[null,null,null,null,null,null,null,null,235],
+    'TUCÁN (Line)':[null,null,null,null,null,null,null,null,275],
+  },
+  'Estamp Aluminio': {
+    'IP 4':[212,288,299,null,315,342,396,358,null],
+    'IP 6':[212,288,299,null,315,342,396,358,null],
+    'IP 10':[212,288,299,null,315,342,396,358,null],
+    'IP 13':[212,288,299,null,315,342,396,358,null],
+    'IP 14':[212,288,299,null,315,342,396,358,null],
+    'IP 3 (Line)':[255,346,359,366,396,428,493,430,null],
+    'IP 7 (Line)':[263,354,367,373,396,428,493,438,null],
+    'IP 11 (Line)':[263,354,367,373,396,428,493,438,null],
+    'IP 15 (Line)':[273,363,376,383,411,443,509,448,null],
+  },
+  'Antiga Clásica': {
+    'CLÁSICA 1':[596,693,714,714,785,839,893,801,null],
+    'CLÁSICA 2':[546,646,665,665,738,789,843,751,null],
+    'CLÁSICA 3':[481,578,600,600,670,724,778,686,null],
+    'CLÁSICA 4':[518,615,637,637,707,761,815,723,null],
+    'CLÁSICA 6':[593,691,712,712,782,836,890,799,null],
+    'CLÁSICA 7':[495,592,614,614,684,738,792,700,null],
+    'CLÁSICA 8':[576,673,695,695,765,819,873,781,null],
+    'CLÁSICA 9':[513,611,632,632,702,756,810,719,null],
+  },
+  'Antiga Básica': {
+    'BÁSICA 1':[236,312,322,null,347,374,428,382,null],
+    'BÁSICA 2':[236,312,322,null,347,374,428,382,null],
+    'BÁSICA 3':[413,504,517,null,547,579,644,588,null],
+    'BÁSICA 4':[413,504,517,null,547,579,644,588,null],
+  },
+  '+Lido (aluminio y PVC)': {
+    'L01':[256,321,334,347,393,418,444,354,256],
+    'L02':[256,321,334,347,393,418,444,354,256],
+    'L03':[256,321,334,347,393,418,444,354,256],
+    'L04':[256,321,334,347,393,418,444,354,256],
+    'L05':[256,321,334,347,393,418,444,354,256],
+    'L06':[256,321,334,347,393,418,444,354,256],
+    'L07':[256,321,334,347,393,418,444,354,256],
+    'L08':[256,321,334,347,393,418,444,354,256],
+    'L09':[256,321,334,347,393,418,444,354,256],
+    'L10':[256,321,334,347,393,418,444,354,256],
+    'L18':[291,356,369,382,427,453,479,388,291],
+    'L19':[288,353,366,378,424,450,476,385,287],
+    'L21':[286,350,363,376,422,448,474,383,286],
+    'L23':[313,377,390,403,449,475,501,410,313],
+  },
+  'Natura (piedra natural)': {
+    'NATURA 9':[565,641,652,652,684,727,776,700,565],
+    'NATURA 10':[696,772,782,782,815,858,907,831,696],
+    'NATURA 11':[732,807,818,818,850,894,942,867,732],
+    'NATURA 12':[726,802,813,813,845,888,937,861,726],
+  },
+  'Avant (detalles inox)': {
+    'AVIA':[329,420,432,432,465,517,569,484,290],
+    'TURIA':[329,420,432,432,465,517,569,484,290],
+    'DEZA':[350,441,454,454,486,538,590,506,312],
+    'ÉUFRATES INOX':[427,510,522,522,552,600,647,570,391],
+    'GARONA INOX':[434,517,529,529,558,605,653,576,398],
+    'TEA':[350,441,454,454,486,538,590,506,312],
+    'TÍBER':[439,530,543,543,575,627,679,594,400],
+    'VALGA':[350,441,454,454,486,538,590,506,312],
+  },
+};
+// Suplementos Indupanel: [medida estándar, hasta 2180x980, hasta 2480x1230]
+// El segundo valor aplica a acabados foliados/lacado madera (índices 4-7).
+const INDUPANEL_MEDIDAS = [
+  { label:'Estándar (2080×880 mm)',    normal:0,  foliado:0  },
+  { label:'Hasta 2180×980 mm',         normal:40, foliado:60 },
+  { label:'Hasta 2480×1230 mm',        normal:60, foliado:90 },
+];
+const INDUPANEL_CHAPA_TRASERA = [40, 40, 50]; // por índice de medida
 
 // Datos ampliados para PDF
 const PANEL_PDF = {
@@ -456,6 +672,16 @@ const PANEL_PDF = {
     desc: 'Doble moldura con mayor profundidad visual. Permite acabado bicolor: un color para el marco exterior y otro para el panel central. El mayor impacto decorativo de la gama, para quien cuida cada detalle.',
     colores: 'Bicolor disponible · Amplia gama',
     swatch: 'background:#e8e2d5;border:2px solid #b8a880;box-shadow:inset 7px 7px 0 rgba(0,0,0,.07),inset -7px -7px 0 rgba(255,255,255,.35),inset 16px 16px 0 rgba(0,0,0,.04),inset -16px -16px 0 rgba(255,255,255,.25);',
+  },
+  'blinsur': {
+    desc: 'Tablero DM decorado fabricado por Blinsur (Crevillent, Alicante). Amplia gama de modelos fresados y moldurados en Sapely, Tea, Roble y Haya vaporizada, tableros MDF listos para lacar y modelos con inserciones de aluminio. Disponible en acabado natural, barnizado o lacado blanco, a una o dos caras. Medida estándar 207×87 cm.',
+    colores: 'Sapely · Tea · Roble · Haya vaporizada · MDF · Barnizado o lacado blanco',
+    swatch: 'background:linear-gradient(135deg,#a0682f 0%,#c68e4f 40%,#8a5526 75%,#6f4218 100%);border:2px solid #59350f;',
+  },
+  'indupanel': {
+    desc: 'Panel decorativo para puertas acorazadas fabricado por Indupanel (A Coruña). Chapa de aluminio o PVC de 1,5 mm sobre contrachapado marino. Colecciones Tempo, Estamp, Antiga (clásica y básica), +Lido, Natura (piedra natural) y Avant (detalles inox). Acabados en lacado blanco, RAL, anodizado, folio decorativo y lacado madera.',
+    colores: 'Lacado blanco · RAL · Anodizado · Folio decorativo · Lacado madera · PVC blanco',
+    swatch: 'background:linear-gradient(135deg,#9aa2ab 0%,#c8cdd3 35%,#7d858e 70%,#5d646c 100%);border:2px solid #4a5058;',
   },
   'estega': {
     desc: 'Panel de aluminio estampado de alta durabilidad fabricado por Estega (Pontevedra). Sin mantenimiento, resiste golpes, humedad y cambios de temperatura. Tres colecciones: Líneas (HALGA, ISOCA, CINCEL...), Geométrica y Tradición / Estampación (BAKRA, DRAGO, MALMO...). Disponible en lacado blanco, colores RAL e imitación madera natural.',
@@ -517,6 +743,63 @@ let estegatDiseno      = '';
 let estegatAcabado     = 'A consultar';
 let estegatPrecio      = null;
 
+// Selección Blinsur
+let blinsurGama     = 'decorados';   // decorados | mdf | aluminio
+let blinsurModelo   = 'LISO';
+let blinsurMadera   = 0;             // índice en maderas de la gama
+let blinsurAcabado  = 0;             // 0 natural · 33 barnizado · 45 lacado blanco
+let blinsurCaras    = 1;             // 1 | 2
+let blinsurMedidaEsp = false;        // otras medidas +25%
+
+// Selección Indupanel
+let induColeccion = 'Tempo Aluminio';
+let induModelo    = 'PANEL LISO';
+let induAcabado   = 0;               // índice en INDUPANEL_ACABADOS
+let induMedida    = 0;               // índice en INDUPANEL_MEDIDAS
+let induChapa     = false;           // chapa trasera
+
+// ── Precios Blinsur ──────────────────────────────────────────────────────────
+function blinsurBaseTablero() { // por tablero, SIN IVA
+  let p = null;
+  if (blinsurGama === 'decorados') p = BLINSUR.decorados[blinsurModelo]?.[blinsurMadera];
+  else if (blinsurGama === 'mdf')  p = BLINSUR.mdf[blinsurModelo];
+  else                             p = BLINSUR.aluminio[blinsurModelo]?.[blinsurMadera];
+  if (p == null) return null;
+  if (blinsurMedidaEsp) p = p * 1.25;
+  return p + Number(blinsurAcabado);
+}
+function blinsurPrecio() { // suplemento total (todas las caras), IVA incluido
+  const t = blinsurBaseTablero();
+  return t == null ? null : Math.round(t * blinsurCaras * 1.21);
+}
+function blinsurMaderaLabel() {
+  if (blinsurGama === 'mdf') return 'MDF';
+  const lista = blinsurGama === 'aluminio' ? BLINSUR.aluminioMaderas : BLINSUR.maderas;
+  return lista[blinsurMadera] || '';
+}
+function blinsurResumen() {
+  const acab = Number(blinsurAcabado) === 33 ? ' · Barnizado' : Number(blinsurAcabado) === 45 ? ' · Lacado blanco' : '';
+  return `mod. ${blinsurModelo} · ${blinsurMaderaLabel()}${acab} · ${blinsurCaras} cara${blinsurCaras>1?'s':''}${blinsurMedidaEsp?' · Medida especial':''}`;
+}
+
+// ── Precios Indupanel ────────────────────────────────────────────────────────
+function induBasePanel() { // por panel, SIN IVA
+  const base = INDUPANEL[induColeccion]?.[induModelo]?.[induAcabado];
+  if (base == null) return null;
+  const med = INDUPANEL_MEDIDAS[induMedida];
+  const foliado = induAcabado >= 4 && induAcabado <= 7;
+  let p = base + (foliado ? med.foliado : med.normal);
+  if (induChapa) p += INDUPANEL_CHAPA_TRASERA[induMedida];
+  return p;
+}
+function induPrecio() { // suplemento IVA incluido
+  const t = induBasePanel();
+  return t == null ? null : Math.round(t * 1.21);
+}
+function induResumen() {
+  return `${induColeccion} · ${induModelo} · ${INDUPANEL_ACABADOS[induAcabado]}${induMedida>0?' · '+INDUPANEL_MEDIDAS[induMedida].label:''}${induChapa?' · Chapa trasera':''}`;
+}
+
 // ── FACTUSOL (vía Cloudflare Worker) ─────────────────────────────────────────
 // URL del Worker intermediario. Mientras esté vacía, el botón "Guardar en
 // FACTUSOL" permanece oculto. Ver factusol-worker/GUIA-INSTALACION.md
@@ -554,7 +837,7 @@ function renderPaneles() {
         onchange="seleccionarPanel('${p.id}')">
       <label for="pan_${p.id}">
         <span class="panel-nombre">${p.nombre}</span>
-        <span class="panel-precio">${p.precio===null?'A consultar':p.precio===0?'Incluido':'+'+formatPrecio(p.precio)}</span>
+        <span class="panel-precio">${p.precioTxt?p.precioTxt:p.precio===null?'A consultar':p.precio===0?'Incluido':'+'+formatPrecio(p.precio)}</span>
         <span class="panel-desc">${p.desc}</span>
       </label>
     </div>`).join('');
@@ -581,8 +864,12 @@ function seleccionar(id) {
   panelSeleccionado  = PANELES[0];
   opcionesActivas.clear();
   estegatColeccion = 'Líneas'; estegatDiseno = ''; estegatAcabado = 'A consultar'; estegatPrecio = null;
-  document.getElementById('estegatZona').style.display = 'none';
+  blinsurGama = 'decorados'; blinsurModelo = 'LISO'; blinsurMadera = 0; blinsurAcabado = 0; blinsurCaras = 1; blinsurMedidaEsp = false;
+  induColeccion = 'Tempo Aluminio'; induModelo = 'PANEL LISO'; induAcabado = 0; induMedida = 0; induChapa = false;
+  ['estegatZona','blinsurZona','indupanelZona'].forEach(id=>document.getElementById(id).style.display='none');
   if(document.getElementById('estegatPrecioInput')) document.getElementById('estegatPrecioInput').value = '';
+  if(document.getElementById('blinsurMedidaChk')) document.getElementById('blinsurMedidaChk').checked = false;
+  if(document.getElementById('induChapaChk')) document.getElementById('induChapaChk').checked = false;
   renderModelos(); renderPaneles();
   document.getElementById('panelOpciones').classList.add('visible');
   document.getElementById('clienteZona').style.display = 'block';
@@ -606,7 +893,11 @@ function filtrar(cat, btn) {
 
 function seleccionarPanel(id) {
   panelSeleccionado = PANELES.find(p=>p.id===id);
-  document.getElementById('estegatZona').style.display = (id==='estega') ? 'block' : 'none';
+  document.getElementById('estegatZona').style.display   = (id==='estega')    ? 'block' : 'none';
+  document.getElementById('blinsurZona').style.display   = (id==='blinsur')   ? 'block' : 'none';
+  document.getElementById('indupanelZona').style.display = (id==='indupanel') ? 'block' : 'none';
+  if (id==='blinsur')   { renderBlinsurSelects(); refrescarPanelesAuto(); }
+  if (id==='indupanel') { renderInduSelects();    refrescarPanelesAuto(); }
   actualizarTotal();
 }
 
@@ -614,6 +905,69 @@ function setEstegatColeccion(v) { estegatColeccion = v; }
 function setEstegatAcabado(v)   { estegatAcabado   = v; }
 function setEstegatDiseno(v)    { estegatDiseno     = v; }
 function setEstegatPrecio(v)    { estegatPrecio = v ? Number(v) : null; actualizarTotal(); }
+
+// ── Setters y render del sub-selector Blinsur ────────────────────────────────
+function setBlinsurGama(v)    { blinsurGama = v; blinsurMadera = 0; renderBlinsurSelects(); refrescarPanelesAuto(); }
+function setBlinsurModelo(v)  { blinsurModelo = v; refrescarPanelesAuto(); }
+function setBlinsurMadera(v)  { blinsurMadera = Number(v); refrescarPanelesAuto(); }
+function setBlinsurAcabado(v) { blinsurAcabado = Number(v); refrescarPanelesAuto(); }
+function setBlinsurCaras(v)   { blinsurCaras = Number(v); refrescarPanelesAuto(); }
+function setBlinsurMedida(v)  { blinsurMedidaEsp = Boolean(v); refrescarPanelesAuto(); }
+
+function renderBlinsurSelects() {
+  const modelos = blinsurGama === 'decorados' ? Object.keys(BLINSUR.decorados)
+                : blinsurGama === 'mdf'       ? Object.keys(BLINSUR.mdf)
+                : Object.keys(BLINSUR.aluminio);
+  if (!modelos.includes(blinsurModelo)) blinsurModelo = modelos[0];
+  document.getElementById('blinsurModeloSel').innerHTML =
+    modelos.map(m => `<option value="${m}" ${m===blinsurModelo?'selected':''}>${m}</option>`).join('');
+  const maderaSel = document.getElementById('blinsurMaderaSel');
+  if (blinsurGama === 'mdf') {
+    maderaSel.innerHTML = '<option value="0">MDF (crudo)</option>';
+    maderaSel.disabled = true;
+  } else {
+    const lista = blinsurGama === 'aluminio' ? BLINSUR.aluminioMaderas : BLINSUR.maderas;
+    if (blinsurMadera >= lista.length) blinsurMadera = 0;
+    maderaSel.innerHTML = lista.map((m,i) => `<option value="${i}" ${i===blinsurMadera?'selected':''}>${m}</option>`).join('');
+    maderaSel.disabled = false;
+  }
+}
+
+// ── Setters y render del sub-selector Indupanel ──────────────────────────────
+function setInduColeccion(v) { induColeccion = v; renderInduSelects(); refrescarPanelesAuto(); }
+function setInduModelo(v)    { induModelo = v; renderInduSelects(); refrescarPanelesAuto(); }
+function setInduAcabado(v)   { induAcabado = Number(v); refrescarPanelesAuto(); }
+function setInduMedida(v)    { induMedida = Number(v); refrescarPanelesAuto(); }
+function setInduChapa(v)     { induChapa = Boolean(v); refrescarPanelesAuto(); }
+
+function renderInduSelects() {
+  const colecciones = Object.keys(INDUPANEL);
+  document.getElementById('induColSel').innerHTML =
+    colecciones.map(c => `<option value="${c}" ${c===induColeccion?'selected':''}>${c}</option>`).join('');
+  const modelos = Object.keys(INDUPANEL[induColeccion]);
+  if (!modelos.includes(induModelo)) induModelo = modelos[0];
+  document.getElementById('induModeloSel').innerHTML =
+    modelos.map(m => `<option value="${m}" ${m===induModelo?'selected':''}>${m}</option>`).join('');
+  // Solo acabados disponibles para el modelo elegido
+  const fila = INDUPANEL[induColeccion][induModelo] || [];
+  const disponibles = INDUPANEL_ACABADOS.map((a,i)=>({a,i})).filter(x => fila[x.i] != null);
+  if (!disponibles.some(x => x.i === induAcabado)) induAcabado = disponibles[0]?.i ?? 0;
+  document.getElementById('induAcabadoSel').innerHTML =
+    disponibles.map(x => `<option value="${x.i}" ${x.i===induAcabado?'selected':''}>${x.a} — ${formatPrecio(Math.round(fila[x.i]*1.21))}</option>`).join('');
+  document.getElementById('induMedidaSel').innerHTML =
+    INDUPANEL_MEDIDAS.map((m,i) => `<option value="${i}" ${i===induMedida?'selected':''}>${m.label}</option>`).join('');
+}
+
+// Actualiza las líneas de precio de los sub-selectores y el total
+function refrescarPanelesAuto() {
+  const bp = blinsurPrecio();
+  document.getElementById('blinsurPrecioTxt').textContent =
+    bp != null ? `Suplemento tablero Blinsur: +${formatPrecio(bp)} IVA incl. (${blinsurCaras} cara${blinsurCaras>1?'s':''})` : '';
+  const ip = induPrecio();
+  document.getElementById('induPrecioTxt').textContent =
+    ip != null ? `Suplemento panel Indupanel: +${formatPrecio(ip)} IVA incl.` : 'Acabado no disponible para este modelo';
+  actualizarTotal();
+}
 
 function toggleOpcion(id, checked) {
   checked ? opcionesActivas.add(id) : opcionesActivas.delete(id);
@@ -625,6 +979,10 @@ function totalCalculado() {
   let t = modeloSeleccionado.precio;
   if (panelSeleccionado?.id==='estega') {
     if (estegatPrecio) t += estegatPrecio;
+  } else if (panelSeleccionado?.id==='blinsur') {
+    const bp = blinsurPrecio(); if (bp) t += bp;
+  } else if (panelSeleccionado?.id==='indupanel') {
+    const ip = induPrecio(); if (ip) t += ip;
   } else if (panelSeleccionado?.precio) {
     t += panelSeleccionado.precio;
   }
@@ -647,6 +1005,16 @@ function payloadFactusol() {
       lineas.push({
         descripcion: `Panel aluminio Estega — Col. ${estegatColeccion}${estegatDiseno ? ' (' + estegatDiseno + ')' : ''}${estegatAcabado !== 'A consultar' ? ' — ' + estegatAcabado : ''}`,
         cantidad: 1, precioBase: base(estegatPrecio), ivaPct: 21,
+      });
+    } else if (panelSeleccionado.id === 'blinsur' && blinsurBaseTablero() != null) {
+      lineas.push({
+        descripcion: `Tablero DM decorado Blinsur ${blinsurResumen()}`,
+        cantidad: blinsurCaras, precioBase: Math.round(blinsurBaseTablero() * 100) / 100, ivaPct: 21,
+      });
+    } else if (panelSeleccionado.id === 'indupanel' && induBasePanel() != null) {
+      lineas.push({
+        descripcion: `Panel Indupanel ${induResumen()}`,
+        cantidad: 1, precioBase: Math.round(induBasePanel() * 100) / 100, ivaPct: 21,
       });
     } else if (panelSeleccionado.precio) {
       lineas.push({ descripcion: panelSeleccionado.nombre, cantidad: 1, precioBase: base(panelSeleccionado.precio), ivaPct: 21 });
@@ -697,6 +1065,8 @@ function actualizarTotal() {
   if (modeloSeleccionado && catActiva!=='metalica' && panelSeleccionado) {
     let ptxt = 'Panel: ' + panelSeleccionado.nombre;
     if (panelSeleccionado.id==='estega' && estegatPrecio) ptxt += ' · +'+formatPrecio(estegatPrecio);
+    else if (panelSeleccionado.id==='blinsur' && blinsurPrecio()) ptxt += ' · +'+formatPrecio(blinsurPrecio());
+    else if (panelSeleccionado.id==='indupanel' && induPrecio()) ptxt += ' · +'+formatPrecio(induPrecio());
     else if (panelSeleccionado.precio) ptxt += ' · +'+formatPrecio(panelSeleccionado.precio);
     panelTxt.textContent = ptxt;
   } else { panelTxt.textContent = ''; }
@@ -756,6 +1126,10 @@ function generarPDF() {
   const panelLabel = catActiva!=='metalica'
     ? (panelSeleccionado?.id==='estega'
         ? `Panel aluminio Estega – Col. ${estegatColeccion}${estegatDiseno?' ('+estegatDiseno+')':''}${estegatAcabado!=='A consultar' ? ' – '+estegatAcabado:''}`
+        : panelSeleccionado?.id==='blinsur'
+        ? `Tablero DM decorado Blinsur ${blinsurResumen()}`
+        : panelSeleccionado?.id==='indupanel'
+        ? `Panel Indupanel ${induResumen()}`
         : panelSeleccionado?.nombre)
     : modeloSeleccionado.nivel;
   const opcionesSel = [...opcionesActivas].map(id=>OPCIONES.find(o=>o.id===id)).filter(Boolean);
@@ -1019,15 +1393,22 @@ ${clienteBloque}
 <!-- 3b. PANEL / ACABADO -->
 ${(()=>{
   if(catActiva==='metalica') return '';
-  const isEstega = panelSeleccionado?.id === 'estega';
+  const isEstega  = panelSeleccionado?.id === 'estega';
+  const isBlinsur = panelSeleccionado?.id === 'blinsur';
+  const isIndu    = panelSeleccionado?.id === 'indupanel';
   const pd = isEstega
     ? { ...PANEL_PDF['estega'],
         desc: PANEL_PDF['estega'].desc + (estegatDiseno ? ` Diseño seleccionado: ${estegatDiseno}.` : ''),
         colores: `Colección ${estegatColeccion} · ${estegatAcabado}` }
+    : isBlinsur
+    ? { ...PANEL_PDF['blinsur'], colores: `Selección: ${blinsurResumen()}` }
+    : isIndu
+    ? { ...PANEL_PDF['indupanel'], colores: `Selección: ${induResumen()}` }
     : (PANEL_PDF[panelSeleccionado?.id] || PANEL_PDF['liso']);
-  const precioTag = isEstega
-    ? (estegatPrecio
-        ? `<span class="panel-card-precio supl">+${formatPrecio(estegatPrecio)}</span>`
+  const precioDyn = isEstega ? estegatPrecio : isBlinsur ? blinsurPrecio() : isIndu ? induPrecio() : undefined;
+  const precioTag = (isEstega || isBlinsur || isIndu)
+    ? (precioDyn
+        ? `<span class="panel-card-precio supl">+${formatPrecio(precioDyn)}</span>`
         : `<span class="panel-card-precio consul">Precio a consultar</span>`)
     : (panelSeleccionado?.precio===null
         ? `<span class="panel-card-precio consul">Precio a consultar</span>`
@@ -1040,7 +1421,7 @@ ${(()=>{
     return `<div class="panel-opt-mini${isActive?' activo':''}">
       <div class="panel-opt-swatch" style="${mpd.swatch}"></div>
       <div class="panel-opt-nombre">${escHtml(p.nombre.replace(' estándar (sapelly o blanco)','').replace(' (lacado, RAL, diseño...)',''))}</div>
-      <div class="panel-opt-precio">${p.id==='estega'&&estegatPrecio?'+'+formatPrecio(estegatPrecio):p.precio===null?'Consultar':p.precio===0?'Incluido':'+'+formatPrecio(p.precio)}</div>
+      <div class="panel-opt-precio">${p.id==='estega'&&estegatPrecio?'+'+formatPrecio(estegatPrecio):p.id==='blinsur'&&isActive&&blinsurPrecio()?'+'+formatPrecio(blinsurPrecio()):p.id==='indupanel'&&isActive&&induPrecio()?'+'+formatPrecio(induPrecio()):p.precioTxt?p.precioTxt:p.precio===null?'Consultar':p.precio===0?'Incluido':'+'+formatPrecio(p.precio)}</div>
       ${isActive?'<div class="panel-opt-activo-badge">▲ SELECCIONADO</div>':''}
     </div>`;
   }).join('');
@@ -1176,6 +1557,10 @@ function enviarWhatsApp() {
   const panelLabel = catActiva!=='metalica'
     ? (panelSeleccionado?.id==='estega'
         ? `Panel aluminio Estega – Col. ${estegatColeccion}${estegatDiseno?' ('+estegatDiseno+')':''}${estegatAcabado!=='A consultar' ? ' – '+estegatAcabado:''}`
+        : panelSeleccionado?.id==='blinsur'
+        ? `Tablero DM decorado Blinsur ${blinsurResumen()}`
+        : panelSeleccionado?.id==='indupanel'
+        ? `Panel Indupanel ${induResumen()}`
         : panelSeleccionado?.nombre)
     : modeloSeleccionado.nivel;
   const opcionesLista = [...opcionesActivas].map(id=>{
@@ -1216,6 +1601,10 @@ function enviarEmail() {
   const panelLabel = catActiva!=='metalica'
     ? (panelSeleccionado?.id==='estega'
         ? `Panel aluminio Estega – Col. ${estegatColeccion}${estegatDiseno?' ('+estegatDiseno+')':''}${estegatAcabado!=='A consultar' ? ' – '+estegatAcabado:''}`
+        : panelSeleccionado?.id==='blinsur'
+        ? `Tablero DM decorado Blinsur ${blinsurResumen()}`
+        : panelSeleccionado?.id==='indupanel'
+        ? `Panel Indupanel ${induResumen()}`
         : panelSeleccionado?.nombre)
     : modeloSeleccionado.nivel;
   const opcionesLista = [...opcionesActivas].map(id=>{
