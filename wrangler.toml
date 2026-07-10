@@ -4,5 +4,9 @@ name = "factusol-iberica"
 main = "factusol-worker/worker.js"
 compatibility_date = "2026-07-01"
 
+# Conservar las variables/secretos definidos en el panel de Cloudflare
+# cuando se despliega desde Git (sin esto, cada deploy los borra).
+keep_vars = true
+
 # Las credenciales (DELSOL_*) se configuran como SECRETOS en el panel de
 # Cloudflare, nunca en este archivo.
