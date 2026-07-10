@@ -82,6 +82,12 @@
   .panel-nombre { font-weight:600; color:var(--blanco); display:block; }
   .panel-precio { font-size:11px; color:var(--dorado); font-weight:700; }
   .panel-desc { font-size:10px; color:var(--gris-medio); }
+  .panel-lados { display:grid; grid-template-columns:1fr 1fr; gap:22px; max-width:1200px; margin:0 auto; align-items:start; }
+  @media (max-width:980px){ .panel-lados{ grid-template-columns:1fr; } }
+  .panel-lado-titulo { font-size:12px; font-weight:800; color:var(--blanco); text-transform:uppercase;
+    letter-spacing:.08em; margin-bottom:10px; padding:7px 12px; background:var(--acero);
+    border-left:3px solid var(--dorado); border-radius:6px; }
+  .panel-grid-lado { display:flex; flex-direction:column; gap:8px; }
 
   /* ESTEGA SUB-PICKER */
   .estegat-zona { display:none; margin-top:14px; border-top:1px solid var(--acero); padding-top:14px; }
@@ -180,121 +186,8 @@
 
 <div class="panel-zona" id="panelZona">
   <h2>Tipo de panel / acabado</h2>
-  <p class="panel-nota">El precio base incluye panel liso estándar (sapelly o blanco) + tapajuntas. Paneles especiales pueden modificar el precio final.</p>
-  <div class="panel-grid" id="panelGrid"></div>
-  <div class="estegat-zona" id="estegatZona">
-    <div class="estegat-titulo">🔩 Configurar panel Estega aluminio</div>
-    <div class="estegat-grid">
-      <div>
-        <div class="estegat-label">Colección</div>
-        <select id="estegatCol" class="estegat-select" onchange="setEstegatColeccion(this.value)">
-          <option value="Líneas">Líneas (HALGA, ISOCA, CINCEL...)</option>
-          <option value="Geométrica">Geométrica (ARGEL, BERLÍN...)</option>
-          <option value="Tradición / Estampación">Tradición / Estampación (BAKRA, DRAGO, MALMO...)</option>
-        </select>
-      </div>
-      <div>
-        <div class="estegat-label">Acabado</div>
-        <select id="estegatAcab" class="estegat-select" onchange="setEstegatAcabado(this.value)">
-          <option value="A consultar">A consultar</option>
-          <option value="Lacado blanco">Lacado blanco</option>
-          <option value="Lacado color estándar">Lacado color estándar</option>
-          <option value="Lacado color especial">Lacado color especial</option>
-          <option value="Folio 1 – Imitación madera (Embero / Nogal)">Folio 1 – Imitación madera (Embero / Nogal)</option>
-          <option value="Folio 2 – Honey Oak / Nutmeg Oak">Folio 2 – Honey Oak / Nutmeg Oak</option>
-          <option value="Folio 3 – Film colores especiales">Folio 3 – Film colores especiales</option>
-        </select>
-      </div>
-      <div class="estegat-full">
-        <div class="estegat-label">Referencia de diseño (opcional — ej: HALGA 4R, ISOCA 3R...)</div>
-        <input type="text" id="estegatDis" class="estegat-input"
-          placeholder="Ej: HALGA 4R · ISOCA 3R 200 · DRAGO · BAKRA..."
-          oninput="setEstegatDiseno(this.value)">
-      </div>
-      <div>
-        <div class="estegat-label">Suplemento panel Estega (€ IVA incl.)</div>
-        <input type="number" id="estegatPrecioInput" class="estegat-input"
-          placeholder="Ej: 450" min="0" step="1"
-          oninput="setEstegatPrecio(this.value)">
-      </div>
-      <div style="display:flex;align-items:flex-end;padding-bottom:2px">
-        <div style="font-size:11px;color:var(--gris-medio);line-height:1.4">Consulta la tarifa Estega 2025<br>y añade aquí el suplemento con tu margen.</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="estegat-zona" id="blinsurZona">
-    <div class="estegat-titulo">🪵 Configurar tablero Blinsur (tarifa nov. 2025)</div>
-    <div class="estegat-grid">
-      <div>
-        <div class="estegat-label">Gama</div>
-        <select id="blinsurGamaSel" class="estegat-select" onchange="setBlinsurGama(this.value)">
-          <option value="decorados">Decorados y lisos (madera)</option>
-          <option value="mdf">MDF (para lacar)</option>
-          <option value="aluminio">Con aluminio</option>
-        </select>
-      </div>
-      <div>
-        <div class="estegat-label">Modelo</div>
-        <select id="blinsurModeloSel" class="estegat-select" onchange="setBlinsurModelo(this.value)"></select>
-      </div>
-      <div>
-        <div class="estegat-label">Madera / soporte</div>
-        <select id="blinsurMaderaSel" class="estegat-select" onchange="setBlinsurMadera(this.value)"></select>
-      </div>
-      <div>
-        <div class="estegat-label">Acabado</div>
-        <select id="blinsurAcabadoSel" class="estegat-select" onchange="setBlinsurAcabado(this.value)">
-          <option value="0">Natural (sin acabado)</option>
-          <option value="33">Barnizado (+33 € por tablero)</option>
-          <option value="45">Lacado blanco (+45 € por tablero)</option>
-        </select>
-      </div>
-      <div>
-        <div class="estegat-label">Caras decoradas</div>
-        <select id="blinsurCarasSel" class="estegat-select" onchange="setBlinsurCaras(this.value)">
-          <option value="1">1 cara (exterior)</option>
-          <option value="2">2 caras (exterior + interior)</option>
-        </select>
-      </div>
-      <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:6px">
-        <label style="font-size:12px;color:var(--gris-medio);display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" id="blinsurMedidaChk" onchange="setBlinsurMedida(this.checked)">
-          Medida especial (+25%)
-        </label>
-      </div>
-      <div class="estegat-full" style="font-size:13px;font-weight:800;color:var(--dorado)" id="blinsurPrecioTxt"></div>
-    </div>
-  </div>
-
-  <div class="estegat-zona" id="indupanelZona">
-    <div class="estegat-titulo">🛡️ Configurar panel Indupanel (tarifa acorazadas 2022)</div>
-    <div class="estegat-grid">
-      <div>
-        <div class="estegat-label">Colección</div>
-        <select id="induColSel" class="estegat-select" onchange="setInduColeccion(this.value)"></select>
-      </div>
-      <div>
-        <div class="estegat-label">Modelo</div>
-        <select id="induModeloSel" class="estegat-select" onchange="setInduModelo(this.value)"></select>
-      </div>
-      <div>
-        <div class="estegat-label">Acabado</div>
-        <select id="induAcabadoSel" class="estegat-select" onchange="setInduAcabado(this.value)"></select>
-      </div>
-      <div>
-        <div class="estegat-label">Medida</div>
-        <select id="induMedidaSel" class="estegat-select" onchange="setInduMedida(this.value)"></select>
-      </div>
-      <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:6px">
-        <label style="font-size:12px;color:var(--gris-medio);display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" id="induChapaChk" onchange="setInduChapa(this.checked)">
-          Chapa trasera (+40/50 €)
-        </label>
-      </div>
-      <div class="estegat-full" style="font-size:13px;font-weight:800;color:var(--dorado)" id="induPrecioTxt"></div>
-    </div>
-  </div>
+  <p class="panel-nota">El precio base incluye panel liso estándar (sapelly o blanco) + tapajuntas en ambas caras. Configura por separado el acabado de la cara exterior y de la interior.</p>
+  <div class="panel-lados" id="panelLados"></div>
 </div>
 
 <div class="panel-opciones" id="panelOpciones">
@@ -735,69 +628,81 @@ const SPECS_MODELO = {
 };
 
 let modeloSeleccionado = null;
-let panelSeleccionado  = PANELES[0];
 let opcionesActivas    = new Set();
 let catActiva          = 'fichet';
-let estegatColeccion   = 'Líneas';
-let estegatDiseno      = '';
-let estegatAcabado     = 'A consultar';
-let estegatPrecio      = null;
+// ── Configuración de panel por cara (exterior / interior) ────────────────────
+const LADOS = [ ['ext','Cara exterior'], ['int','Cara interior'] ];
+function nuevoPanelCfg() {
+  return {
+    id: 'liso',
+    estega:  { coleccion:'Líneas', diseno:'', acabado:'A consultar', precio:null },
+    blinsur: { gama:'decorados', modelo:'LISO', madera:0, acabado:0, medidaEsp:false },
+    indu:    { coleccion:'Tempo Aluminio', modelo:'PANEL LISO', acabado:0, medida:0, chapa:false },
+  };
+}
+let panelCfg = { ext: nuevoPanelCfg(), int: nuevoPanelCfg() };
 
-// Selección Blinsur
-let blinsurGama     = 'decorados';   // decorados | mdf | aluminio
-let blinsurModelo   = 'LISO';
-let blinsurMadera   = 0;             // índice en maderas de la gama
-let blinsurAcabado  = 0;             // 0 natural · 33 barnizado · 45 lacado blanco
-let blinsurCaras    = 1;             // 1 | 2
-let blinsurMedidaEsp = false;        // otras medidas +25%
-
-// Selección Indupanel
-let induColeccion = 'Tempo Aluminio';
-let induModelo    = 'PANEL LISO';
-let induAcabado   = 0;               // índice en INDUPANEL_ACABADOS
-let induMedida    = 0;               // índice en INDUPANEL_MEDIDAS
-let induChapa     = false;           // chapa trasera
-
-// ── Precios Blinsur ──────────────────────────────────────────────────────────
-function blinsurBaseTablero() { // por tablero, SIN IVA
+// ── Precios Blinsur (por tablero/cara, SIN IVA) ──────────────────────────────
+function blinsurBaseTablero(b) {
   let p = null;
-  if (blinsurGama === 'decorados') p = BLINSUR.decorados[blinsurModelo]?.[blinsurMadera];
-  else if (blinsurGama === 'mdf')  p = BLINSUR.mdf[blinsurModelo];
-  else                             p = BLINSUR.aluminio[blinsurModelo]?.[blinsurMadera];
+  if (b.gama === 'decorados') p = BLINSUR.decorados[b.modelo]?.[b.madera];
+  else if (b.gama === 'mdf')  p = BLINSUR.mdf[b.modelo];
+  else                        p = BLINSUR.aluminio[b.modelo]?.[b.madera];
   if (p == null) return null;
-  if (blinsurMedidaEsp) p = p * 1.25;
-  return p + Number(blinsurAcabado);
+  if (b.medidaEsp) p = p * 1.25;
+  return p + Number(b.acabado);
 }
-function blinsurPrecio() { // suplemento total (todas las caras), IVA incluido
-  const t = blinsurBaseTablero();
-  return t == null ? null : Math.round(t * blinsurCaras * 1.21);
+function blinsurMaderaLabel(b) {
+  if (b.gama === 'mdf') return 'MDF';
+  const lista = b.gama === 'aluminio' ? BLINSUR.aluminioMaderas : BLINSUR.maderas;
+  return lista[b.madera] || '';
 }
-function blinsurMaderaLabel() {
-  if (blinsurGama === 'mdf') return 'MDF';
-  const lista = blinsurGama === 'aluminio' ? BLINSUR.aluminioMaderas : BLINSUR.maderas;
-  return lista[blinsurMadera] || '';
-}
-function blinsurResumen() {
-  const acab = Number(blinsurAcabado) === 33 ? ' · Barnizado' : Number(blinsurAcabado) === 45 ? ' · Lacado blanco' : '';
-  return `mod. ${blinsurModelo} · ${blinsurMaderaLabel()}${acab} · ${blinsurCaras} cara${blinsurCaras>1?'s':''}${blinsurMedidaEsp?' · Medida especial':''}`;
+function blinsurResumen(b) {
+  const acab = Number(b.acabado) === 33 ? ' · Barnizado' : Number(b.acabado) === 45 ? ' · Lacado blanco' : '';
+  return `mod. ${b.modelo} · ${blinsurMaderaLabel(b)}${acab}${b.medidaEsp ? ' · Medida especial' : ''}`;
 }
 
-// ── Precios Indupanel ────────────────────────────────────────────────────────
-function induBasePanel() { // por panel, SIN IVA
-  const base = INDUPANEL[induColeccion]?.[induModelo]?.[induAcabado];
+// ── Precios Indupanel (por panel/cara, SIN IVA) ──────────────────────────────
+function induBasePanel(c) {
+  const base = INDUPANEL[c.coleccion]?.[c.modelo]?.[c.acabado];
   if (base == null) return null;
-  const med = INDUPANEL_MEDIDAS[induMedida];
-  const foliado = induAcabado >= 4 && induAcabado <= 7;
+  const med = INDUPANEL_MEDIDAS[c.medida];
+  const foliado = c.acabado >= 4 && c.acabado <= 7;
   let p = base + (foliado ? med.foliado : med.normal);
-  if (induChapa) p += INDUPANEL_CHAPA_TRASERA[induMedida];
+  if (c.chapa) p += INDUPANEL_CHAPA_TRASERA[c.medida];
   return p;
 }
-function induPrecio() { // suplemento IVA incluido
-  const t = induBasePanel();
-  return t == null ? null : Math.round(t * 1.21);
+function induResumen(c) {
+  return `${c.coleccion} · ${c.modelo} · ${INDUPANEL_ACABADOS[c.acabado]}${c.medida>0 ? ' · '+INDUPANEL_MEDIDAS[c.medida].label : ''}${c.chapa ? ' · Chapa trasera' : ''}`;
 }
-function induResumen() {
-  return `${induColeccion} · ${induModelo} · ${INDUPANEL_ACABADOS[induAcabado]}${induMedida>0?' · '+INDUPANEL_MEDIDAS[induMedida].label:''}${induChapa?' · Chapa trasera':''}`;
+
+// ── Precio y resumen por cara ─────────────────────────────────────────────────
+function precioLado(l) { // € IVA incl. · 0 = incluido · null = a consultar
+  const c = panelCfg[l];
+  if (c.id === 'liso') return 0;
+  if (c.id === 'moldurado-s') return 150;
+  if (c.id === 'moldurado-d') return 300;
+  if (c.id === 'blinsur')   { const b = blinsurBaseTablero(c.blinsur); return b == null ? null : Math.round(b * 1.21); }
+  if (c.id === 'indupanel') { const b = induBasePanel(c.indu);        return b == null ? null : Math.round(b * 1.21); }
+  if (c.id === 'estega') return c.estega.precio || null;
+  return null; // acabado especial → a consultar
+}
+function resumenLado(l) {
+  const c = panelCfg[l];
+  if (c.id === 'blinsur')   return `Tablero DM Blinsur ${blinsurResumen(c.blinsur)}`;
+  if (c.id === 'indupanel') return `Panel Indupanel ${induResumen(c.indu)}`;
+  if (c.id === 'estega')    return `Panel aluminio Estega – Col. ${c.estega.coleccion}${c.estega.diseno ? ' ('+c.estega.diseno+')' : ''}${c.estega.acabado !== 'A consultar' ? ' – '+c.estega.acabado : ''}`;
+  return PANELES.find(p => p.id === c.id)?.nombre || 'Panel liso estándar';
+}
+function resumenCortoLado(l) {
+  const c = panelCfg[l];
+  if (c.id === 'blinsur')   return `Blinsur ${c.blinsur.modelo}`;
+  if (c.id === 'indupanel') return `Indupanel ${c.indu.modelo}`;
+  if (c.id === 'estega')    return `Estega${c.estega.diseno ? ' '+c.estega.diseno : ''}`;
+  if (c.id === 'moldurado-s') return 'Moldurado sencillo';
+  if (c.id === 'moldurado-d') return 'Moldurado doble';
+  if (c.id === 'especial')  return 'Acabado especial';
+  return 'Liso estándar';
 }
 
 // ── FACTUSOL (vía Cloudflare Worker) ─────────────────────────────────────────
@@ -830,17 +735,179 @@ function renderPaneles() {
   const zona = document.getElementById('panelZona');
   if (catActiva==='metalica' || !modeloSeleccionado) { zona.classList.remove('visible'); return; }
   zona.classList.add('visible');
-  document.getElementById('panelGrid').innerHTML = PANELES.map(p => `
-    <div class="panel-item">
-      <input type="radio" name="panel" id="pan_${p.id}" value="${p.id}"
-        ${panelSeleccionado.id===p.id?'checked':''}
-        onchange="seleccionarPanel('${p.id}')">
-      <label for="pan_${p.id}">
-        <span class="panel-nombre">${p.nombre}</span>
-        <span class="panel-precio">${p.precioTxt?p.precioTxt:p.precio===null?'A consultar':p.precio===0?'Incluido':'+'+formatPrecio(p.precio)}</span>
-        <span class="panel-desc">${p.desc}</span>
-      </label>
-    </div>`).join('');
+  document.getElementById('panelLados').innerHTML = LADOS.map(([l, titulo]) => {
+    const c = panelCfg[l];
+    const items = PANELES.map(p => `
+      <div class="panel-item">
+        <input type="radio" name="pan_${l}" id="pan_${l}_${p.id}"
+          ${c.id===p.id?'checked':''}
+          onchange="setPanelLado('${l}','${p.id}')">
+        <label for="pan_${l}_${p.id}">
+          <span class="panel-nombre">${p.nombre}</span>
+          <span class="panel-precio">${p.precioTxt?p.precioTxt:p.precio===null?'A consultar':p.precio===0?'Incluido':'+'+formatPrecio(p.precio)}</span>
+          <span class="panel-desc">${p.desc}</span>
+        </label>
+      </div>`).join('');
+    return `<div class="panel-lado">
+      <div class="panel-lado-titulo">${l==='ext'?'🚪':'🏠'} ${titulo}</div>
+      <div class="panel-grid-lado">${items}</div>
+      ${subPickerLado(l)}
+    </div>`;
+  }).join('');
+}
+
+function lineaPrecioLado(l) {
+  const p = precioLado(l);
+  return p ? `Suplemento ${l==='ext'?'cara exterior':'cara interior'}: +${formatPrecio(p)} IVA incl.`
+       : p===0 ? '' : 'Precio a consultar';
+}
+
+function subPickerLado(l) {
+  const c = panelCfg[l];
+  const ladoTxt = l==='ext' ? 'exterior' : 'interior';
+  const precioLinea = `<div class="estegat-full" style="font-size:13px;font-weight:800;color:var(--dorado)" id="precioLado_${l}">${lineaPrecioLado(l)}</div>`;
+
+  if (c.id === 'estega') {
+    const e = c.estega;
+    const ops = (arr, sel) => arr.map(o=>`<option value="${o}" ${o===sel?'selected':''}>${o}</option>`).join('');
+    return `<div class="estegat-zona" style="display:block">
+      <div class="estegat-titulo">🔩 Panel Estega — cara ${ladoTxt}</div>
+      <div class="estegat-grid">
+        <div><div class="estegat-label">Colección</div>
+          <select class="estegat-select" onchange="setEstegaCfg('${l}','coleccion',this.value)">
+            ${ops(['Líneas','Geométrica','Tradición / Estampación'], e.coleccion)}
+          </select></div>
+        <div><div class="estegat-label">Acabado</div>
+          <select class="estegat-select" onchange="setEstegaCfg('${l}','acabado',this.value)">
+            ${ops(['A consultar','Lacado blanco','Lacado color estándar','Lacado color especial','Folio 1 – Imitación madera (Embero / Nogal)','Folio 2 – Honey Oak / Nutmeg Oak','Folio 3 – Film colores especiales'], e.acabado)}
+          </select></div>
+        <div class="estegat-full"><div class="estegat-label">Referencia de diseño (opcional — ej: HALGA 4R, ISOCA 3R...)</div>
+          <input type="text" class="estegat-input" placeholder="Ej: HALGA 4R · ISOCA 3R 200 · DRAGO · BAKRA..." value="${escHtml(e.diseno)}"
+            oninput="setEstegaCfg('${l}','diseno',this.value)"></div>
+        <div><div class="estegat-label">Suplemento (€ IVA incl.)</div>
+          <input type="number" class="estegat-input" placeholder="Ej: 450" min="0" step="1" value="${e.precio??''}"
+            oninput="setEstegaCfg('${l}','precio',this.value)"></div>
+        <div style="display:flex;align-items:flex-end;padding-bottom:2px">
+          <div style="font-size:11px;color:var(--gris-medio);line-height:1.4">Consulta la tarifa Estega 2025 y añade el suplemento con tu margen.</div>
+        </div>
+        ${precioLinea}
+      </div>
+    </div>`;
+  }
+
+  if (c.id === 'blinsur') {
+    const b = c.blinsur;
+    const modelos = b.gama==='decorados' ? Object.keys(BLINSUR.decorados)
+                  : b.gama==='mdf'       ? Object.keys(BLINSUR.mdf)
+                  : Object.keys(BLINSUR.aluminio);
+    const maderas = b.gama==='mdf' ? ['MDF (crudo)'] : (b.gama==='aluminio' ? BLINSUR.aluminioMaderas : BLINSUR.maderas);
+    return `<div class="estegat-zona" style="display:block">
+      <div class="estegat-titulo">🪵 Tablero Blinsur — cara ${ladoTxt} (tarifa nov. 2025)</div>
+      <div class="estegat-grid">
+        <div><div class="estegat-label">Gama</div>
+          <select class="estegat-select" onchange="setBlinsurCfg('${l}','gama',this.value)">
+            <option value="decorados" ${b.gama==='decorados'?'selected':''}>Decorados y lisos (madera)</option>
+            <option value="mdf" ${b.gama==='mdf'?'selected':''}>MDF (para lacar)</option>
+            <option value="aluminio" ${b.gama==='aluminio'?'selected':''}>Con aluminio</option>
+          </select></div>
+        <div><div class="estegat-label">Modelo</div>
+          <select class="estegat-select" onchange="setBlinsurCfg('${l}','modelo',this.value)">
+            ${modelos.map(m=>`<option value="${m}" ${m===b.modelo?'selected':''}>${m}</option>`).join('')}
+          </select></div>
+        <div><div class="estegat-label">Madera / soporte</div>
+          <select class="estegat-select" ${b.gama==='mdf'?'disabled':''} onchange="setBlinsurCfg('${l}','madera',this.value)">
+            ${maderas.map((m,i)=>`<option value="${i}" ${i===b.madera?'selected':''}>${m}</option>`).join('')}
+          </select></div>
+        <div><div class="estegat-label">Acabado</div>
+          <select class="estegat-select" onchange="setBlinsurCfg('${l}','acabado',this.value)">
+            <option value="0" ${b.acabado===0?'selected':''}>Natural (sin acabado)</option>
+            <option value="33" ${b.acabado===33?'selected':''}>Barnizado (+33 €)</option>
+            <option value="45" ${b.acabado===45?'selected':''}>Lacado blanco (+45 €)</option>
+          </select></div>
+        <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:6px">
+          <label style="font-size:12px;color:var(--gris-medio);display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" ${b.medidaEsp?'checked':''} onchange="setBlinsurCfg('${l}','medidaEsp',this.checked)"> Medida especial (+25%)
+          </label>
+        </div>
+        ${precioLinea}
+      </div>
+    </div>`;
+  }
+
+  if (c.id === 'indupanel') {
+    const n = c.indu;
+    const fila = INDUPANEL[n.coleccion][n.modelo] || [];
+    const disponibles = INDUPANEL_ACABADOS.map((a,i)=>({a,i})).filter(x => fila[x.i] != null);
+    return `<div class="estegat-zona" style="display:block">
+      <div class="estegat-titulo">🛡️ Panel Indupanel — cara ${ladoTxt} (tarifa 2022)</div>
+      <div class="estegat-grid">
+        <div><div class="estegat-label">Colección</div>
+          <select class="estegat-select" onchange="setInduCfg('${l}','coleccion',this.value)">
+            ${Object.keys(INDUPANEL).map(cn=>`<option value="${cn}" ${cn===n.coleccion?'selected':''}>${cn}</option>`).join('')}
+          </select></div>
+        <div><div class="estegat-label">Modelo</div>
+          <select class="estegat-select" onchange="setInduCfg('${l}','modelo',this.value)">
+            ${Object.keys(INDUPANEL[n.coleccion]).map(m=>`<option value="${m}" ${m===n.modelo?'selected':''}>${m}</option>`).join('')}
+          </select></div>
+        <div><div class="estegat-label">Acabado</div>
+          <select class="estegat-select" onchange="setInduCfg('${l}','acabado',this.value)">
+            ${disponibles.map(x=>`<option value="${x.i}" ${x.i===n.acabado?'selected':''}>${x.a} — ${formatPrecio(Math.round(fila[x.i]*1.21))}</option>`).join('')}
+          </select></div>
+        <div><div class="estegat-label">Medida</div>
+          <select class="estegat-select" onchange="setInduCfg('${l}','medida',this.value)">
+            ${INDUPANEL_MEDIDAS.map((m,i)=>`<option value="${i}" ${i===n.medida?'selected':''}>${m.label}</option>`).join('')}
+          </select></div>
+        <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:6px">
+          <label style="font-size:12px;color:var(--gris-medio);display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" ${n.chapa?'checked':''} onchange="setInduCfg('${l}','chapa',this.checked)"> Chapa trasera (+40/50 €)
+          </label>
+        </div>
+        ${precioLinea}
+      </div>
+    </div>`;
+  }
+  return '';
+}
+
+function setPanelLado(l, id) { panelCfg[l].id = id; renderPaneles(); actualizarTotal(); }
+
+function setEstegaCfg(l, campo, v) {
+  panelCfg[l].estega[campo] = campo === 'precio' ? (v ? Number(v) : null) : v;
+  const el = document.getElementById('precioLado_'+l);
+  if (el) el.textContent = lineaPrecioLado(l);
+  actualizarTotal();
+}
+
+function setBlinsurCfg(l, campo, v) {
+  const b = panelCfg[l].blinsur;
+  if (campo === 'gama') {
+    b.gama = v; b.madera = 0;
+    const ms = v==='decorados' ? Object.keys(BLINSUR.decorados) : v==='mdf' ? Object.keys(BLINSUR.mdf) : Object.keys(BLINSUR.aluminio);
+    if (!ms.includes(b.modelo)) b.modelo = ms[0];
+  }
+  else if (campo === 'modelo')    b.modelo = v;
+  else if (campo === 'madera')    b.madera = Number(v);
+  else if (campo === 'acabado')   b.acabado = Number(v);
+  else if (campo === 'medidaEsp') b.medidaEsp = Boolean(v);
+  renderPaneles(); actualizarTotal();
+}
+
+function setInduCfg(l, campo, v) {
+  const c = panelCfg[l].indu;
+  if (campo === 'coleccion') {
+    c.coleccion = v;
+    const ms = Object.keys(INDUPANEL[v]);
+    if (!ms.includes(c.modelo)) c.modelo = ms[0];
+  }
+  else if (campo === 'modelo')  c.modelo = v;
+  else if (campo === 'acabado') c.acabado = Number(v);
+  else if (campo === 'medida')  c.medida = Number(v);
+  else if (campo === 'chapa')   c.chapa = Boolean(v);
+  if (campo === 'coleccion' || campo === 'modelo') {
+    const fila = INDUPANEL[c.coleccion][c.modelo] || [];
+    if (fila[c.acabado] == null) c.acabado = fila.findIndex(x => x != null);
+  }
+  renderPaneles(); actualizarTotal();
 }
 
 function renderOpciones() {
@@ -861,15 +928,8 @@ function renderOpciones() {
 // ── Lógica ────────────────────────────────────────────────────────────────────
 function seleccionar(id) {
   modeloSeleccionado = MODELOS.find(m=>m.id===id);
-  panelSeleccionado  = PANELES[0];
+  panelCfg = { ext: nuevoPanelCfg(), int: nuevoPanelCfg() };
   opcionesActivas.clear();
-  estegatColeccion = 'Líneas'; estegatDiseno = ''; estegatAcabado = 'A consultar'; estegatPrecio = null;
-  blinsurGama = 'decorados'; blinsurModelo = 'LISO'; blinsurMadera = 0; blinsurAcabado = 0; blinsurCaras = 1; blinsurMedidaEsp = false;
-  induColeccion = 'Tempo Aluminio'; induModelo = 'PANEL LISO'; induAcabado = 0; induMedida = 0; induChapa = false;
-  ['estegatZona','blinsurZona','indupanelZona'].forEach(id=>document.getElementById(id).style.display='none');
-  if(document.getElementById('estegatPrecioInput')) document.getElementById('estegatPrecioInput').value = '';
-  if(document.getElementById('blinsurMedidaChk')) document.getElementById('blinsurMedidaChk').checked = false;
-  if(document.getElementById('induChapaChk')) document.getElementById('induChapaChk').checked = false;
   renderModelos(); renderPaneles();
   document.getElementById('panelOpciones').classList.add('visible');
   document.getElementById('clienteZona').style.display = 'block';
@@ -880,7 +940,7 @@ function seleccionar(id) {
 function filtrar(cat, btn) {
   catActiva = cat;
   if (modeloSeleccionado?.cat !== cat) {
-    modeloSeleccionado = null; panelSeleccionado = PANELES[0]; opcionesActivas.clear();
+    modeloSeleccionado = null; panelCfg = { ext: nuevoPanelCfg(), int: nuevoPanelCfg() }; opcionesActivas.clear();
     document.getElementById('panelZona').classList.remove('visible');
     document.getElementById('panelOpciones').classList.remove('visible');
     document.getElementById('clienteZona').style.display = 'none';
@@ -891,84 +951,6 @@ function filtrar(cat, btn) {
   renderModelos(); renderOpciones(); actualizarTotal();
 }
 
-function seleccionarPanel(id) {
-  panelSeleccionado = PANELES.find(p=>p.id===id);
-  document.getElementById('estegatZona').style.display   = (id==='estega')    ? 'block' : 'none';
-  document.getElementById('blinsurZona').style.display   = (id==='blinsur')   ? 'block' : 'none';
-  document.getElementById('indupanelZona').style.display = (id==='indupanel') ? 'block' : 'none';
-  if (id==='blinsur')   { renderBlinsurSelects(); refrescarPanelesAuto(); }
-  if (id==='indupanel') { renderInduSelects();    refrescarPanelesAuto(); }
-  actualizarTotal();
-}
-
-function setEstegatColeccion(v) { estegatColeccion = v; }
-function setEstegatAcabado(v)   { estegatAcabado   = v; }
-function setEstegatDiseno(v)    { estegatDiseno     = v; }
-function setEstegatPrecio(v)    { estegatPrecio = v ? Number(v) : null; actualizarTotal(); }
-
-// ── Setters y render del sub-selector Blinsur ────────────────────────────────
-function setBlinsurGama(v)    { blinsurGama = v; blinsurMadera = 0; renderBlinsurSelects(); refrescarPanelesAuto(); }
-function setBlinsurModelo(v)  { blinsurModelo = v; refrescarPanelesAuto(); }
-function setBlinsurMadera(v)  { blinsurMadera = Number(v); refrescarPanelesAuto(); }
-function setBlinsurAcabado(v) { blinsurAcabado = Number(v); refrescarPanelesAuto(); }
-function setBlinsurCaras(v)   { blinsurCaras = Number(v); refrescarPanelesAuto(); }
-function setBlinsurMedida(v)  { blinsurMedidaEsp = Boolean(v); refrescarPanelesAuto(); }
-
-function renderBlinsurSelects() {
-  const modelos = blinsurGama === 'decorados' ? Object.keys(BLINSUR.decorados)
-                : blinsurGama === 'mdf'       ? Object.keys(BLINSUR.mdf)
-                : Object.keys(BLINSUR.aluminio);
-  if (!modelos.includes(blinsurModelo)) blinsurModelo = modelos[0];
-  document.getElementById('blinsurModeloSel').innerHTML =
-    modelos.map(m => `<option value="${m}" ${m===blinsurModelo?'selected':''}>${m}</option>`).join('');
-  const maderaSel = document.getElementById('blinsurMaderaSel');
-  if (blinsurGama === 'mdf') {
-    maderaSel.innerHTML = '<option value="0">MDF (crudo)</option>';
-    maderaSel.disabled = true;
-  } else {
-    const lista = blinsurGama === 'aluminio' ? BLINSUR.aluminioMaderas : BLINSUR.maderas;
-    if (blinsurMadera >= lista.length) blinsurMadera = 0;
-    maderaSel.innerHTML = lista.map((m,i) => `<option value="${i}" ${i===blinsurMadera?'selected':''}>${m}</option>`).join('');
-    maderaSel.disabled = false;
-  }
-}
-
-// ── Setters y render del sub-selector Indupanel ──────────────────────────────
-function setInduColeccion(v) { induColeccion = v; renderInduSelects(); refrescarPanelesAuto(); }
-function setInduModelo(v)    { induModelo = v; renderInduSelects(); refrescarPanelesAuto(); }
-function setInduAcabado(v)   { induAcabado = Number(v); refrescarPanelesAuto(); }
-function setInduMedida(v)    { induMedida = Number(v); refrescarPanelesAuto(); }
-function setInduChapa(v)     { induChapa = Boolean(v); refrescarPanelesAuto(); }
-
-function renderInduSelects() {
-  const colecciones = Object.keys(INDUPANEL);
-  document.getElementById('induColSel').innerHTML =
-    colecciones.map(c => `<option value="${c}" ${c===induColeccion?'selected':''}>${c}</option>`).join('');
-  const modelos = Object.keys(INDUPANEL[induColeccion]);
-  if (!modelos.includes(induModelo)) induModelo = modelos[0];
-  document.getElementById('induModeloSel').innerHTML =
-    modelos.map(m => `<option value="${m}" ${m===induModelo?'selected':''}>${m}</option>`).join('');
-  // Solo acabados disponibles para el modelo elegido
-  const fila = INDUPANEL[induColeccion][induModelo] || [];
-  const disponibles = INDUPANEL_ACABADOS.map((a,i)=>({a,i})).filter(x => fila[x.i] != null);
-  if (!disponibles.some(x => x.i === induAcabado)) induAcabado = disponibles[0]?.i ?? 0;
-  document.getElementById('induAcabadoSel').innerHTML =
-    disponibles.map(x => `<option value="${x.i}" ${x.i===induAcabado?'selected':''}>${x.a} — ${formatPrecio(Math.round(fila[x.i]*1.21))}</option>`).join('');
-  document.getElementById('induMedidaSel').innerHTML =
-    INDUPANEL_MEDIDAS.map((m,i) => `<option value="${i}" ${i===induMedida?'selected':''}>${m.label}</option>`).join('');
-}
-
-// Actualiza las líneas de precio de los sub-selectores y el total
-function refrescarPanelesAuto() {
-  const bp = blinsurPrecio();
-  document.getElementById('blinsurPrecioTxt').textContent =
-    bp != null ? `Suplemento tablero Blinsur: +${formatPrecio(bp)} IVA incl. (${blinsurCaras} cara${blinsurCaras>1?'s':''})` : '';
-  const ip = induPrecio();
-  document.getElementById('induPrecioTxt').textContent =
-    ip != null ? `Suplemento panel Indupanel: +${formatPrecio(ip)} IVA incl.` : 'Acabado no disponible para este modelo';
-  actualizarTotal();
-}
-
 function toggleOpcion(id, checked) {
   checked ? opcionesActivas.add(id) : opcionesActivas.delete(id);
   actualizarTotal();
@@ -977,14 +959,8 @@ function toggleOpcion(id, checked) {
 function totalCalculado() {
   if (!modeloSeleccionado || modeloSeleccionado.precio===null) return null;
   let t = modeloSeleccionado.precio;
-  if (panelSeleccionado?.id==='estega') {
-    if (estegatPrecio) t += estegatPrecio;
-  } else if (panelSeleccionado?.id==='blinsur') {
-    const bp = blinsurPrecio(); if (bp) t += bp;
-  } else if (panelSeleccionado?.id==='indupanel') {
-    const ip = induPrecio(); if (ip) t += ip;
-  } else if (panelSeleccionado?.precio) {
-    t += panelSeleccionado.precio;
+  if (catActiva !== 'metalica') {
+    for (const [l] of LADOS) { const p = precioLado(l); if (p) t += p; }
   }
   for (const id of opcionesActivas) {
     const op = OPCIONES.find(o=>o.id===id);
@@ -1000,24 +976,19 @@ function payloadFactusol() {
     descripcion: `Puerta ${modeloSeleccionado.cat.toUpperCase()} ${modeloSeleccionado.nombre} — ${modeloSeleccionado.nivel}`,
     cantidad: 1, precioBase: base(modeloSeleccionado.precio), ivaPct: 21,
   }];
-  if (catActiva !== 'metalica' && panelSeleccionado) {
-    if (panelSeleccionado.id === 'estega' && estegatPrecio) {
+  if (catActiva !== 'metalica') {
+    for (const [l, titulo] of LADOS) {
+      const c = panelCfg[l];
+      if (c.id === 'liso') continue;
+      let pb = null; // precio unitario SIN IVA
+      if (c.id === 'blinsur')        pb = blinsurBaseTablero(c.blinsur);
+      else if (c.id === 'indupanel') pb = induBasePanel(c.indu);
+      else { const p = precioLado(l); pb = p ? base(p) : null; }
+      if (pb == null) continue; // "a consultar" → sin línea
       lineas.push({
-        descripcion: `Panel aluminio Estega — Col. ${estegatColeccion}${estegatDiseno ? ' (' + estegatDiseno + ')' : ''}${estegatAcabado !== 'A consultar' ? ' — ' + estegatAcabado : ''}`,
-        cantidad: 1, precioBase: base(estegatPrecio), ivaPct: 21,
+        descripcion: `${titulo} — ${resumenLado(l)}`,
+        cantidad: 1, precioBase: Math.round(pb * 100) / 100, ivaPct: 21,
       });
-    } else if (panelSeleccionado.id === 'blinsur' && blinsurBaseTablero() != null) {
-      lineas.push({
-        descripcion: `Tablero DM decorado Blinsur ${blinsurResumen()}`,
-        cantidad: blinsurCaras, precioBase: Math.round(blinsurBaseTablero() * 100) / 100, ivaPct: 21,
-      });
-    } else if (panelSeleccionado.id === 'indupanel' && induBasePanel() != null) {
-      lineas.push({
-        descripcion: `Panel Indupanel ${induResumen()}`,
-        cantidad: 1, precioBase: Math.round(induBasePanel() * 100) / 100, ivaPct: 21,
-      });
-    } else if (panelSeleccionado.precio) {
-      lineas.push({ descripcion: panelSeleccionado.nombre, cantidad: 1, precioBase: base(panelSeleccionado.precio), ivaPct: 21 });
     }
   }
   for (const id of opcionesActivas) {
@@ -1062,13 +1033,14 @@ function actualizarTotal() {
   document.getElementById('modeloSelTxt').textContent =
     modeloSeleccionado ? (modeloSeleccionado.cat.toUpperCase()+' '+modeloSeleccionado.nombre) : 'Selecciona un modelo';
   const panelTxt = document.getElementById('panelSelTxt');
-  if (modeloSeleccionado && catActiva!=='metalica' && panelSeleccionado) {
-    let ptxt = 'Panel: ' + panelSeleccionado.nombre;
-    if (panelSeleccionado.id==='estega' && estegatPrecio) ptxt += ' · +'+formatPrecio(estegatPrecio);
-    else if (panelSeleccionado.id==='blinsur' && blinsurPrecio()) ptxt += ' · +'+formatPrecio(blinsurPrecio());
-    else if (panelSeleccionado.id==='indupanel' && induPrecio()) ptxt += ' · +'+formatPrecio(induPrecio());
-    else if (panelSeleccionado.precio) ptxt += ' · +'+formatPrecio(panelSeleccionado.precio);
-    panelTxt.textContent = ptxt;
+  if (modeloSeleccionado && catActiva!=='metalica') {
+    const partes = LADOS.map(([l]) => {
+      const c = panelCfg[l];
+      if (c.id === 'liso') return null;
+      const p = precioLado(l);
+      return `${l==='ext'?'Ext':'Int'}: ${resumenCortoLado(l)}${p ? ' +'+formatPrecio(p) : ' (consultar)'}`;
+    }).filter(Boolean);
+    panelTxt.textContent = partes.length ? 'Panel · ' + partes.join(' · ') : 'Panel liso estándar en ambas caras';
   } else { panelTxt.textContent = ''; }
   document.getElementById('importeTxt').innerHTML = t!==null
     ? `${formatPrecio(t)} <span>IVA incl.</span>`
@@ -1124,13 +1096,7 @@ function generarPDF() {
   const notas      = document.getElementById('notasPresupuesto').value.trim();
   const logoTag    = LOGO_DATA_URL ? `<img src="${LOGO_DATA_URL}" style="height:110px;width:auto;display:block;align-self:flex-start;" alt="Ibérica Seguridad">` : '';
   const panelLabel = catActiva!=='metalica'
-    ? (panelSeleccionado?.id==='estega'
-        ? `Panel aluminio Estega – Col. ${estegatColeccion}${estegatDiseno?' ('+estegatDiseno+')':''}${estegatAcabado!=='A consultar' ? ' – '+estegatAcabado:''}`
-        : panelSeleccionado?.id==='blinsur'
-        ? `Tablero DM decorado Blinsur ${blinsurResumen()}`
-        : panelSeleccionado?.id==='indupanel'
-        ? `Panel Indupanel ${induResumen()}`
-        : panelSeleccionado?.nombre)
+    ? `Exterior: ${resumenLado('ext')} · Interior: ${resumenLado('int')}`
     : modeloSeleccionado.nivel;
   const opcionesSel = [...opcionesActivas].map(id=>OPCIONES.find(o=>o.id===id)).filter(Boolean);
 
@@ -1393,42 +1359,27 @@ ${clienteBloque}
 <!-- 3b. PANEL / ACABADO -->
 ${(()=>{
   if(catActiva==='metalica') return '';
-  const isEstega  = panelSeleccionado?.id === 'estega';
-  const isBlinsur = panelSeleccionado?.id === 'blinsur';
-  const isIndu    = panelSeleccionado?.id === 'indupanel';
-  const pd = isEstega
-    ? { ...PANEL_PDF['estega'],
-        desc: PANEL_PDF['estega'].desc + (estegatDiseno ? ` Diseño seleccionado: ${estegatDiseno}.` : ''),
-        colores: `Colección ${estegatColeccion} · ${estegatAcabado}` }
-    : isBlinsur
-    ? { ...PANEL_PDF['blinsur'], colores: `Selección: ${blinsurResumen()}` }
-    : isIndu
-    ? { ...PANEL_PDF['indupanel'], colores: `Selección: ${induResumen()}` }
-    : (PANEL_PDF[panelSeleccionado?.id] || PANEL_PDF['liso']);
-  const precioDyn = isEstega ? estegatPrecio : isBlinsur ? blinsurPrecio() : isIndu ? induPrecio() : undefined;
-  const precioTag = (isEstega || isBlinsur || isIndu)
-    ? (precioDyn
-        ? `<span class="panel-card-precio supl">+${formatPrecio(precioDyn)}</span>`
-        : `<span class="panel-card-precio consul">Precio a consultar</span>`)
-    : (panelSeleccionado?.precio===null
-        ? `<span class="panel-card-precio consul">Precio a consultar</span>`
-        : panelSeleccionado?.precio===0
-        ? `<span class="panel-card-precio incl">✓ Incluido</span>`
-        : `<span class="panel-card-precio supl">+${formatPrecio(panelSeleccionado.precio)}</span>`);
-  const miniOpts = PANELES.map(p=>{
-    const mpd = PANEL_PDF[p.id]||PANEL_PDF['liso'];
-    const isActive = panelSeleccionado?.id===p.id;
-    return `<div class="panel-opt-mini${isActive?' activo':''}">
-      <div class="panel-opt-swatch" style="${mpd.swatch}"></div>
-      <div class="panel-opt-nombre">${escHtml(p.nombre.replace(' estándar (sapelly o blanco)','').replace(' (lacado, RAL, diseño...)',''))}</div>
-      <div class="panel-opt-precio">${p.id==='estega'&&estegatPrecio?'+'+formatPrecio(estegatPrecio):p.id==='blinsur'&&isActive&&blinsurPrecio()?'+'+formatPrecio(blinsurPrecio()):p.id==='indupanel'&&isActive&&induPrecio()?'+'+formatPrecio(induPrecio()):p.precioTxt?p.precioTxt:p.precio===null?'Consultar':p.precio===0?'Incluido':'+'+formatPrecio(p.precio)}</div>
-      ${isActive?'<div class="panel-opt-activo-badge">▲ SELECCIONADO</div>':''}
-    </div>`;
-  }).join('');
-  return `<div class="panel-card">
+  const cardLado = (l, titulo, icono) => {
+    const c = panelCfg[l];
+    const pd = c.id==='estega'
+      ? { ...PANEL_PDF['estega'],
+          desc: PANEL_PDF['estega'].desc + (c.estega.diseno ? ` Diseño seleccionado: ${c.estega.diseno}.` : ''),
+          colores: `Colección ${c.estega.coleccion} · ${c.estega.acabado}` }
+      : c.id==='blinsur'
+      ? { ...PANEL_PDF['blinsur'], colores: `Selección: ${blinsurResumen(c.blinsur)}` }
+      : c.id==='indupanel'
+      ? { ...PANEL_PDF['indupanel'], colores: `Selección: ${induResumen(c.indu)}` }
+      : (PANEL_PDF[c.id] || PANEL_PDF['liso']);
+    const p = precioLado(l);
+    const precioTag = p===0
+      ? `<span class="panel-card-precio incl">✓ Incluido</span>`
+      : p
+      ? `<span class="panel-card-precio supl">+${formatPrecio(p)}</span>`
+      : `<span class="panel-card-precio consul">Precio a consultar</span>`;
+    return `<div class="panel-card">
   <div class="panel-card-hdr">
-    <span class="panel-card-badge">🎨 Panel / Acabado</span>
-    <span class="panel-card-nombre">${escHtml(panelSeleccionado?.nombre||'Panel liso estándar')}</span>
+    <span class="panel-card-badge">${icono} ${titulo}</span>
+    <span class="panel-card-nombre">${escHtml(resumenLado(l))}</span>
     ${precioTag}
   </div>
   <div class="panel-card-body">
@@ -1440,10 +1391,26 @@ ${(()=>{
       <div class="panel-info-row"><span class="panel-info-dot">◆</span> <strong>Colores disponibles:</strong> ${escHtml(pd.colores)}</div>
     </div>
   </div>
-  <div class="panel-all-opts">
-    ${miniOpts}
-  </div>
 </div>`;
+  };
+  const badges = (pid) => {
+    const b = [];
+    if (panelCfg.ext.id===pid) b.push('EXT');
+    if (panelCfg.int.id===pid) b.push('INT');
+    return b;
+  };
+  const miniOpts = PANELES.map(p=>{
+    const mpd = PANEL_PDF[p.id]||PANEL_PDF['liso'];
+    const bs = badges(p.id);
+    return `<div class="panel-opt-mini${bs.length?' activo':''}">
+      <div class="panel-opt-swatch" style="${mpd.swatch}"></div>
+      <div class="panel-opt-nombre">${escHtml(p.nombre.replace(' estándar (sapelly o blanco)','').replace(' (lacado, RAL, diseño...)',''))}</div>
+      <div class="panel-opt-precio">${p.precioTxt?p.precioTxt:p.precio===null?'Consultar':p.precio===0?'Incluido':'+'+formatPrecio(p.precio)}</div>
+      ${bs.length?`<div class="panel-opt-activo-badge">▲ ${bs.join(' + ')}</div>`:''}
+    </div>`;
+  }).join('');
+  return cardLado('ext','Panel exterior','🚪') + cardLado('int','Panel interior','🏠')
+    + `<div class="panel-card"><div class="panel-all-opts">${miniOpts}</div></div>`;
 })()}
 
 <!-- 4. EXTRAS Y OPCIONES -->
@@ -1555,13 +1522,7 @@ function enviarWhatsApp() {
   const t          = totalCalculado();
   const fv         = fechaValidez();
   const panelLabel = catActiva!=='metalica'
-    ? (panelSeleccionado?.id==='estega'
-        ? `Panel aluminio Estega – Col. ${estegatColeccion}${estegatDiseno?' ('+estegatDiseno+')':''}${estegatAcabado!=='A consultar' ? ' – '+estegatAcabado:''}`
-        : panelSeleccionado?.id==='blinsur'
-        ? `Tablero DM decorado Blinsur ${blinsurResumen()}`
-        : panelSeleccionado?.id==='indupanel'
-        ? `Panel Indupanel ${induResumen()}`
-        : panelSeleccionado?.nombre)
+    ? `Exterior: ${resumenLado('ext')} · Interior: ${resumenLado('int')}`
     : modeloSeleccionado.nivel;
   const opcionesLista = [...opcionesActivas].map(id=>{
     const o = OPCIONES.find(x=>x.id===id);
@@ -1599,13 +1560,7 @@ function enviarEmail() {
   const t   = totalCalculado();
   const fv  = fechaValidez();
   const panelLabel = catActiva!=='metalica'
-    ? (panelSeleccionado?.id==='estega'
-        ? `Panel aluminio Estega – Col. ${estegatColeccion}${estegatDiseno?' ('+estegatDiseno+')':''}${estegatAcabado!=='A consultar' ? ' – '+estegatAcabado:''}`
-        : panelSeleccionado?.id==='blinsur'
-        ? `Tablero DM decorado Blinsur ${blinsurResumen()}`
-        : panelSeleccionado?.id==='indupanel'
-        ? `Panel Indupanel ${induResumen()}`
-        : panelSeleccionado?.nombre)
+    ? `Exterior: ${resumenLado('ext')} · Interior: ${resumenLado('int')}`
     : modeloSeleccionado.nivel;
   const opcionesLista = [...opcionesActivas].map(id=>{
     const o = OPCIONES.find(x=>x.id===id);
