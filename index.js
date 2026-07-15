@@ -1091,6 +1091,202 @@ async function procesarMensaje(telefono, texto) {
 }
 
 // ============================================================
+// CAPTACIÓN — Campaña de puertas (módulo aislado)
+// Cualifica leads de anuncios (localidad, necesidad, fotos, plazo) y los
+// traspasa a una persona. No comparte estado con el flujo de partes/menú.
+// ============================================================
+
+// Estado de leads de captación en memoria: { [telefono]: {...} }
+const captacionLeads = {};
+
+// Frase distintiva del mensaje precargado del anuncio/landing (normalizada).
+// Un cliente de urgencias NUNCA la escribe → así separamos leads de clientes.
+const FRASE_CAMPANA = "campana de puertas";
+
+function normalizaTxt(t) {
+  return (t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+function esInicioCampana(texto) {
+  return normalizaTxt(texto).includes(FRASE_CAMPANA);
+}
+// ¿El contacto está dentro del flujo de captación? (con caducidad de 24 h)
+function captacionActiva(telefono) {
+  const lead = captacionLeads[telefono];
+  if (!lead) return false;
+  if (Date.now() - (lead.updatedAt || 0) > 24 * 60 * 60 * 1000) {
+    delete captacionLeads[telefono];
+    return false;
+  }
+  return true;
+}
+
+const CAP = {
+  bienvenida:
+    "¡Hola! 👋 Gracias por escribir a *Ibérica Seguridad*.\n" +
+    "Somos especialistas en puertas de entrada y seguridad en Almería y provincia, con más de 20 años instalando.\n\n" +
+    "Te hago un par de preguntas rápidas para orientarte bien 👇\n\n" +
+    "¿En qué *localidad* estás?",
+  necesidad:
+    "¡Genial! ¿Qué te gustaría mejorar sobre todo? Responde con un número:\n\n" +
+    "1️⃣ Seguridad\n2️⃣ Ruido / frío\n3️⃣ Estética\n4️⃣ Un poco de todo",
+  fotos:
+    "Perfecto. Para decirte qué te conviene de verdad, mándame *dos fotos de tu puerta*:\n\n" +
+    "📸 una por dentro\n📸 una por fuera\n\n" +
+    "Con eso te oriento sin ningún compromiso. (Si ahora no puedes, escribe *más tarde* y seguimos igualmente.)",
+  plazo:
+    "¡Gracias! 🙌 Última pregunta: ¿para cuándo lo necesitas? Responde con un número:\n\n" +
+    "1️⃣ Cuanto antes\n2️⃣ En 1-3 meses\n3️⃣ Solo me estoy informando",
+  cierre:
+    "¡Perfecto! 🙌 Un especialista revisa tus datos y te orienta enseguida sobre la mejor opción para tu vivienda.\n" +
+    "Estás en buenas manos. 🙂",
+  precio:
+    "Buena pregunta 🙂 El precio depende del tipo de puerta, las medidas y el estado del hueco, así que darte una cifra al aire sería engañarte.\n" +
+    "Con tus dos fotos te oriento gratis y, si encaja, hacemos medición y presupuesto cerrado sin compromiso.",
+  reintenta: "Por favor, responde con uno de los números de la lista 🙂",
+  NECESIDAD: { "1": "Seguridad", "2": "Ruido / frío", "3": "Estética", "4": "Un poco de todo" },
+  PLAZO: { "1": "Cuanto antes", "2": "En 1-3 meses", "3": "Solo se informa" },
+  pregunta(step) {
+    return {
+      cap_localidad: "¿En qué *localidad* estás?",
+      cap_necesidad: this.necesidad,
+      cap_fotos: this.fotos,
+      cap_plazo: this.plazo,
+    }[step] || null;
+  },
+};
+
+// Envía un texto al lead usando su canal/miembro de Woztell (aislado de enviarMensaje)
+async function enviarCap(lead, mensaje) {
+  try {
+    await axios.post(
+      `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
+      { channelId: lead.channelId, memberId: lead.memberId, response: [{ type: "TEXT", text: mensaje }] }
+    );
+    console.log(`[Captación] ✅ → ${lead.telefono}: "${mensaje.slice(0, 50)}..."`);
+  } catch (e) {
+    console.error(`[Captación] ❌ Envío falló:`, e.response?.data || e.message);
+  }
+}
+
+// Aviso best-effort al agente de turno de que ha entrado un lead cualificado
+async function notificarLeadPuertas(datos) {
+  try {
+    const dest = determinarDestinatarioNotificacion();
+    const texto =
+      `🚪 *Nuevo LEAD de puertas (campaña)*\n` +
+      `📞 Teléfono: ${datos.telefono}\n` +
+      `📍 Localidad: ${datos.localidad || "—"}\n` +
+      `🎯 Quiere mejorar: ${datos.necesidad || "—"}\n` +
+      `⏱️ Plazo: ${datos.plazo || "—"}\n` +
+      `📷 Fotos: ${datos.fotos ? "sí" : "no"}\n` +
+      `📢 Origen: ${datos.origen || "—"}\n\n` +
+      `Atiéndelo desde el inbox de Woztell.`;
+    await axios.post(
+      `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
+      { channelId: dest.channelId, memberId: dest.memberId, response: [{ type: "TEXT", text: texto }] }
+    );
+    console.log(`[Captación] ✅ Aviso de lead enviado a ${dest.nombre}`);
+  } catch (e) {
+    console.error(`[Captación] ❌ Aviso de lead falló:`, e.response?.data || e.message);
+  }
+}
+
+// Cierra el lead: pausa el bot para ese contacto (lo atiende una persona),
+// avisa al equipo y limpia el estado de captación.
+async function handoffCaptacion(telefono, channelId) {
+  const lead = captacionLeads[telefono] || {};
+  const datos = {
+    telefono,
+    localidad: lead.localidad, necesidad: lead.necesidad,
+    plazo: lead.plazo, fotos: !!lead.fotos, origen: lead.origen,
+  };
+  console.log(`[Captación] ✅ Lead cualificado:`, JSON.stringify(datos));
+
+  // Pausar el bot para este contacto (mismo mecanismo que el canal Soporte)
+  const clave = `${channelId}_${telefono}`;
+  botActivo[clave] = false;
+  redisSet("iberica:botActivo", botActivo);
+
+  await notificarLeadPuertas(datos);
+  delete captacionLeads[telefono];
+}
+
+// Máquina de estados de la captación
+async function manejarCaptacion({ telefono, memberId, channelId, texto, esImagen, req }) {
+  let lead = captacionLeads[telefono];
+
+  // Primer contacto (viene del anuncio) → bienvenida y captura de origen
+  if (!lead) {
+    console.log(`[Captación] PRIMER CONTACTO — payload:`, JSON.stringify(req.body));
+    const ref = req.body?.data?.referral || req.body?.referral || {};
+    const origen = ref.headline || ref.source_id || ref.ctwa_clid || ref.body || null;
+    lead = captacionLeads[telefono] = {
+      telefono, step: "cap_localidad",
+      localidad: null, necesidad: null, plazo: null, fotos: false,
+      origen, memberId, channelId, updatedAt: Date.now(),
+    };
+    await enviarCap(lead, CAP.bienvenida);
+    return;
+  }
+
+  lead.memberId = memberId;
+  lead.channelId = channelId;
+  lead.updatedAt = Date.now();
+
+  const msg = (texto || "").trim();
+  const low = msg.toLowerCase();
+
+  // Globales
+  if (/(agente|persona|humano|hablar con)/i.test(low)) {
+    await enviarCap(lead, "Claro, te paso con una persona del equipo que te atiende enseguida. 🙂");
+    return handoffCaptacion(telefono, channelId);
+  }
+  if (/(precio|cu[aá]nto|coste|cuesta|vale|presupuesto)/i.test(low) && lead.step !== "cap_plazo") {
+    await enviarCap(lead, CAP.precio);
+    const q = CAP.pregunta(lead.step);
+    if (q) await enviarCap(lead, q);
+    return;
+  }
+
+  switch (lead.step) {
+    case "cap_localidad":
+      lead.localidad = msg;
+      lead.step = "cap_necesidad";
+      await enviarCap(lead, CAP.necesidad);
+      return;
+
+    case "cap_necesidad":
+      if (!CAP.NECESIDAD[low]) { await enviarCap(lead, CAP.reintenta); return; }
+      lead.necesidad = CAP.NECESIDAD[low];
+      lead.step = "cap_fotos";
+      await enviarCap(lead, CAP.fotos);
+      return;
+
+    case "cap_fotos":
+      if (esImagen) lead.fotos = true;
+      if (esImagen || /(m[aá]s tarde|luego|despu[eé]s|ya|listo|enviad|hecho|no tengo|no puedo)/i.test(low)) {
+        lead.step = "cap_plazo";
+        if (esImagen) await enviarCap(lead, "¡Recibidas, gracias! 📷");
+        await enviarCap(lead, CAP.plazo);
+      } else {
+        await enviarCap(lead, "Cuando puedas, mándame las dos fotos (dentro y fuera). Si prefieres seguir sin ellas, escribe *más tarde*. 🙂");
+      }
+      return;
+
+    case "cap_plazo":
+      if (!CAP.PLAZO[low]) { await enviarCap(lead, CAP.reintenta); return; }
+      lead.plazo = CAP.PLAZO[low];
+      await enviarCap(lead, CAP.cierre);
+      return handoffCaptacion(telefono, channelId);
+
+    default:
+      lead.step = "cap_localidad";
+      await enviarCap(lead, CAP.bienvenida);
+      return;
+  }
+}
+
+// ============================================================
 // ENDPOINTS EXPRESS
 // ============================================================
 
@@ -1463,15 +1659,13 @@ app.get("/health", (req, res) => {
 // ── Webhook de Woztell ───────────────────────────────────────
 app.post("/webhook", async (req, res) => {
   try {
-    const tipo       = req.body?.type;
-    const eventType  = req.body?.eventType;
+    const tipo       = (req.body?.type || "").toUpperCase();
+    const eventType  = (req.body?.eventType || "").toUpperCase();
 
-    // Ignorar eventos que no son mensajes de texto entrantes del cliente:
-    // - type !== "TEXT": READ, DELIVERED, SENT, etc.
+    // Solo procesamos mensajes ENTRANTES del cliente.
     // - eventType !== "INBOUND": mensajes OUTBOUND (los que el propio bot envía)
-    //   Woztell los refleja de vuelta al webhook y causarían un bucle infinito
-    if (tipo?.toUpperCase() !== "TEXT" || eventType?.toUpperCase() !== "INBOUND") {
-      console.log(`[Webhook] Evento ignorado (type: ${tipo}, eventType: ${eventType})`);
+    //   Woztell los refleja de vuelta al webhook y causarían un bucle infinito.
+    if (eventType !== "INBOUND") {
       return res.sendStatus(200);
     }
 
@@ -1479,9 +1673,17 @@ app.post("/webhook", async (req, res) => {
     const telefono  = req.body?.from;      // número del cliente (clave de estado)
     const memberId  = req.body?.member;    // ID interno Woztell para enviar mensajes
     const channelId = req.body?.channel;   // canal real — puede diferir del .env
-    const texto     = req.body?.data?.text;
+    const texto     = req.body?.data?.text || "";
+    // Imagen/documento — solo lo usa el flujo de captación (fotos de la puerta)
+    const esImagen  = tipo === "IMAGE" || tipo === "MEDIA" || tipo === "DOCUMENT" || !!req.body?.data?.url;
 
-    if (!telefono || !memberId || !channelId || !texto) {
+    // Ignorar el resto de eventos (READ, DELIVERED, SENT, etc.)
+    if (tipo !== "TEXT" && !esImagen) {
+      console.log(`[Webhook] Evento ignorado (type: ${tipo}, eventType: ${eventType})`);
+      return res.sendStatus(200);
+    }
+
+    if (!telefono || !memberId || !channelId) {
       console.warn("[Webhook] Payload incompleto:", JSON.stringify(req.body));
       return res.status(400).json({ error: "Payload incompleto" });
     }
@@ -1499,6 +1701,23 @@ app.post("/webhook", async (req, res) => {
     // ── Ignorar mensajes de agentes internos (no son clientes) ──────────
     if (NOMBRES_AGENTES[telefono]) {
       console.log(`[Webhook] Mensaje de agente interno ${NOMBRES_AGENTES[telefono]} (${telefono}) — ignorado`);
+      return res.sendStatus(200);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // CAPTACIÓN — Campaña de puertas (leads de anuncios)
+    // Flujo aislado. Se activa 24/7 si el primer mensaje trae la frase de
+    // la campaña, o si el contacto ya está dentro del flujo de captación.
+    // Los clientes normales NUNCA envían esa frase → siguen con el menú.
+    // ══════════════════════════════════════════════════════════════════
+    if (esInicioCampana(texto) || captacionActiva(telefono)) {
+      await manejarCaptacion({ telefono, memberId, channelId, texto, esImagen, req });
+      return res.sendStatus(200);
+    }
+
+    // A partir de aquí, el flujo normal solo continúa con mensajes de TEXTO
+    // (una imagen que no sea de captación se ignora, como antes).
+    if (tipo !== "TEXT") {
       return res.sendStatus(200);
     }
 
