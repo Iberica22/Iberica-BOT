@@ -1099,6 +1099,11 @@ async function procesarMensaje(telefono, texto) {
 // Estado de leads de captación en memoria: { [telefono]: {...} }
 const captacionLeads = {};
 
+// La captación SOLO se activa en el canal del número de la campaña (el de los
+// anuncios). En cualquier otro número/canal del bot NUNCA se dispara.
+// Si no está configurado, la captación queda DESACTIVADA (a prueba de fallos).
+const CAMPANA_CHANNEL_ID = process.env.CAMPANA_CHANNEL_ID || null;
+
 // Frase distintiva del mensaje precargado del anuncio/landing (normalizada).
 // Un cliente de urgencias NUNCA la escribe → así separamos leads de clientes.
 const FRASE_CAMPANA = "campana de puertas";
@@ -1710,7 +1715,8 @@ app.post("/webhook", async (req, res) => {
     // la campaña, o si el contacto ya está dentro del flujo de captación.
     // Los clientes normales NUNCA envían esa frase → siguen con el menú.
     // ══════════════════════════════════════════════════════════════════
-    if (esInicioCampana(texto) || captacionActiva(telefono)) {
+    if (CAMPANA_CHANNEL_ID && channelId === CAMPANA_CHANNEL_ID &&
+        (esInicioCampana(texto) || captacionActiva(telefono))) {
       await manejarCaptacion({ telefono, memberId, channelId, texto, esImagen, req });
       return res.sendStatus(200);
     }
