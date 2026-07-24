@@ -116,7 +116,23 @@
   .opcion-nombre { font-weight:600; color:var(--blanco); display:block; }
   .opcion-precio { font-size:11px; color:var(--verde-claro); font-weight:700; }
   .opcion-nota { font-size:10px; color:var(--gris-medio); }
-  .notas-zona { max-width:1100px; margin:0 auto; }
+  .extras-man-zona, .descuentos-zona { max-width:1100px; margin:16px auto 0; }
+  .extras-man-zona label, .descuentos-zona label { font-size:12px; color:var(--gris-medio); display:block; margin-bottom:6px; }
+  .extras-man-form { display:flex; gap:8px; flex-wrap:wrap; }
+  .extras-man-form input { background:var(--acero); border:1px solid #555; border-radius:6px; color:var(--blanco); padding:8px 10px; font-size:13px; }
+  .extras-man-form input[type=text] { flex:1; min-width:220px; }
+  .extras-man-form input[type=number] { width:110px; }
+  .extras-man-form button { background:var(--verde); color:#06120c; border:none; border-radius:6px; padding:8px 14px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .extra-man-item { display:flex; justify-content:space-between; align-items:center; background:var(--acero); border-radius:6px; padding:6px 10px; margin-bottom:6px; font-size:13px; }
+  .extra-man-item .emi-precio { color:var(--dorado); font-weight:700; margin-left:10px; white-space:nowrap; }
+  .extra-man-item button { background:none; border:none; color:#e05555; cursor:pointer; font-size:15px; }
+  .descuentos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:8px; }
+  .dsc-row { display:flex; align-items:center; gap:6px; background:var(--acero); border-radius:6px; padding:6px 10px; }
+  .dsc-row span { font-size:12px; color:var(--gris-medio); flex:1; }
+  .dsc-row input { width:75px; background:var(--grafito); border:1px solid #555; border-radius:5px; color:var(--blanco); padding:5px 7px; font-size:13px; }
+  .dsc-row select { background:var(--grafito); border:1px solid #555; border-radius:5px; color:var(--blanco); padding:5px; font-size:13px; }
+
+  .notas-zona { max-width:1100px; margin:16px auto 0; }
   .notas-zona label { font-size:12px; color:var(--gris-medio); display:block; margin-bottom:4px; }
   .notas-zona textarea { width:100%; background:var(--acero); border:1px solid #2a4535;
     border-radius:8px; color:var(--blanco); padding:10px 12px; font-family:inherit;
@@ -194,6 +210,27 @@
 <div class="panel-opciones" id="panelOpciones">
   <h2>Extras y opciones adicionales</h2>
   <div class="opciones-grid" id="opcionesGrid"></div>
+
+  <div class="extras-man-zona">
+    <label>Extras a medida (concepto libre + importe IVA incl.):</label>
+    <div id="extrasManLista"></div>
+    <div class="extras-man-form">
+      <input type="text" id="extraConcepto" placeholder="Concepto (ej: retirada de escombros, desplazamiento especial...)">
+      <input type="number" id="extraImporte" placeholder="€" min="0" step="0.01">
+      <button type="button" onclick="addExtraManual()">➕ Añadir extra</button>
+    </div>
+  </div>
+
+  <div class="descuentos-zona">
+    <label>Descuentos (en % o €) — se muestran en el PDF como descuento aplicado:</label>
+    <div class="descuentos-grid">
+      <div class="dsc-row"><span>Puerta</span><input type="number" min="0" step="0.01" placeholder="0" id="dscv_puerta" oninput="setDescuento('puerta')"><select id="dsct_puerta" onchange="setDescuento('puerta')"><option value="pct">%</option><option value="eur">€</option></select></div>
+      <div class="dsc-row"><span>Paneles</span><input type="number" min="0" step="0.01" placeholder="0" id="dscv_paneles" oninput="setDescuento('paneles')"><select id="dsct_paneles" onchange="setDescuento('paneles')"><option value="pct">%</option><option value="eur">€</option></select></div>
+      <div class="dsc-row"><span>Extras</span><input type="number" min="0" step="0.01" placeholder="0" id="dscv_extras" oninput="setDescuento('extras')"><select id="dsct_extras" onchange="setDescuento('extras')"><option value="pct">%</option><option value="eur">€</option></select></div>
+      <div class="dsc-row"><span><strong>TOTAL</strong></span><input type="number" min="0" step="0.01" placeholder="0" id="dscv_total" oninput="setDescuento('total')"><select id="dsct_total" onchange="setDescuento('total')"><option value="pct">%</option><option value="eur">€</option></select></div>
+    </div>
+  </div>
+
   <div class="notas-zona">
     <label for="notasPresupuesto">Observaciones / notas del técnico:</label>
     <textarea id="notasPresupuesto" placeholder="Medidas especiales, tipo de marco, observaciones de visita técnica..."></textarea>
@@ -214,6 +251,7 @@
   <div class="total-info">
     <div class="total-modelo" id="modeloSelTxt">Selecciona un modelo para empezar</div>
     <div class="total-panel-txt" id="panelSelTxt"></div>
+    <div class="total-panel-txt" id="descTxt" style="color:#e6a435"></div>
     <div id="importeTxt">— <span>IVA incl.</span></div>
   </div>
   <div class="total-actions">
@@ -303,10 +341,10 @@ const MODELOS = [
     id:'k100', cat:'kiuso', nombre:'K100 Ibérica',
     nivel:'Grado 3 — puerta acorazada certificada, 10 bulones laterales',
     precio:2628,
-    descripcion:'10 bulones laterales y 8 pivotes antipalanca. Cilindro SECUREMME EVO K22 o ABUS VELA 2000.',
+    descripcion:'10 bulones laterales y 8 pivotes antipalanca. Cilindro M&C de alta seguridad de serie.',
     incluye:[
       '10 bulones laterales + 8 pivotes antipalanca (dificulta palanca y ganzúas)',
-      'Cilindro SECUREMME EVO K22 o ABUS VELA 2000 — alta seguridad',
+      'Cilindro M&C de alta seguridad — de serie',
       'Escudo protector del cilindro (anti-taladro)',
       'Mirilla + retenedor: abre sin riesgo si no conoces a quien llama',
       'Carpintería completa: paneles ext. e int. + tapajuntas',
@@ -319,7 +357,7 @@ const MODELOS = [
     precio:2839,
     descripcion:'Gama media-alta con equipamiento completo y mayor resistencia.',
     incluye:[
-      'Cilindro de seguridad premium',
+      'Cilindro M&C de alta seguridad — de serie',
       '10 bulones + 8 pivotes antipalanca',
       'Escudo protector reforzado (anti-taladro)',
       'Mirilla + retenedor',
@@ -333,7 +371,7 @@ const MODELOS = [
     precio:3049,
     descripcion:'Gama KRONOS con estética contemporánea. Mismas prestaciones de seguridad que el K100 estándar.',
     incluye:[
-      'Cilindro SECUREMME EVO K22 — alta seguridad',
+      'Cilindro M&C de alta seguridad — de serie',
       '10 bulones + 8 pivotes antipalanca',
       'Escudo de seguridad reforzado',
       'Mirilla + retenedor',
@@ -646,6 +684,11 @@ const PANEL_PDF = {
 
 const OPCIONES = [
   { id:'nivel4',     nombre:'Certificación Clase 4 KIUSO',  precio:260, nota:'Suplemento certificación Clase 4 (solo KIUSO)', cats:['kiuso'] },
+  // Protectores de cilindro: el precio se ve en el configurador, pero en el
+  // PDF del cliente NO se desglosan — van sumados al precio de la puerta.
+  { id:'prot-ths',   nombre:'Protector cilindro THS',            precio:68,  nota:'Instalado en la puerta', cats:['kiuso'], ocultoPDF:true },
+  { id:'prot-mag',   nombre:'Protector cilindro magnético',      precio:216, nota:'Instalado en la puerta', cats:['kiuso'], ocultoPDF:true },
+  { id:'prot-diam',  nombre:'Protector cilindro polvo diamante', precio:78,  nota:'Instalado en la puerta', cats:['kiuso'], ocultoPDF:true },
   { id:'kit-resina', nombre:'Kit resina para marco',         precio:42,  nota:'Fijación de alta resistencia',                 cats:['fichet','kiuso','blindada','metalica'] },
   { id:'albanil',    nombre:'Trabajos de albañilería',       precio:545, nota:'Cuando el hueco requiere modificación',        cats:['fichet','kiuso','blindada','metalica'] },
   { id:'alarma',     nombre:'Alarma AJAX',                   precio:null,nota:'Precio a consultar según instalación',         cats:['fichet','kiuso','blindada','metalica'] },
@@ -658,13 +701,13 @@ const PITCHES = {
   'spheris-s':      `Los ladrones buscan la rendija, el punto débil. El cierre multipunto de la SPHERIS S los elimina todos. Cada punto de anclaje adicional en el marco multiplica la resistencia al forzado de forma exponencial. RC3 certificado con el diseño exclusivo de la gama SPHERIS: protección real con una estética que enorgullece. Porque su puerta también es la primera imagen de su hogar.`,
   'spheris-his':    `¿Por qué elegir entre diseño exclusivo y la protección más avanzada? La SPHERIS HIS combina el cierre multipunto de la gama SPHERIS con el sistema HIS de alta intrusión: dos capas de protección activa que trabajan juntas. RC3/RC4 certificado. La puerta elegida por quien no acepta compromisos. Si su hogar lo merece, este es el nivel.`,
   'spheris-xp':     `RC4 es el pico más alto de la resistencia certificada en el mercado residencial. La SPHERIS XP es, sin más, la mejor puerta de seguridad que puede instalar en su vivienda. El Multipunto XP de Fichet es el mecanismo de cierre más resistente que fabrica la marca. Sin escalón superior, sin compromisos. Si quiere la certeza absoluta de que nadie va a entrar sin su permiso, la elección es esta.`,
-  'k100':           `Una puerta acorazada es otra categoría. La K100 Ibérica llega con 10 bulones laterales de acero y 8 pivotes antipalanca: 18 puntos de resistencia física contra las herramientas más usadas en los robos con fuerza. Cilindro SECUREMME o ABUS con escudo anti-taladro. Grado 3 certificado, el nivel que los seguros de hogar ya reconocen y valoran. Protección seria a precio serio.`,
+  'k100':           `Una puerta acorazada es otra categoría. La K100 Ibérica llega con 10 bulones laterales de acero y 8 pivotes antipalanca: 18 puntos de resistencia física contra las herramientas más usadas en los robos con fuerza. Cilindro M&C de alta seguridad con escudo anti-taladro. Grado 3 certificado, el nivel que los seguros de hogar ya reconocen y valoran. Protección seria a precio serio.`,
   'k-xxi':          `Todo lo que hace grande al K100, mejorado. La K-XXI eleva el equipamiento a cilindro premium, refuerza el escudo anti-taladro y mejora el acabado exterior. Mismos 10 bulones y 8 pivotes antipalanca del estándar acorazado, con el plus de una presentación superior. Para quien quiere la mejor versión de una puerta acorazada sin renunciar al detalle.`,
-  'kronos':         `Seguridad de Grado 3 con una estética que no parece una puerta de cuartel. El KRONOS K100 mantiene exactamente la misma protección que el K100 clásico —10 bulones, 8 pivotes, cilindro SECUREMME— pero con una línea contemporánea que encaja en los hogares actuales. La prueba de que no hay que sacrificar el diseño para tener una puerta que disuada a cualquiera.`,
+  'kronos':         `Seguridad de Grado 3 con una estética que no parece una puerta de cuartel. El KRONOS K100 mantiene exactamente la misma protección que el K100 clásico —10 bulones, 8 pivotes, cilindro M&C— pero con una línea contemporánea que encaja en los hogares actuales. La prueba de que no hay que sacrificar el diseño para tener una puerta que disuada a cualquiera.`,
   'grado-v':        `El Grado 5 es la certificación más alta que existe en puertas acorazadas. La GRADO V es la respuesta cuando la seguridad no admite concesiones: sistema multipunto Grado 5, cilindro Grado 5, escudo blindado de última generación. Diseñada para resistir los ataques más sofisticados durante el mayor tiempo posible. Esto no es seguridad estándar: es el máximo que el mercado puede ofrecerle.`,
   'blindada':       `Hay situaciones donde la puerta original no está tan mal, pero el cilindro y el escudo son el eslabón débil. La Puerta Blindada M&C resuelve eso de raíz: escudo macizo del mismo nivel que una acorazada, cilindro de alta seguridad con llaves incopiables y tarjeta de propiedad. Instalación por técnicos propios. La mejor relación calidad-precio del mercado para quien quiere protección real sin pagar de más.`,
-  'metalica-blanco':`Cuando la funcionalidad manda. Grado 2 certificado, resistente a golpes y corrosión, en lacado blanco que se integra en cualquier portal o garaje. Instalación limpia y rápida por nuestros técnicos propios, con 2 años de garantía. Para quien necesita una puerta segura y duradera sin complicaciones.`,
-  'metalica-madera':`La estética cálida de la madera con la resistencia de una puerta metálica. Acabado imitación madera de alta calidad, Grado 2 certificado, sin mantenimiento. Una solución práctica y elegante para portales, garajes y accesos secundarios. Instalada por nuestros técnicos propios, con 2 años de garantía detrás.`,
+  'metalica-blanco':`Cuando la funcionalidad manda. Grado 2 certificado, resistente a golpes y corrosión, en lacado blanco que se integra en cualquier portal o garaje. Instalación limpia y rápida por nuestros técnicos propios, con 3 años de garantía. Para quien necesita una puerta segura y duradera sin complicaciones.`,
+  'metalica-madera':`La estética cálida de la madera con la resistencia de una puerta metálica. Acabado imitación madera de alta calidad, Grado 2 certificado, sin mantenimiento. Una solución práctica y elegante para portales, garajes y accesos secundarios. Instalada por nuestros técnicos propios, con 3 años de garantía detrás.`,
 };
 
 // ── Especificaciones técnicas por modelo ──────────────────────────────────────
@@ -674,9 +717,9 @@ const SPECS_MODELO = {
   'spheris-s':      { fab:'Fichet (Francia)',       cert:'RC3 certificado',  cierre:'Multipunto reforzado SPHERIS',          cil:'Cilindro Fichet premium con tarjeta de propiedad' },
   'spheris-his':    { fab:'Fichet (Francia)',       cert:'RC3 / RC4',        cierre:'Multipunto SPHERIS + Sistema HIS',      cil:'Cilindro Fichet gama alta con tarjeta de propiedad' },
   'spheris-xp':     { fab:'Fichet (Francia)',       cert:'RC4 certificado',  cierre:'Multipunto XP (máxima resistencia)',    cil:'Cilindro Fichet máxima seguridad con tarjeta de propiedad' },
-  'k100':           { fab:'KIUSO (España)',         cert:'Grado 3',          cierre:'10 bulones + 8 pivotes antipalanca',    cil:'SECUREMME EVO K22 / ABUS VELA 2000' },
-  'k-xxi':          { fab:'KIUSO (España)',         cert:'Grado 3+',         cierre:'10 bulones + 8 pivotes + escudo ref.',  cil:'Cilindro premium SECUREMME / ABUS' },
-  'kronos':         { fab:'KIUSO (España)',         cert:'Grado 3',          cierre:'10 bulones + 8 pivotes antipalanca',    cil:'SECUREMME EVO K22' },
+  'k100':           { fab:'KIUSO (España)',         cert:'Grado 3',          cierre:'10 bulones + 8 pivotes antipalanca',    cil:'Cilindro M&C alta seguridad' },
+  'k-xxi':          { fab:'KIUSO (España)',         cert:'Grado 3+',         cierre:'10 bulones + 8 pivotes + escudo ref.',  cil:'Cilindro M&C alta seguridad' },
+  'kronos':         { fab:'KIUSO (España)',         cert:'Grado 3',          cierre:'10 bulones + 8 pivotes antipalanca',    cil:'Cilindro M&C alta seguridad' },
   'grado-v':        { fab:'KIUSO (España)',         cert:'Grado 5',          cierre:'Multipunto Grado 5',                   cil:'Cilindro Grado 5 certificado' },
   'blindada':       { fab:'Hoja sapelly / M&C',    cert:'Escudo M&C A.S.',  cierre:'Escudo macizo anti-taladro M&C',        cil:'Cilindro alta seg. M&C con tarjeta de propiedad' },
   'metalica-blanco':{ fab:'Fabricación nacional',  cert:'Grado 2',          cierre:'Cerradura multipunto de seguridad',     cil:'Cilindro de seguridad estándar' },
@@ -686,6 +729,8 @@ const SPECS_MODELO = {
 let modeloSeleccionado = null;
 let opcionesActivas    = new Set();
 let catActiva          = 'fichet';
+let extrasManuales     = []; // [{concepto, importe}] — IVA incluido
+let descuentos         = { puerta:{v:0,t:'pct'}, paneles:{v:0,t:'pct'}, extras:{v:0,t:'pct'}, total:{v:0,t:'pct'} };
 // ── Configuración de panel por cara (exterior / interior) ────────────────────
 const LADOS = [ ['ext','Cara exterior'], ['int','Cara interior'] ];
 function nuevoPanelCfg() {
@@ -1045,6 +1090,7 @@ function seleccionar(id) {
   modeloSeleccionado = MODELOS.find(m=>m.id===id);
   panelCfg = { ext: nuevoPanelCfg(), int: nuevoPanelCfg() };
   opcionesActivas.clear();
+  resetExtrasDescuentos();
   renderModelos(); renderPaneles();
   document.getElementById('panelOpciones').classList.add('visible');
   document.getElementById('clienteZona').style.display = 'block';
@@ -1071,17 +1117,80 @@ function toggleOpcion(id, checked) {
   actualizarTotal();
 }
 
-function totalCalculado() {
-  if (!modeloSeleccionado || modeloSeleccionado.precio===null) return null;
-  let t = modeloSeleccionado.precio;
+// ── Extras manuales ──────────────────────────────────────────────────────────
+function addExtraManual() {
+  const c = document.getElementById('extraConcepto').value.trim();
+  const imp = parseFloat(String(document.getElementById('extraImporte').value).replace(',', '.'));
+  if (!c) { alert('Escribe el concepto del extra.'); return; }
+  if (isNaN(imp) || imp <= 0) { alert('Introduce un importe válido.'); return; }
+  extrasManuales.push({ concepto: c, importe: Math.round(imp * 100) / 100 });
+  document.getElementById('extraConcepto').value = '';
+  document.getElementById('extraImporte').value = '';
+  renderExtrasManuales(); actualizarTotal();
+}
+function quitarExtraManual(i) {
+  extrasManuales.splice(i, 1);
+  renderExtrasManuales(); actualizarTotal();
+}
+function renderExtrasManuales() {
+  document.getElementById('extrasManLista').innerHTML = extrasManuales.map((e, i) => `
+    <div class="extra-man-item">
+      <span>${escHtml(e.concepto)}</span>
+      <span class="emi-precio">+${formatPrecio(e.importe)} <button type="button" title="Quitar" onclick="quitarExtraManual(${i})">✕</button></span>
+    </div>`).join('');
+}
+
+// ── Descuentos ───────────────────────────────────────────────────────────────
+function setDescuento(scope) {
+  descuentos[scope] = {
+    v: Number(document.getElementById('dscv_' + scope).value) || 0,
+    t: document.getElementById('dsct_' + scope).value,
+  };
+  actualizarTotal();
+}
+function resetExtrasDescuentos() {
+  extrasManuales = [];
+  renderExtrasManuales();
+  descuentos = { puerta:{v:0,t:'pct'}, paneles:{v:0,t:'pct'}, extras:{v:0,t:'pct'}, total:{v:0,t:'pct'} };
+  for (const s of ['puerta','paneles','extras','total']) {
+    const iv = document.getElementById('dscv_' + s), it = document.getElementById('dsct_' + s);
+    if (iv) iv.value = ''; if (it) it.value = 'pct';
+  }
+}
+function calcDescuento(base, d) {
+  if (!d || !d.v || base <= 0) return 0;
+  const x = d.t === 'pct' ? base * d.v / 100 : d.v;
+  return Math.min(Math.round(x * 100) / 100, base);
+}
+
+// ── Desglose económico completo ──────────────────────────────────────────────
+function desglosePresupuesto() {
+  if (!modeloSeleccionado || modeloSeleccionado.precio === null) return null;
+  const puerta = modeloSeleccionado.precio;
+  let paneles = 0;
   if (catActiva !== 'metalica') {
-    for (const [l] of LADOS) { const p = precioLado(l); if (p) t += p; }
+    for (const [l] of LADOS) { const p = precioLado(l); if (p) paneles += p; }
   }
+  let extras = 0;
   for (const id of opcionesActivas) {
-    const op = OPCIONES.find(o=>o.id===id);
-    if (op?.precio) t += op.precio;
+    const op = OPCIONES.find(o => o.id === id);
+    if (op?.precio) extras += op.precio;
   }
-  return t;
+  for (const e of extrasManuales) extras += e.importe;
+  const dPuerta  = calcDescuento(puerta,  descuentos.puerta);
+  const dPaneles = calcDescuento(paneles, descuentos.paneles);
+  const dExtras  = calcDescuento(extras,  descuentos.extras);
+  const subtotal = puerta - dPuerta + paneles - dPaneles + extras - dExtras;
+  const dTotal   = calcDescuento(subtotal, descuentos.total);
+  return {
+    puerta, paneles, extras, dPuerta, dPaneles, dExtras, dTotal,
+    descuentoTotal: Math.round((dPuerta + dPaneles + dExtras + dTotal) * 100) / 100,
+    total: Math.round(subtotal - dTotal),
+  };
+}
+function totalCalculado() {
+  const d = desglosePresupuesto();
+  return d ? d.total : null;
 }
 
 // ── FACTUSOL: construir payload y grabar ─────────────────────────────────────
@@ -1110,6 +1219,20 @@ function payloadFactusol() {
   for (const id of opcionesActivas) {
     const op = OPCIONES.find(o => o.id === id);
     if (op?.precio) lineas.push({ descripcion: op.nombre, cantidad: 1, precioBase: base(op.precio), ivaPct: 21 });
+  }
+  for (const e of extrasManuales) {
+    lineas.push({ descripcion: 'Extra: ' + e.concepto, cantidad: 1, precioBase: base(e.importe), ivaPct: 21 });
+  }
+  // Descuentos como líneas negativas para que el total de FACTUSOL cuadre
+  const desg = desglosePresupuesto();
+  if (desg) {
+    const dsc = [
+      ['Descuento puerta', desg.dPuerta], ['Descuento paneles', desg.dPaneles],
+      ['Descuento extras', desg.dExtras], ['Descuento adicional', desg.dTotal],
+    ];
+    for (const [nombre, imp] of dsc) {
+      if (imp > 0) lineas.push({ descripcion: nombre, cantidad: 1, precioBase: -base(imp), ivaPct: 21 });
+    }
   }
   return {
     origen: 'puertas',
@@ -1158,6 +1281,12 @@ function actualizarTotal() {
     }).filter(Boolean);
     panelTxt.textContent = partes.length ? 'Panel · ' + partes.join(' · ') : 'Panel liso estándar en ambas caras';
   } else { panelTxt.textContent = ''; }
+  const desg = desglosePresupuesto();
+  const nExtras = extrasManuales.length;
+  let infoTxt = '';
+  if (nExtras) infoTxt += `${nExtras} extra${nExtras>1?'s':''} a medida`;
+  if (desg && desg.descuentoTotal > 0) infoTxt += `${infoTxt?' · ':''}Descuentos: −${formatPrecio(desg.descuentoTotal)}`;
+  document.getElementById('descTxt').textContent = infoTxt;
   document.getElementById('importeTxt').innerHTML = t!==null
     ? `${formatPrecio(t)} <span>IVA incl.</span>`
     : `<span style="font-size:16px;color:var(--dorado)">A consultar</span>`;
@@ -1194,10 +1323,6 @@ function fechaValidez() {
   const d = new Date(); d.setDate(d.getDate()+10);
   return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
 }
-function fechaInstalacion(dias) {
-  const d = new Date(); d.setDate(d.getDate()+(dias||70));
-  return d.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'});
-}
 function mesLimiteSinConf() {
   const d = new Date(); d.setDate(d.getDate()+110);
   return d.toLocaleDateString('es-ES',{month:'long',year:'numeric'});
@@ -1215,6 +1340,10 @@ function generarPDF() {
     ? `Exterior: ${resumenLado('ext')} · Interior: ${resumenLado('int')}`
     : modeloSeleccionado.nivel;
   const opcionesSel = [...opcionesActivas].map(id=>OPCIONES.find(o=>o.id===id)).filter(Boolean);
+  // Opciones ocultas en el PDF del cliente (van sumadas al total, sin desglose)
+  const opcionesVisibles = opcionesSel.filter(o=>!o.ocultoPDF);
+  const opcionesOcultas  = opcionesSel.filter(o=>o.ocultoPDF);
+  const desg = desglosePresupuesto();
 
   const precioRef  = total!==null ? Math.ceil(total*1.15/50)*50 : null;
   const cuotaMes   = total!==null ? Math.ceil(total/12) : null;
@@ -1246,11 +1375,16 @@ function generarPDF() {
         </div>
       </div>` : '';
 
-  const filasOpciones = opcionesSel.map(o=>`<tr>
+  const filasOpciones = opcionesVisibles.map(o=>`<tr>
     <td>${escHtml(o.nombre)}${o.nota?`<br><small style="color:#999">${escHtml(o.nota)}</small>`:''}</td>
     <td style="text-align:center">1</td>
     <td style="text-align:right">${o.precio!==null?formatPrecio(o.precio):'A consultar'}</td>
     <td style="text-align:right;font-weight:700">${o.precio!==null?formatPrecio(o.precio):'A consultar'}</td>
+  </tr>`).join('') + extrasManuales.map(e=>`<tr>
+    <td>${escHtml(e.concepto)}</td>
+    <td style="text-align:center">1</td>
+    <td style="text-align:right">${formatPrecio(e.importe)}</td>
+    <td style="text-align:right;font-weight:700">${formatPrecio(e.importe)}</td>
   </tr>`).join('');
 
   const specRows = [
@@ -1385,7 +1519,7 @@ function generarPDF() {
   .cta-nota{font-size:10px;color:rgba(255,255,255,.45)}
 
   /* GARANTÍAS */
-  .garantias-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:18px}
+  .garantias-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:18px}
   .gar-card{background:#f5fbf5;border:1.5px solid #cde8cd;border-radius:8px;padding:11px 9px;text-align:center}
   .gar-icon{font-size:19px;margin-bottom:4px}
   .gar-title{font-size:11px;font-weight:800;color:#0e1f15;margin-bottom:2px}
@@ -1430,7 +1564,6 @@ function generarPDF() {
     <div class="num">${escHtml(num)}</div>
     <div class="fecha">Fecha: ${fechaHoy()}</div>
     <div class="validez">Válido hasta: ${fv}</div>
-    <div class="inst">Instalación estimada: ${fechaInstalacion(60)} – ${fechaInstalacion(80)}</div>
   </div>
 </div>
 
@@ -1463,7 +1596,7 @@ ${clienteBloque}
     <div class="dossier-includes">
       <div class="d-sec-title">¿Qué incluye su presupuesto?</div>
       <ul class="inc-list">
-        ${modeloSeleccionado.incluye.map(i=>`<li><span class="inc-chk">✓</span><span>${escHtml(i)}</span></li>`).join('')}
+        ${modeloSeleccionado.incluye.concat(opcionesOcultas.map(o=>o.nombre+' — instalado en la puerta')).map(i=>`<li><span class="inc-chk">✓</span><span>${escHtml(i)}</span></li>`).join('')}
       </ul>
     </div>
   </div>
@@ -1532,7 +1665,7 @@ ${(()=>{
 })()}
 
 <!-- 4. EXTRAS Y OPCIONES -->
-${opcionesSel.length>0?`<div class="section-block">
+${(opcionesVisibles.length+extrasManuales.length)>0?`<div class="section-block">
   <div class="sec-title">Extras y opciones adicionales</div>
   <table class="opt-table">
     <thead><tr><th>Extra / Opción</th><th>Ud.</th><th>Precio u.</th><th>Total</th></tr></thead>
@@ -1546,6 +1679,12 @@ ${total!==null?`<div class="totales-box">
     <span>Precio de referencia en el mercado</span>
     <span class="ref-val">desde ${formatPrecio(precioRef)}</span>
   </div>
+  ${desg && desg.descuentoTotal>0 ? [
+    ['Descuento en puerta', desg.dPuerta],
+    ['Descuento en paneles / acabados', desg.dPaneles],
+    ['Descuento en extras', desg.dExtras],
+    ['Descuento adicional', desg.dTotal],
+  ].filter(([,v])=>v>0).map(([n,v])=>`<div class="ref-row" style="color:#b0003a;font-weight:700"><span>🏷️ ${n}</span><span>−${formatPrecio(v)}</span></div>`).join('') : ''}
   <div class="precio-final-row">
     <span class="precio-final-label">SU PRECIO — IVA incluido</span>
     <span class="precio-final-val">${formatPrecio(total)}</span>
@@ -1555,11 +1694,10 @@ ${total!==null?`<div class="totales-box">
 
 <!-- 6. CTA — LLAMADA A LA ACCIÓN -->
 <div class="cta-box">
-  <div class="cta-titulo">Su hogar protegido en 60–80 días</div>
+  <div class="cta-titulo">Proteja su hogar con la tranquilidad de Ibérica Seguridad</div>
   <div class="cta-sub">Confirme ahora y le reservamos fecha de instalación</div>
   <div class="cta-urg">
-    ⏳ Este presupuesto es válido hasta el <strong>${fv}</strong>. Tras esa fecha, el precio puede verse afectado por cambios de fábrica.<br>
-    📅 Si confirma esta semana, su instalación queda programada entre el <strong>${fechaInstalacion(60)}</strong> y el <strong>${fechaInstalacion(80)}</strong>.
+    ⏳ Este presupuesto es válido hasta el <strong>${fv}</strong>. Tras esa fecha, el precio puede verse afectado por cambios de fábrica.
   </div>
   <div class="cta-btns">
     <a class="cta-btn btn-tel" href="tel:+34950088086">📞 950 088 086</a>
@@ -1572,10 +1710,12 @@ ${total!==null?`<div class="totales-box">
 <!-- 7. POR QUÉ IBÉRICA SEGURIDAD -->
 <div class="sec-title" style="margin-bottom:11px">¿Por qué Ibérica Seguridad?</div>
 <div class="garantias-grid">
-  <div class="gar-card"><div class="gar-icon">🔧</div><div class="gar-title">Técnicos propios</div><div class="gar-desc">Sin subcontratas. Instalación directa, responsabilidad directa.</div></div>
-  <div class="gar-card"><div class="gar-icon">🛡️</div><div class="gar-title">2 años de garantía</div><div class="gar-desc">En instalación y producto. Sin letra pequeña.</div></div>
-  <div class="gar-card"><div class="gar-icon">⚡</div><div class="gar-title">Respuesta &lt;24 h</div><div class="gar-desc">Si algo falla, estamos en su puerta antes de 24 horas.</div></div>
-  <div class="gar-card"><div class="gar-icon">📍</div><div class="gar-title">+20 años en Almería</div><div class="gar-desc">Empresa local. Confianza en más de 1.000 hogares.</div></div>
+  <div class="gar-card"><div class="gar-icon">🛡️</div><div class="gar-title">3 años de garantía total</div><div class="gar-desc">Cubrimos puerta e instalación durante 3 años, por escrito y sin letra pequeña.</div></div>
+  <div class="gar-card"><div class="gar-icon">🔧</div><div class="gar-title">Técnicos propios certificados</div><div class="gar-desc">Instala nuestro equipo, no subcontratas: cada detalle responde a nuestro nombre.</div></div>
+  <div class="gar-card"><div class="gar-icon">🏅</div><div class="gar-title">Certificación europea RC2–RC4</div><div class="gar-desc">Puertas con grado de seguridad certificado según normativa europea, según modelo.</div></div>
+  <div class="gar-card"><div class="gar-icon">🤝</div><div class="gar-title">Marcas líderes: FICHET y KIUSO</div><div class="gar-desc">Instaladores oficiales de las firmas de referencia en seguridad.</div></div>
+  <div class="gar-card"><div class="gar-icon">📍</div><div class="gar-title">Postventa local en Almería</div><div class="gar-desc">Estamos aquí al lado: respuesta rápida de quien le instaló la puerta.</div></div>
+  <div class="gar-card"><div class="gar-icon">✅</div><div class="gar-title">Precio cerrado, sin sorpresas</div><div class="gar-desc">Presupuesto definitivo con retirada de su puerta antigua incluida.</div></div>
 </div>
 
 <!-- 8. TESTIMONIO / PRUEBA SOCIAL -->
@@ -1614,7 +1754,7 @@ ${total!==null?`<div class="totales-box">
     </div>
     <div class="cond-item">
       <strong>⏱ Plazo de entrega</strong>
-      60–80 días desde la confirmación del pedido, según disponibilidad de fábrica. Le confirmamos fecha exacta al tramitar el pedido.
+      Según disponibilidad de fábrica. Le confirmamos la fecha exacta de instalación al tramitar el pedido.
     </div>
     ${notas?`<div class="cond-item full"><strong>📝 Notas del técnico</strong><div class="notas-box">${escHtml(notas)}</div></div>`:''}
   </div>
@@ -1642,10 +1782,13 @@ function enviarWhatsApp() {
   const panelLabel = catActiva!=='metalica'
     ? `Exterior: ${resumenLado('ext')} · Interior: ${resumenLado('int')}`
     : modeloSeleccionado.nivel;
-  const opcionesLista = [...opcionesActivas].map(id=>{
-    const o = OPCIONES.find(x=>x.id===id);
-    return o ? `· ${o.nombre}${o.precio?' (+'+formatPrecio(o.precio)+')':' (a consultar)'}` : '';
-  }).filter(Boolean).join('\n');
+  const opsSel = [...opcionesActivas].map(id=>OPCIONES.find(x=>x.id===id)).filter(Boolean);
+  const opcionesLista = opsSel.filter(o=>!o.ocultoPDF).map(o=>
+    `· ${o.nombre}${o.precio?' (+'+formatPrecio(o.precio)+')':' (a consultar)'}`
+  ).concat(extrasManuales.map(e=>`· ${e.concepto} (+${formatPrecio(e.importe)})`)).join('\n');
+  const inclOcultas = opsSel.filter(o=>o.ocultoPDF).map(o=>`🔒 ${o.nombre} — instalado en la puerta`).join('\n');
+  const desg = desglosePresupuesto();
+  const descLinea = desg && desg.descuentoTotal>0 ? `🏷️ Descuento aplicado: −${formatPrecio(desg.descuentoTotal)}\n` : '';
 
   const texto = `Hola${cli.nombre?' '+cli.nombre:''},
 
@@ -1654,14 +1797,13 @@ Te envío el presupuesto de *Ibérica Seguridad*:
 🚪 *${modeloSeleccionado.nombre}*
 📋 ${modeloSeleccionado.nivel}
 🎨 Panel: ${panelLabel||'Estándar'}
-${opcionesLista?'\nExtras:\n'+opcionesLista+'\n':''}
-💰 *Total: ${t!==null?formatPrecio(t):'A consultar'} (IVA incluido)*
+${inclOcultas?inclOcultas+'\n':''}${opcionesLista?'\nExtras:\n'+opcionesLista+'\n':''}
+${descLinea}💰 *Total: ${t!==null?formatPrecio(t):'A consultar'} (IVA incluido)*
 ${t!==null?'💳 O desde '+formatPrecio(Math.ceil(t/12))+'/mes · 12 cuotas sin intereses con Cetelem\n':''}
-✅ Instalación por técnicos propios — 2 años de garantía
+✅ Instalación por técnicos propios — 3 años de garantía
 ✅ Si algo falla, en menos de 24h estamos en tu puerta
 
 ⏳ Presupuesto válido hasta *${fv}*
-Si confirmas esta semana, la instalación queda para *${fechaInstalacion()}*.
 
 ¿Lo cerramos? Escríbeme o llama al 950 088 086.
 
@@ -1680,10 +1822,14 @@ function enviarEmail() {
   const panelLabel = catActiva!=='metalica'
     ? `Exterior: ${resumenLado('ext')} · Interior: ${resumenLado('int')}`
     : modeloSeleccionado.nivel;
-  const opcionesLista = [...opcionesActivas].map(id=>{
-    const o = OPCIONES.find(x=>x.id===id);
-    return o ? `  · ${o.nombre}${o.precio?' (+'+formatPrecio(o.precio)+')':' (a consultar)'}` : '';
-  }).filter(Boolean).join('\n');
+  const opsSel = [...opcionesActivas].map(id=>OPCIONES.find(x=>x.id===id)).filter(Boolean);
+  const opcionesLista = opsSel.filter(o=>!o.ocultoPDF).map(o=>
+    `  · ${o.nombre}${o.precio?' (+'+formatPrecio(o.precio)+')':' (a consultar)'}`
+  ).concat(extrasManuales.map(e=>`  · ${e.concepto} (+${formatPrecio(e.importe)})`)).join('\n');
+  const inclEmail = modeloSeleccionado.incluye.concat(
+    opsSel.filter(o=>o.ocultoPDF).map(o=>o.nombre+' — instalado en la puerta'));
+  const desg = desglosePresupuesto();
+  const descLinea = desg && desg.descuentoTotal>0 ? 'Descuento aplicado: −'+formatPrecio(desg.descuentoTotal)+'\n' : '';
 
   const cuerpo = `Hola${cli.nombre?' '+cli.nombre:''},
 
@@ -1695,21 +1841,20 @@ ${modeloSeleccionado.nivel}
 Panel / acabado: ${panelLabel||'Estándar'}
 ${opcionesLista?'\nExtras incluidos:\n'+opcionesLista+'\n':''}
 ━━━ PRECIO ━━━
-Total (IVA incluido): ${t!==null?formatPrecio(t):'A consultar'}
+${descLinea}Total (IVA incluido): ${t!==null?formatPrecio(t):'A consultar'}
 ${t!==null?'O desde '+formatPrecio(Math.ceil(t/12))+'/mes · 12 cuotas sin intereses con Cetelem (sin cambiar de banco)\n':''}
 ━━━ QUÉ INCLUYE ━━━
-${modeloSeleccionado.incluye.map(i=>'  ✓ '+i).join('\n')}
+${inclEmail.map(i=>'  ✓ '+i).join('\n')}
 
 ━━━ NUESTRA GARANTÍA ━━━
   ✓ Técnicos propios — sin subcontratas, responsabilidad directa
-  ✓ 2 años de garantía en instalación y producto
+  ✓ 3 años de garantía en instalación y producto
   ✓ Si algo falla, en menos de 24h estamos en tu puerta
   ✓ Seguro de Responsabilidad Civil · Empresa local en Almería
   ✓ ⭐ 4,8 en Google · Más de 1.000 instalaciones realizadas
 
 ━━━ PRÓXIMO PASO ━━━
 Presupuesto válido hasta: ${fv}
-Si confirmas antes de esa fecha, tu instalación queda programada para ${fechaInstalacion()}.
 
 Para confirmar o cualquier duda:
   📞 950 088 086
@@ -1721,7 +1866,6 @@ Para confirmar o cualquier duda:
 Incluye instalación completa + retirada puerta antigua + terminaciones de carpintería.
 No incluye pintura de paredes ni reparación de suelo/parquet.
 50% de anticipo al confirmar · 50% a la entrega e instalación.
-Plazo aprox. 8–10 semanas desde la confirmación del pedido.
 
 Un saludo,
 Ibérica Seguridad
