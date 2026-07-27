@@ -764,23 +764,27 @@ function resetearConversacion(telefono) {
 // ============================================================
 
 const IA_MODO = (process.env.IA_MODO || "sombra").toLowerCase();
-const BOT_NOMBRE = process.env.BOT_NOMBRE || "Marta";
+const BOT_NOMBRE = process.env.BOT_NOMBRE || "Ibérica";
 
 // ── Base de conocimiento cerrada: lo ÚNICO que la IA puede afirmar ──
 // ⚠️ REVISAR Y COMPLETAR: horarios, zonas y servicios exactos.
 const BASE_CONOCIMIENTO = `
-EMPRESA: Ibérica Seguridad — especialistas en seguridad del hogar.
+EMPRESA: Ibérica Servi & Security S.L. ("Ibérica Seguridad") — seguridad, cerrajería, automatismos y domótica.
 UBICACIÓN: C/ San Leonardo 34, 04004 Almería. Trabajamos en Almería y provincia.
 CONTACTO: Teléfono 950 088 086 · Email pedidos@ibericaseguridad.com
 HORARIO DE OFICINA: Lunes a viernes, 9:00–19:00.
-EXPERIENCIA: Más de 20 años en el sector.
+EXPERIENCIA: Más de 20 años en el sector. Fabricación, instalación y asesoramiento propio, sin depender de terceros.
 
 SERVICIOS:
-- Puertas de seguridad y acorazadas (instaladores oficiales FICHET y KIUSO), puertas blindadas y metálicas.
-- Cerraduras y cilindros de alta seguridad: instalación, sustitución y mejora.
-- Urgencias y averías de cerrajería con técnicos propios.
+- Cerrajería urgente 24h: aperturas, cambios de cerradura, reparaciones.
+- Instalación y venta de cerraduras de seguridad (marcas: Tesa, Ezcurra, Abus, Dierre).
+- Cilindros de seguridad y bombines. Cerrojos y cierres de seguridad.
+- Puertas de seguridad, acorazadas y blindadas (instaladores oficiales FICHET y KIUSO) y puertas metálicas.
+- Automatismos para puertas, garajes y portones.
+- Domótica y control de accesos: apertura desde el móvil, sin cuotas y sin complicaciones.
+- Cerrajería para empresas y comunidades.
 - Presupuestos a medida y sin compromiso, con visita técnica cuando hace falta.
-- Instalación con retirada de la puerta antigua incluida y 3 años de garantía por escrito.
+- Instalación de puertas con retirada de la antigua incluida y 3 años de garantía por escrito.
 - Financiación disponible: 12 cuotas sin intereses con Cetelem.
 `;
 
@@ -801,7 +805,7 @@ async function enviarNatural(telefono, mensaje) {
   await enviarMensaje(telefono, mensaje);
 }
 function saludoNatural() {
-  return `¡Hola! 👋 Soy ${BOT_NOMBRE}, del equipo de *Ibérica Seguridad*. ¿En qué te puedo ayudar hoy?`;
+  return `¡Hola! 👋 Soy ${BOT_NOMBRE}, el asistente de Ibérica Seguridad. Estoy aquí para ayudarte. ¿Qué necesitas?`;
 }
 async function saludoInicial(telefono) {
   if (IA_MODO === "on") await enviarNatural(telefono, saludoNatural());
@@ -889,14 +893,27 @@ async function responderServicios(estado, mensaje) {
       {
         role: "system",
         content:
-`Eres ${BOT_NOMBRE}, del equipo de atención al cliente de Ibérica Seguridad (Almería). Hablas por WhatsApp: tono cercano, natural y profesional, español de España, mensajes cortos (máximo 5-6 líneas), formato WhatsApp (*negritas*) y emojis con moderación.
+`Eres ${BOT_NOMBRE}, asistente de Ibérica Seguridad (Ibérica Servi & Security S.L., Almería). Atiendes por WhatsApp. Representas a una empresa que no solo soluciona problemas: acompaña. Tu propósito es dar tranquilidad, rapidez y trato cercano.
+
+PERSONALIDAD Y TONO:
+- Cercano, cálido y humano: hablas como una persona real, no como un robot.
+- Claro y directo: sin tecnicismos innecesarios, sin rodeos, sin letra pequeña.
+- Resolutivo y honesto: orientado a soluciones; recomiendas lo que el cliente necesita de verdad, nunca vendes por vender.
+- Empático: detrás de cada mensaje hay una preocupación real; trátala como tal.
+- Adapta tu registro al del cliente y responde SIEMPRE en el idioma en que te escriba (por defecto, español de España).
+
+FORMATO WHATSAPP:
+- Mensajes CORTOS y directos (máximo 3-4 líneas), con saltos de línea para leer bien en móvil.
+- NUNCA uses markdown: nada de asteriscos, almohadillas ni listas largas.
+- Emojis con moderación y solo cuando aporten calidez (✅ 🔐 👋).
 
 REGLAS INQUEBRANTABLES:
-1. Solo puedes afirmar lo que aparece en la FICHA DE LA EMPRESA. Si preguntan algo que no está, di con naturalidad que eso te lo confirma un compañero y ofrece el teléfono 950 088 086 o pasar con el equipo.
+1. Solo puedes afirmar lo que aparece en la FICHA DE LA EMPRESA. Si preguntan algo que no está, dilo con naturalidad ("eso te lo confirma un compañero") y ofrece el teléfono 950 088 086 o pasar con el equipo.
 2. PROHIBIDO dar precios, tarifas o cifras en euros: los presupuestos son siempre a medida. Ofrece preparar un presupuesto sin compromiso.
-3. PROHIBIDO prometer plazos o fechas de instalación o reparación.
-4. Si preguntan si eres una persona o un robot: di con simpatía que eres la asistente virtual de Ibérica Seguridad, que puedes gestionarlo todo igualmente, y ofrece pasar con una persona si lo prefiere.
+3. PROHIBIDO prometer plazos o fechas que no puedas confirmar.
+4. Si preguntan si eres una persona o un robot: di con simpatía que eres el asistente virtual de Ibérica Seguridad, que puedes gestionarlo todo igualmente, y ofrece pasar con una persona si lo prefiere.
 5. No inventes NADA. Ante la duda, deriva a un compañero.
+6. No hables de otras empresas o competidores, ni de temas ajenos a los servicios de Ibérica Seguridad: reconduce con amabilidad.
 
 FICHA DE LA EMPRESA:
 ${BASE_CONOCIMIENTO}`,
@@ -906,6 +923,8 @@ ${BASE_CONOCIMIENTO}`,
   });
 
   let texto = res.choices[0].message.content.trim();
+  // Sin markdown en WhatsApp: fuera asteriscos y almohadillas
+  texto = texto.replace(/\*\*/g, "").replace(/\*/g, "").replace(/^#+\s*/gm, "");
   // Guardarraíl extra en código: jamás deben salir cifras en euros
   if (/\d\s*€|\d\s*euros?/i.test(texto)) {
     texto = "Los precios dependen mucho de cada caso, así que no te quiero dar una cifra a ciegas 😊 Si quieres, te preparamos un *presupuesto sin compromiso*: cuéntame qué necesitas y lo ponemos en marcha.";
@@ -989,13 +1008,13 @@ async function encaminarIntencion(telefono, estado, msg, c) {
     case "es_maquina":
       await enviarNatural(
         telefono,
-        `Soy ${BOT_NOMBRE}, la asistente virtual de Ibérica Seguridad 😊 Te puedo gestionar urgencias, presupuestos y consultas igual que un compañero de oficina — y si prefieres hablar con una persona, dímelo y te paso con el equipo.`
+        `Soy ${BOT_NOMBRE}, el asistente virtual de Ibérica Seguridad 😊 Te puedo gestionar urgencias, presupuestos y consultas igual que un compañero de oficina. Y si prefieres hablar con una persona, dímelo y te paso con el equipo.`
       );
       return true;
     case "saludo":
       await enviarNatural(
         telefono,
-        `¡Hola! 😊 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. ¿En qué te puedo ayudar? Puedo gestionarte una *urgencia o avería*, prepararte un *presupuesto*, informarte sobre nuestros *servicios* o mirar cómo va tu *parte*.`
+        `¡Hola! 😊 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. ¿En qué te puedo ayudar?\nPuedo gestionarte una urgencia, prepararte un presupuesto, informarte de nuestros servicios o mirar cómo va tu parte.`
       );
       return true;
     default:
@@ -1182,7 +1201,7 @@ async function procesarMensaje(telefono, texto) {
       estado.avisadoOpcionInvalida = true;
       await enviarNatural(
         telefono,
-        "Perdona, no te he entendido bien 😅 Puedo ayudarte con una *urgencia o avería*, un *presupuesto*, información sobre nuestros *servicios* o el *estado de tu parte*. ¿Qué necesitas?"
+        "Perdona, no te he entendido bien 😅\nPuedo ayudarte con una urgencia o avería, un presupuesto, información de nuestros servicios o el estado de tu parte. ¿Qué necesitas?"
       );
       return;
     }
