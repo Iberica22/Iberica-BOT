@@ -30,6 +30,54 @@ const conversaciones = {};
 // true = bot activo (por defecto), false = agente humano atiende
 const botActivo = {};
 
+// Pausas temporales con caducidad: { "canal_telefono": timestamp_ms }
+// (la pausa manual desde el panel sigue siendo indefinida)
+const pausaExpira = {};
+const PAUSA_TAKEOVER_H = 6; // al detectar a una persona de oficina escribiendo
+const PAUSA_AGENTE_H   = 8; // cuando el cliente pide hablar con una persona
+
+function pausarBot(clave, horas, motivo) {
+  botActivo[clave] = false;
+  pausaExpira[clave] = Date.now() + horas * 3600 * 1000;
+  redisSet("iberica:botActivo", botActivo);
+  redisSet("iberica:pausaExpira", pausaExpira);
+  console.log(`[Pausa] Bot pausado ${horas}h para ${clave} — ${motivo}`);
+}
+
+// Últimos mensajes enviados por el propio bot, para distinguir su eco
+// OUTBOUND del de una persona de la oficina: { telefono: [{t, ts}] }
+const enviosBot = {};
+function registrarEnvioBot(telefono, texto) {
+  (enviosBot[telefono] = enviosBot[telefono] || []).push({ t: texto, ts: Date.now() });
+  if (enviosBot[telefono].length > 25) enviosBot[telefono].shift();
+}
+function esEnvioDelBot(telefono, texto) {
+  const ahora = Date.now();
+  return (enviosBot[telefono] || []).some((e) => ahora - e.ts < 10 * 60 * 1000 && e.t === texto);
+}
+
+// Un mensaje SALIENTE que el bot no envió = una persona de la oficina está
+// atendiendo la conversación → pausamos el bot para no pisarla.
+function detectarIntervencionHumana(body) {
+  const texto = body?.data?.text;
+  const canal = body?.channel;
+  if (!texto || !canal) return;
+  const candidatos = [body?.to, body?.from].filter(Boolean);
+  const telefono = candidatos.find((t) => conversaciones[t]);
+  if (!telefono) return;                       // no es un cliente conocido
+  if (esEnvioDelBot(telefono, texto)) return;  // es el eco de un envío del bot
+  const clave = `${canal}_${telefono}`;
+  if (botActivo[clave] === false) {
+    // Ya pausado: si era pausa temporal, extenderla mientras la persona siga escribiendo
+    if (pausaExpira[clave]) {
+      pausaExpira[clave] = Date.now() + PAUSA_TAKEOVER_H * 3600 * 1000;
+      redisSet("iberica:pausaExpira", pausaExpira);
+    }
+    return;
+  }
+  pausarBot(clave, PAUSA_TAKEOVER_H, "intervención humana detectada (mensaje manual de oficina)");
+}
+
 // ── Registro de actividad por cliente (para el panel admin) ─
 // { [telefono]: { ultimoMensaje, ultimaActividad, mensajesTotal } }
 const actividad = {};
@@ -282,12 +330,14 @@ async function redisSet(key, value) {
 }
 
 async function cargarEstadoDesdeRedis() {
-  const [botActivoGuardado, actividadGuardada] = await Promise.all([
+  const [botActivoGuardado, actividadGuardada, pausasGuardadas] = await Promise.all([
     redisGet("iberica:botActivo"),
     redisGet("iberica:actividad"),
+    redisGet("iberica:pausaExpira"),
   ]);
   if (botActivoGuardado) Object.assign(botActivo, botActivoGuardado);
   if (actividadGuardada) Object.assign(actividad, actividadGuardada);
+  if (pausasGuardadas) Object.assign(pausaExpira, pausasGuardadas);
   console.log(`[Redis] Estado cargado — ${Object.keys(actividad).length} contactos, ${Object.keys(botActivo).length} estados de bot`);
 }
 
@@ -658,6 +708,8 @@ async function enviarMensaje(telefono, mensaje) {
     return;
   }
 
+  registrarEnvioBot(telefono, mensaje);
+
   const body = {
     channelId,
     memberId,   // string: "69df644a0e70e45b41053725"
@@ -1002,8 +1054,7 @@ async function encaminarIntencion(telefono, estado, msg, c) {
       await consultarExpediente(telefono, estado);
       return true;
     case "agente":
-      await enviarNatural(telefono, "Por supuesto, aviso a un compañero del equipo para que atienda esta conversación en cuanto pueda 😊");
-      resetearConversacion(telefono);
+      await derivarAAgente(telefono, estado);
       return true;
     case "es_maquina":
       await enviarNatural(
@@ -1032,6 +1083,35 @@ async function finalizarPresupuesto(telefono, estado) {
   );
   resetearConversacion(telefono);
   await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
+}
+
+// Deriva la conversación a una persona: avisa al agente de turno y pausa
+// el bot para que no pise la conversación (se reactiva solo pasadas unas
+// horas, o desde el panel de administración).
+async function derivarAAgente(telefono, estado) {
+  await enviarNatural(
+    telefono,
+    "Por supuesto, te paso con un compañero del equipo 😊 Atenderá esta misma conversación en cuanto se libere. ¡Gracias por tu paciencia!"
+  );
+  try {
+    const destinatario = determinarDestinatarioNotificacion();
+    const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+    await enviarNotificacionAgente(destinatario, {
+      nombre:      estado.nombre || `Cliente ${telefono.slice(-9)}`,
+      telefono:    telefono.slice(-9),
+      direccion:   "—",
+      descripcion: "El cliente pide hablar con una persona (conversación del bot).",
+      apertura:    ahoraStr,
+      refParte:    "—",
+      agente:      CANALES_AGENTES[estado.channelId] || "Bot",
+    });
+  } catch (e) {
+    console.error("[Agente] No se pudo notificar al equipo:", e.message);
+  }
+  if (estado.channelId) {
+    pausarBot(`${estado.channelId}_${telefono}`, PAUSA_AGENTE_H, "el cliente pidió hablar con una persona");
+  }
+  resetearConversacion(telefono);
 }
 
 async function crearUrgencia(telefono, estado) {
@@ -1176,12 +1256,7 @@ async function procesarMensaje(telefono, texto) {
       return;
     }
     if (["5", "agente", "persona", "humano"].includes(msgLower)) {
-      await enviarMensaje(
-        telefono,
-        "Perfecto, te pongo en contacto con uno de nuestros agentes. En breve alguien del equipo atenderá tu conversación."
-      );
-      resetearConversacion(telefono);
-      await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
+      await derivarAAgente(telefono, estado);
       return;
     }
     // ── Texto libre ──
@@ -1928,7 +2003,9 @@ app.post("/admin/api/toggle/:telefono", authAdmin, async (req, res) => {
 
   const estabaActivo = botActivo[clave] !== false;
   botActivo[clave] = activo;
+  delete pausaExpira[clave]; // el control manual manda: pausa/activación indefinida
   redisSet("iberica:botActivo", botActivo);
+  redisSet("iberica:pausaExpira", pausaExpira);
   console.log(`[Admin] Bot ${activo ? "activado" : "pausado"} para ${telefono} (canal: ${canalId})`);
 
   // Si se acaba de pausar, avisar al cliente
@@ -1956,7 +2033,12 @@ app.get("/admin/api/ia-log", authAdmin, (req, res) => {
 
 // ── Health check ─────────────────────────────────────────────
 app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
+  res.json({
+    status: "ok",
+    iaModo: IA_MODO,
+    asistente: BOT_NOMBRE,
+    version: (process.env.RAILWAY_GIT_COMMIT_SHA || "").slice(0, 7) || "dev",
+  });
 });
 
 // ── Webhook de Woztell ───────────────────────────────────────
@@ -1969,6 +2051,12 @@ app.post("/webhook", async (req, res) => {
     // - eventType !== "INBOUND": mensajes OUTBOUND (los que el propio bot envía)
     //   Woztell los refleja de vuelta al webhook y causarían un bucle infinito.
     if (eventType !== "INBOUND") {
+      // Mensaje saliente: si no lo envió el bot, es una persona de la
+      // oficina escribiendo al cliente → pausa automática (auto-takeover).
+      if (eventType === "OUTBOUND") {
+        try { detectarIntervencionHumana(req.body); }
+        catch (e) { console.error("[Takeover] Error:", e.message); }
+      }
       return res.sendStatus(200);
     }
 
@@ -2028,8 +2116,16 @@ app.post("/webhook", async (req, res) => {
     // ── Comprobar si el bot está pausado para este cliente en este canal ──
     const claveBot = `${channelId}_${telefono}`;
     if (botActivo[claveBot] === false) {
-      console.log(`[Webhook] Bot pausado para ${telefono} en canal ${channelId} — mensaje ignorado`);
-      return res.sendStatus(200);
+      if (pausaExpira[claveBot] && Date.now() > pausaExpira[claveBot]) {
+        botActivo[claveBot] = true;
+        delete pausaExpira[claveBot];
+        redisSet("iberica:botActivo", botActivo);
+        redisSet("iberica:pausaExpira", pausaExpira);
+        console.log(`[Pausa] Caducada para ${claveBot} — bot reactivado`);
+      } else {
+        console.log(`[Webhook] Bot pausado para ${telefono} en canal ${channelId} — mensaje ignorado`);
+        return res.sendStatus(200);
+      }
     }
 
     // ── Canal Soporte (encuestas/reseñas) — derivar siempre a agente humano ──
