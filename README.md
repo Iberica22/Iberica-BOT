@@ -43,6 +43,8 @@ npm run dev
 | Variable | Descripción |
 |---|---|
 | `OPENAI_API_KEY` | Clave de API de OpenAI |
+| `IA_MODO` | Modo de la IA conversacional "Marta": `off` (menú clásico), `sombra` (por defecto — se comporta como siempre pero clasifica cada mensaje libre y lo registra en `/admin/api/ia-log` para revisión), `on` (conversación natural: entiende el mensaje y lo encarrila por los 5 flujos de siempre, con confirmación antes de crear partes y sin poder inventar precios ni plazos) |
+| `BOT_NOMBRE` | Nombre de la asistente virtual (por defecto `Marta`) |
 | `ZOHO_CLIENT_ID` | Client ID de la app OAuth en Zoho |
 | `ZOHO_CLIENT_SECRET` | Client Secret de la app OAuth en Zoho |
 | `ZOHO_REFRESH_TOKEN` | Refresh token permanente de Zoho |

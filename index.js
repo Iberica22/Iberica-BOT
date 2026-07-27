@@ -21,7 +21,6 @@ const PORT = process.env.PORT || 3000;
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ── ID del asistente de OpenAI ──────────────────────────────
-const ASSISTANT_ID = "asst_TGm5TBJYuHyAAKirANa1n0QC";
 
 // ── Estado de conversaciones en memoria ────────────────────
 // Estructura por cliente: { step, nombre, telefono, direccion, descripcion, thread_id, memberId, channelId }
@@ -689,57 +688,8 @@ async function enviarMensaje(telefono, mensaje) {
 // OPENAI - Rama de Servicios
 // ============================================================
 
-/**
- * Envía un mensaje al asistente de OpenAI (Assistants API) y devuelve su respuesta.
- * Cada cliente tiene su propio thread persistente guardado en estado.thread_id.
- * Si no existe, se crea uno nuevo automáticamente.
- * @param {string} telefono - ID del cliente (usado para recuperar su estado)
- * @param {string} mensajeUsuario - Texto enviado por el cliente
- * @returns {string} - Respuesta del asistente
- */
-async function consultarAsistente(telefono, mensajeUsuario) {
-  const estado = conversaciones[telefono];
-
-  try {
-    // Crear thread si el cliente no tiene uno todavía
-    if (!estado.thread_id) {
-      const thread = await openai.beta.threads.create();
-      estado.thread_id = thread.id;
-      console.log(`[OpenAI] Nuevo thread creado para ${telefono}: ${thread.id}`);
-    }
-
-    // Añadir el mensaje del usuario al thread
-    await openai.beta.threads.messages.create(estado.thread_id, {
-      role: "user",
-      content: mensajeUsuario,
-    });
-
-    // Ejecutar el asistente y esperar a que termine (polling automático)
-    const run = await openai.beta.threads.runs.createAndPoll(estado.thread_id, {
-      assistant_id: ASSISTANT_ID,
-    });
-
-    if (run.status !== "completed") {
-      console.error(`[OpenAI] Run finalizado con estado inesperado: ${run.status}`);
-      throw new Error(`Run no completado: ${run.status}`);
-    }
-
-    // Obtener el último mensaje del asistente (el primero de la lista, orden desc)
-    const mensajes = await openai.beta.threads.messages.list(estado.thread_id, {
-      order: "desc",
-      limit: 1,
-    });
-
-    const respuesta = mensajes.data[0]?.content[0]?.text?.value;
-    if (!respuesta) throw new Error("Respuesta vacía del asistente");
-
-    console.log(`[OpenAI] Respuesta para ${telefono}: ${respuesta.slice(0, 80)}...`);
-    return respuesta;
-  } catch (err) {
-    console.error("[OpenAI] Error en Assistants API:", err.message);
-    throw new Error("Error al consultar el asistente de IA");
-  }
-}
+// (La antigua integración con la Assistants API se retiró: la rama de
+// servicios usa ahora Chat Completions — ver responderServicios más abajo.)
 
 // ============================================================
 // MENÚ PRINCIPAL
@@ -802,54 +752,319 @@ function resetearConversacion(telefono) {
 }
 
 // ============================================================
-// PROCESADOR DE MENSAJES - Lógica principal del bot
+// IA CONVERSACIONAL — "Marta" (Chat Completions con guardarraíles)
+// Modos (variable de entorno IA_MODO):
+//   "off"    → menú clásico de siempre, sin IA de comprensión.
+//   "sombra" → se comporta como siempre, pero clasifica cada mensaje
+//              libre y lo registra en /admin/api/ia-log para revisar.
+//   "on"     → conversación natural: la IA entiende el mensaje y lo
+//              encarrila por los MISMOS 5 flujos de siempre.
+// La IA nunca decide acciones ni inventa datos: solo clasifica (salida
+// estructurada estricta) o responde sobre la FICHA DE LA EMPRESA.
 // ============================================================
 
-/**
- * Procesa el mensaje recibido y gestiona el flujo de la conversación.
- * @param {string} telefono - número del cliente (req.body.from), clave en conversaciones[]
- * @param {string} texto    - Texto del mensaje recibido
- */
-async function procesarMensaje(telefono, texto) {
-  const msg = texto.trim();
-  const msgLower = msg.toLowerCase();
+const IA_MODO = (process.env.IA_MODO || "sombra").toLowerCase();
+const BOT_NOMBRE = process.env.BOT_NOMBRE || "Marta";
 
-  // Obtener o inicializar estado del cliente
-  if (!conversaciones[telefono]) {
-    resetearConversacion(telefono);
+// ── Base de conocimiento cerrada: lo ÚNICO que la IA puede afirmar ──
+// ⚠️ REVISAR Y COMPLETAR: horarios, zonas y servicios exactos.
+const BASE_CONOCIMIENTO = `
+EMPRESA: Ibérica Seguridad — especialistas en seguridad del hogar.
+UBICACIÓN: C/ San Leonardo 34, 04004 Almería. Trabajamos en Almería y provincia.
+CONTACTO: Teléfono 950 088 086 · Email pedidos@ibericaseguridad.com
+HORARIO DE OFICINA: Lunes a viernes, 9:00–19:00.
+EXPERIENCIA: Más de 20 años en el sector.
+
+SERVICIOS:
+- Puertas de seguridad y acorazadas (instaladores oficiales FICHET y KIUSO), puertas blindadas y metálicas.
+- Cerraduras y cilindros de alta seguridad: instalación, sustitución y mejora.
+- Urgencias y averías de cerrajería con técnicos propios.
+- Presupuestos a medida y sin compromiso, con visita técnica cuando hace falta.
+- Instalación con retirada de la puerta antigua incluida y 3 años de garantía por escrito.
+- Financiación disponible: 12 cuotas sin intereses con Cetelem.
+`;
+
+// ── Registro de decisiones (visible en GET /admin/api/ia-log) ──
+const iaLog = [];
+function registrarDecisionIA(entrada) {
+  iaLog.unshift({ ts: new Date().toISOString(), modo: IA_MODO, ...entrada });
+  if (iaLog.length > 300) iaLog.pop();
+  console.log(`[IA] ${entrada.telefono} | "${(entrada.mensaje || "").slice(0, 60)}" → ${entrada.intencion}`);
+}
+
+// ── Toques humanos ──
+function esperaHumana() {
+  return new Promise((r) => setTimeout(r, 700 + Math.random() * 1100));
+}
+async function enviarNatural(telefono, mensaje) {
+  if (IA_MODO === "on") await esperaHumana();
+  await enviarMensaje(telefono, mensaje);
+}
+function saludoNatural() {
+  return `¡Hola! 👋 Soy ${BOT_NOMBRE}, del equipo de *Ibérica Seguridad*. ¿En qué te puedo ayudar hoy?`;
+}
+async function saludoInicial(telefono) {
+  if (IA_MODO === "on") await enviarNatural(telefono, saludoNatural());
+  else await enviarMensaje(telefono, MENU_PRINCIPAL);
+}
+
+// ── Clasificador con salida estructurada ESTRICTA ──
+// El modelo solo puede rellenar este esquema; no escribe al cliente.
+const ESQUEMA_CLASIFICACION = {
+  name: "clasificacion_mensaje",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      intencion: {
+        type: "string",
+        enum: ["urgencia", "presupuesto", "servicios", "expediente", "agente", "saludo", "es_maquina", "no_claro"],
+      },
+      datos: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          nombre:      { type: ["string", "null"] },
+          telefono:    { type: ["string", "null"] },
+          direccion:   { type: ["string", "null"] },
+          descripcion: { type: ["string", "null"] },
+        },
+        required: ["nombre", "telefono", "direccion", "descripcion"],
+      },
+    },
+    required: ["intencion", "datos"],
+  },
+};
+
+async function clasificarConIA(estado, mensaje) {
+  const historial = (estado.historialIA || []).slice(-6);
+  try {
+    const res = await Promise.race([
+      openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0,
+        max_tokens: 250,
+        messages: [
+          {
+            role: "system",
+            content:
+`Clasificas mensajes de clientes de Ibérica Seguridad (empresa de cerrajería y puertas de seguridad en Almería). Devuelve SOLO el JSON del esquema. Significado de cada intención:
+- urgencia: avería, cerradura rota o bloqueada, no puede entrar o cerrar su casa, robo, puerta forzada.
+- presupuesto: quiere precio o presupuesto de un trabajo, puerta, cerradura u otro producto.
+- servicios: pide información general (qué hacéis, horario, zona, garantías, financiación...).
+- expediente: pregunta cómo va su parte, reparación, expediente o aviso ya abierto.
+- agente: pide expresamente hablar con una persona o que le llamen.
+- saludo: solo saluda, se despide o da las gracias, sin petición concreta.
+- es_maquina: pregunta si está hablando con un robot, una IA o una persona.
+- no_claro: nada de lo anterior encaja con claridad.
+En "datos" extrae SOLO lo que el cliente haya dicho literalmente (nombre, teléfono, dirección, descripción del problema); usa null para lo que no haya dicho. No inventes nada.`,
+          },
+          ...historial,
+          { role: "user", content: mensaje },
+        ],
+        response_format: { type: "json_schema", json_schema: ESQUEMA_CLASIFICACION },
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 9000)),
+    ]);
+    return JSON.parse(res.choices[0].message.content);
+  } catch (err) {
+    console.error("[IA] Clasificador falló:", err.message);
+    return null;
   }
-  const estado = conversaciones[telefono];
+}
 
-  console.log(`[Bot] ${telefono} | step: ${estado.step} | msg: "${msg}"`);
+// ── Respuestas de la rama "servicios" con conocimiento cerrado ──
+// (sustituye a la antigua Assistants API, en vías de retirada por OpenAI)
+async function responderServicios(estado, mensaje) {
+  estado.historialIA = estado.historialIA || [];
+  estado.historialIA.push({ role: "user", content: mensaje });
+  estado.historialIA = estado.historialIA.slice(-12);
 
-  // ── Comando de vuelta al menú desde cualquier punto ──────
-  if (esComandoMenu(msgLower) || estado.step === null) {
-    resetearConversacion(telefono);
-    await enviarMensaje(telefono, MENU_PRINCIPAL);
-    return;
+  const res = await openai.chat.completions.create({
+    model: "gpt-4o",
+    temperature: 0.4,
+    max_tokens: 320,
+    messages: [
+      {
+        role: "system",
+        content:
+`Eres ${BOT_NOMBRE}, del equipo de atención al cliente de Ibérica Seguridad (Almería). Hablas por WhatsApp: tono cercano, natural y profesional, español de España, mensajes cortos (máximo 5-6 líneas), formato WhatsApp (*negritas*) y emojis con moderación.
+
+REGLAS INQUEBRANTABLES:
+1. Solo puedes afirmar lo que aparece en la FICHA DE LA EMPRESA. Si preguntan algo que no está, di con naturalidad que eso te lo confirma un compañero y ofrece el teléfono 950 088 086 o pasar con el equipo.
+2. PROHIBIDO dar precios, tarifas o cifras en euros: los presupuestos son siempre a medida. Ofrece preparar un presupuesto sin compromiso.
+3. PROHIBIDO prometer plazos o fechas de instalación o reparación.
+4. Si preguntan si eres una persona o un robot: di con simpatía que eres la asistente virtual de Ibérica Seguridad, que puedes gestionarlo todo igualmente, y ofrece pasar con una persona si lo prefiere.
+5. No inventes NADA. Ante la duda, deriva a un compañero.
+
+FICHA DE LA EMPRESA:
+${BASE_CONOCIMIENTO}`,
+      },
+      ...estado.historialIA,
+    ],
+  });
+
+  let texto = res.choices[0].message.content.trim();
+  // Guardarraíl extra en código: jamás deben salir cifras en euros
+  if (/\d\s*€|\d\s*euros?/i.test(texto)) {
+    texto = "Los precios dependen mucho de cada caso, así que no te quiero dar una cifra a ciegas 😊 Si quieres, te preparamos un *presupuesto sin compromiso*: cuéntame qué necesitas y lo ponemos en marcha.";
   }
+  estado.historialIA.push({ role: "assistant", content: texto });
+  return texto;
+}
 
-  // ── Selección del menú principal ────────────────────────
-  if (estado.step === "menu_principal") {
-    if (["1", "urgencia", "averia", "avería", "emergencia"].includes(msgLower)) {
-      estado.step = "urg_nombre";
-      await enviarMensaje(telefono, "¿Cuál es tu nombre completo?");
-      return;
+// ── Encaminar la intención detectada por los flujos de SIEMPRE ──
+const PREGUNTA_CAMPO = {
+  nombre:      "¿Me dices tu nombre completo, por favor?",
+  telefono:    "¿En qué teléfono podemos localizarte?",
+  direccion:   "¿En qué dirección está la avería?",
+  descripcion: "Cuéntame brevemente qué ha pasado:",
+};
+
+function aplicarDatosExtraidos(estado, datos) {
+  if (!datos) return;
+  if (datos.nombre && !estado.nombre) estado.nombre = datos.nombre;
+  if (datos.telefono && !estado.telefono) {
+    const t = validarTelefono(datos.telefono);
+    if (t) estado.telefono = t;
+  }
+  if (datos.direccion && !estado.direccion) estado.direccion = datos.direccion;
+  if (datos.descripcion && !estado.descripcion) estado.descripcion = datos.descripcion;
+}
+
+async function encaminarIntencion(telefono, estado, msg, c) {
+  if (["urgencia", "presupuesto"].includes(c.intencion)) aplicarDatosExtraidos(estado, c.datos);
+  const nombrePila = estado.nombre ? `, ${String(estado.nombre).trim().split(/\s+/)[0]}` : "";
+  switch (c.intencion) {
+    case "urgencia": {
+      const faltan = ["nombre", "telefono", "direccion", "descripcion"].filter((f) => !estado[f]);
+      if (faltan.length === 0) {
+        // Todo extraído del mensaje → confirmación determinista antes de crear nada
+        estado.step = "urg_confirmar";
+        await enviarNatural(
+          telefono,
+          `Entendido${nombrePila}, lo registro como *urgencia* ahora mismo. Confírmame los datos:\n\n` +
+          `👤 ${estado.nombre}\n📞 ${estado.telefono}\n📍 ${estado.direccion}\n📝 ${estado.descripcion}\n\n` +
+          `¿Es todo correcto? (*sí* / *no*)`
+        );
+      } else {
+        estado.step = "urg_" + faltan[0];
+        await enviarNatural(
+          telefono,
+          `Vaya, lamento el problema 😕 Vamos a registrarlo para que un técnico te atienda cuanto antes. ${PREGUNTA_CAMPO[faltan[0]]}`
+        );
+      }
+      return true;
     }
-    if (["2", "presupuesto", "precio"].includes(msgLower)) {
-      estado.step = "pres_nombre";
-      await enviarMensaje(telefono, "¿Cuál es tu nombre completo?");
-      return;
+    case "presupuesto": {
+      if (estado.nombre && estado.descripcion) {
+        await finalizarPresupuesto(telefono, estado);
+      } else if (!estado.nombre) {
+        estado.step = "pres_nombre";
+        await enviarNatural(telefono, `¡Claro que sí! Te preparamos un presupuesto sin compromiso 😊 ${PREGUNTA_CAMPO.nombre}`);
+      } else {
+        estado.step = "pres_descripcion";
+        await enviarNatural(telefono, `Perfecto${nombrePila}. Cuéntame qué necesitas presupuestar:`);
+      }
+      return true;
     }
-    if (["3", "servicios", "información", "informacion"].includes(msgLower)) {
+    case "servicios": {
       estado.step = "servicios";
-      await enviarMensaje(
-        telefono,
-        "Estoy aquí para informarte sobre nuestros servicios. ¿Qué quieres saber? (Escribe *menú* cuando quieras volver al inicio)"
-      );
-      return;
+      try {
+        await enviarNatural(telefono, await responderServicios(estado, msg));
+      } catch (err) {
+        console.error("[IA] responderServicios falló:", err.message);
+        await enviarNatural(telefono, "Ahora mismo no puedo consultar esa información 😔 Escribe *menú* para volver al inicio o llámanos al 950 088 086.");
+      }
+      return true;
     }
-    if (["4", "estado", "expediente", "parte"].includes(msgLower)) {
+    case "expediente":
+      await consultarExpediente(telefono, estado);
+      return true;
+    case "agente":
+      await enviarNatural(telefono, "Por supuesto, aviso a un compañero del equipo para que atienda esta conversación en cuanto pueda 😊");
+      resetearConversacion(telefono);
+      return true;
+    case "es_maquina":
+      await enviarNatural(
+        telefono,
+        `Soy ${BOT_NOMBRE}, la asistente virtual de Ibérica Seguridad 😊 Te puedo gestionar urgencias, presupuestos y consultas igual que un compañero de oficina — y si prefieres hablar con una persona, dímelo y te paso con el equipo.`
+      );
+      return true;
+    case "saludo":
+      await enviarNatural(
+        telefono,
+        `¡Hola! 😊 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. ¿En qué te puedo ayudar? Puedo gestionarte una *urgencia o avería*, prepararte un *presupuesto*, informarte sobre nuestros *servicios* o mirar cómo va tu *parte*.`
+      );
+      return true;
+    default:
+      return false;
+  }
+}
+
+async function finalizarPresupuesto(telefono, estado) {
+  estado.step = "pres_ok";
+  await enviarMensaje(
+    telefono,
+    `✅ Hemos recibido tu solicitud de presupuesto.\n\n` +
+      `📝 *Descripción:* ${estado.descripcion}\n\n` +
+      `Nuestro equipo comercial revisará tu solicitud y se pondrá en contacto contigo a la mayor brevedad. ¡Gracias por confiar en Ibérica Seguridad!`
+  );
+  resetearConversacion(telefono);
+  await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
+}
+
+async function crearUrgencia(telefono, estado) {
+  await enviarMensaje(telefono, "⏳ Estamos registrando tu urgencia, un momento...");
+
+  try {
+    const agente = CANALES_AGENTES[estado.channelId] || "Bot";
+    const { id, refParte } = await crearParteZoho({
+      nombre:      estado.nombre,
+      telefono:    estado.telefono,
+      direccion:   estado.direccion,
+      descripcion: estado.descripcion,
+      agente,
+    });
+
+    // Mensaje de confirmación al cliente
+    await enviarMensaje(
+      telefono,
+      `✅ Tu parte de urgencia ha sido registrado correctamente.\n\n` +
+      `📋 *Ref. Parte:* ${refParte}\n` +
+      `👤 Nombre: ${estado.nombre}\n` +
+      `📞 Teléfono: ${estado.telefono}\n` +
+      `📍 Dirección: ${estado.direccion}\n\n` +
+      `Un técnico se pondrá en contacto contigo lo antes posible. Guarda la referencia del parte para futuras consultas.`
+    );
+
+    // Notificación al agente de turno (plantilla aprobada por Meta)
+    const destinatario = determinarDestinatarioNotificacion();
+    const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+    await enviarNotificacionAgente(destinatario, {
+      nombre:      estado.nombre,
+      telefono:    estado.telefono,
+      direccion:   estado.direccion,
+      descripcion: estado.descripcion,
+      apertura:    ahoraStr,
+      refParte:    refParte,
+      agente:      agente,
+    });
+
+  } catch (err) {
+    console.error("[Bot] Error en creación de parte:", err.message);
+    await enviarMensaje(
+      telefono,
+      "Lo sentimos, hubo un problema al registrar tu parte. Por favor, llámanos directamente para atenderte."
+    );
+  }
+
+  resetearConversacion(telefono);
+  await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
+}
+
+async function consultarExpediente(telefono, estado) {
       await enviarMensaje(telefono, "🔍 Consultando tus partes...");
       try {
         const partes = await consultarPartesPorContacto(telefono);
@@ -877,6 +1092,68 @@ async function procesarMensaje(telefono, texto) {
         await enviarMensaje(telefono, "Ha ocurrido un error al consultar el parte. Por favor, inténtalo más tarde.");
         await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
       }
+}
+
+// ============================================================
+// PROCESADOR DE MENSAJES - Lógica principal del bot
+// ============================================================
+
+/**
+ * Procesa el mensaje recibido y gestiona el flujo de la conversación.
+ * @param {string} telefono - número del cliente (req.body.from), clave en conversaciones[]
+ * @param {string} texto    - Texto del mensaje recibido
+ */
+async function procesarMensaje(telefono, texto) {
+  const msg = texto.trim();
+  const msgLower = msg.toLowerCase();
+
+  // Obtener o inicializar estado del cliente
+  if (!conversaciones[telefono]) {
+    resetearConversacion(telefono);
+  }
+  const estado = conversaciones[telefono];
+
+  console.log(`[Bot] ${telefono} | step: ${estado.step} | msg: "${msg}"`);
+
+  // ── Comando de vuelta al menú desde cualquier punto ──────
+  // "menú"/"volver"/"inicio" muestran SIEMPRE el menú clásico (vía de
+  // escape). Con la IA activa, "hola" recibe un saludo natural.
+  const esMenuExplicito = ["menu", "menú", "volver", "inicio"].includes(msgLower);
+  if (esMenuExplicito || estado.step === null || (IA_MODO !== "on" && esComandoMenu(msgLower))) {
+    resetearConversacion(telefono);
+    conversaciones[telefono].step = "menu_principal";
+    if (IA_MODO === "on" && !esMenuExplicito) {
+      await enviarNatural(telefono, saludoNatural());
+    } else {
+      await enviarMensaje(telefono, MENU_PRINCIPAL);
+    }
+    return;
+  }
+
+  // ── Selección del menú principal ────────────────────────
+  if (estado.step === "menu_principal") {
+    if (["1", "urgencia", "averia", "avería", "emergencia"].includes(msgLower)) {
+      estado.step = "urg_nombre";
+      await enviarMensaje(telefono, "¿Cuál es tu nombre completo?");
+      return;
+    }
+    if (["2", "presupuesto", "precio"].includes(msgLower)) {
+      estado.step = "pres_nombre";
+      await enviarMensaje(telefono, "¿Cuál es tu nombre completo?");
+      return;
+    }
+    if (["3", "servicios", "información", "informacion"].includes(msgLower)) {
+      estado.step = "servicios";
+      await enviarMensaje(
+        telefono,
+        IA_MODO === "on"
+          ? `¡Claro! 😊 Pregúntame lo que quieras sobre nuestros servicios, garantías u horarios.`
+          : "Estoy aquí para informarte sobre nuestros servicios. ¿Qué quieres saber? (Escribe *menú* cuando quieras volver al inicio)"
+      );
+      return;
+    }
+    if (["4", "estado", "expediente", "parte"].includes(msgLower)) {
+      await consultarExpediente(telefono, estado);
       return;
     }
     if (["5", "agente", "persona", "humano"].includes(msgLower)) {
@@ -888,12 +1165,55 @@ async function procesarMensaje(telefono, texto) {
       await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
       return;
     }
+    // ── Texto libre ──
+    if (IA_MODO === "on") {
+      const c = await clasificarConIA(estado, msg);
+      registrarDecisionIA({ telefono, mensaje: msg, intencion: c ? c.intencion : "error", datos: c ? c.datos : null });
+      if (c && (await encaminarIntencion(telefono, estado, msg, c))) {
+        estado.avisadoOpcionInvalida = false;
+        return;
+      }
+      // no_claro (o fallo del clasificador): pedir aclaración; a la segunda, menú clásico
+      if (estado.avisadoOpcionInvalida) {
+        estado.avisadoOpcionInvalida = false;
+        await enviarMensaje(telefono, MENU_PRINCIPAL);
+        return;
+      }
+      estado.avisadoOpcionInvalida = true;
+      await enviarNatural(
+        telefono,
+        "Perdona, no te he entendido bien 😅 Puedo ayudarte con una *urgencia o avería*, un *presupuesto*, información sobre nuestros *servicios* o el *estado de tu parte*. ¿Qué necesitas?"
+      );
+      return;
+    }
+    if (IA_MODO === "sombra") {
+      // Modo sombra: clasifica y registra en segundo plano, sin cambiar nada
+      clasificarConIA(estado, msg)
+        .then((c) => registrarDecisionIA({ telefono, mensaje: msg, intencion: c ? c.intencion : "error", datos: c ? c.datos : null }))
+        .catch(() => {});
+    }
     // Opción no reconocida — avisar solo la primera vez, luego ignorar
     if (estado.avisadoOpcionInvalida) {
       return; // Ya se avisó antes, ignorar silenciosamente
     }
     estado.avisadoOpcionInvalida = true;
     await enviarMensaje(telefono, "No he entendido tu opción. Por favor, responde con un número del 1 al 5.");
+    return;
+  }
+
+  // ── Confirmación de urgencia con datos extraídos por la IA ──
+  if (estado.step === "urg_confirmar") {
+    if (["si", "sí", "s", "vale", "ok", "correcto"].includes(msgLower)) {
+      await crearUrgencia(telefono, estado);
+      return;
+    }
+    if (["no", "n"].includes(msgLower)) {
+      resetearConversacion(telefono);
+      conversaciones[telefono].step = "menu_principal";
+      await enviarNatural(telefono, "Sin problema, empezamos de nuevo 😊 Escríbeme otra vez qué necesitas (o escribe *menú* para ver las opciones).");
+      return;
+    }
+    await enviarMensaje(telefono, "Por favor responde *sí* o *no*.");
     return;
   }
 
@@ -930,53 +1250,7 @@ async function procesarMensaje(telefono, texto) {
   if (estado.step === "urg_descripcion") {
     estado.descripcion = msg;
     estado.step = "urg_crear";
-
-    await enviarMensaje(telefono, "⏳ Estamos registrando tu urgencia, un momento...");
-
-    try {
-      const agente = CANALES_AGENTES[estado.channelId] || "Bot";
-      const { id, refParte } = await crearParteZoho({
-        nombre:      estado.nombre,
-        telefono:    estado.telefono,
-        direccion:   estado.direccion,
-        descripcion: estado.descripcion,
-        agente,
-      });
-
-      // Mensaje de confirmación al cliente
-      await enviarMensaje(
-        telefono,
-        `✅ Tu parte de urgencia ha sido registrado correctamente.\n\n` +
-        `📋 *Ref. Parte:* ${refParte}\n` +
-        `👤 Nombre: ${estado.nombre}\n` +
-        `📞 Teléfono: ${estado.telefono}\n` +
-        `📍 Dirección: ${estado.direccion}\n\n` +
-        `Un técnico se pondrá en contacto contigo lo antes posible. Guarda la referencia del parte para futuras consultas.`
-      );
-
-      // Notificación al agente de turno (plantilla aprobada por Meta)
-      const destinatario = determinarDestinatarioNotificacion();
-      const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
-      await enviarNotificacionAgente(destinatario, {
-        nombre:      estado.nombre,
-        telefono:    estado.telefono,
-        direccion:   estado.direccion,
-        descripcion: estado.descripcion,
-        apertura:    ahoraStr,
-        refParte:    refParte,
-        agente:      agente,
-      });
-
-    } catch (err) {
-      console.error("[Bot] Error en creación de parte:", err.message);
-      await enviarMensaje(
-        telefono,
-        "Lo sentimos, hubo un problema al registrar tu parte. Por favor, llámanos directamente para atenderte."
-      );
-    }
-
-    resetearConversacion(telefono);
-    await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
+    await crearUrgencia(telefono, estado);
     return;
   }
 
@@ -993,17 +1267,7 @@ async function procesarMensaje(telefono, texto) {
 
   if (estado.step === "pres_descripcion") {
     estado.descripcion = msg;
-    estado.step = "pres_ok";
-
-    await enviarMensaje(
-      telefono,
-      `✅ Hemos recibido tu solicitud de presupuesto.\n\n` +
-        `📝 *Descripción:* ${estado.descripcion}\n\n` +
-        `Nuestro equipo comercial revisará tu solicitud y se pondrá en contacto contigo a la mayor brevedad. ¡Gracias por confiar en Ibérica Seguridad!`
-    );
-
-    resetearConversacion(telefono);
-    await enviarMensaje(telefono, "¿Puedo ayudarte en algo más? Escribe *menú* para volver al inicio.");
+    await finalizarPresupuesto(telefono, estado);
     return;
   }
 
@@ -1016,10 +1280,20 @@ async function procesarMensaje(telefono, texto) {
       return;
     }
 
+    // Con la IA activa, el cliente puede cambiar de tema sin volver al menú
+    if (IA_MODO === "on") {
+      const c = await clasificarConIA(estado, msg);
+      if (c && ["urgencia", "presupuesto", "expediente", "agente", "es_maquina"].includes(c.intencion)) {
+        registrarDecisionIA({ telefono, mensaje: msg, intencion: c.intencion, datos: c.datos });
+        if (await encaminarIntencion(telefono, estado, msg, c)) return;
+      }
+    }
+
     try {
-      const respuestaIA = await consultarAsistente(telefono, msg);
-      await enviarMensaje(telefono, respuestaIA);
+      const respuestaIA = await responderServicios(estado, msg);
+      await enviarNatural(telefono, respuestaIA);
     } catch (err) {
+      console.error("[Bot] Error en rama servicios:", err.message);
       await enviarMensaje(
         telefono,
         "Lo siento, en este momento no puedo responder. Escribe *menú* para volver al inicio o contacta con nosotros directamente."
@@ -1650,10 +1924,15 @@ app.post("/admin/api/toggle/:telefono", authAdmin, async (req, res) => {
   if (!estabaActivo && activo && conversaciones[telefono]?.memberId) {
     resetearConversacion(telefono);
     conversaciones[telefono].step = "menu_principal";
-    await enviarMensaje(telefono, MENU_PRINCIPAL);
+    await saludoInicial(telefono);
   }
 
   res.json({ ok: true, telefono, canalId, botActivo: activo });
+});
+
+// ── Registro de decisiones de la IA (revisión en modo sombra) ─
+app.get("/admin/api/ia-log", authAdmin, (req, res) => {
+  res.json({ modo: IA_MODO, nombre: BOT_NOMBRE, decisiones: iaLog });
 });
 
 // ── Health check ─────────────────────────────────────────────
@@ -1784,13 +2063,19 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // Inicializar conversación si no existe y mostrar menú en primer contacto
+    // Inicializar conversación si no existe. Con la IA activa, el primer
+    // mensaje se procesa directamente (así "se me ha roto la cerradura"
+    // no se pierde detrás de un menú).
     if (!conversaciones[telefono]) {
       resetearConversacion(telefono);
       conversaciones[telefono].memberId  = memberId;
       conversaciones[telefono].channelId = channelId;
       conversaciones[telefono].step = "menu_principal";
-      await enviarMensaje(telefono, MENU_PRINCIPAL);
+      if (IA_MODO === "on") {
+        await procesarMensaje(telefono, texto);
+      } else {
+        await enviarMensaje(telefono, MENU_PRINCIPAL);
+      }
       return res.sendStatus(200);
     }
 
@@ -1801,7 +2086,11 @@ app.post("/webhook", async (req, res) => {
     // Si el step es null (recién reseteado pero ya tenía estado), forzar menú
     if (conversaciones[telefono].step === null) {
       conversaciones[telefono].step = "menu_principal";
-      await enviarMensaje(telefono, MENU_PRINCIPAL);
+      if (IA_MODO === "on") {
+        await procesarMensaje(telefono, texto);
+      } else {
+        await enviarMensaje(telefono, MENU_PRINCIPAL);
+      }
       return res.sendStatus(200);
     }
 
