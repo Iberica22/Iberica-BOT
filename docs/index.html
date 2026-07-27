@@ -7,66 +7,115 @@
 <title>Ibérica Seguridad — Herramientas</title>
 <style>
   :root {
-    --grafito:#14181c; --acero:#232a31; --dorado:#e6a435; --verde:#4fa845;
-    --verde-hover:#5cbf51; --blanco:#f2f2f2; --gris-medio:#9aa4ad;
+    --negro:#0d1117; --negro-2:#151b22; --panel:#1c242d; --panel-hover:#222d38;
+    --verde:#4fa845; --verde-claro:#5cbf51; --verde-oscuro:#2e6b28;
+    --blanco:#f5f7f9; --gris:#8b959e; --gris-linea:#2c3843;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; }
   body {
     font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
-    background:var(--grafito); color:var(--blanco);
+    background:
+      radial-gradient(1100px 500px at 50% -10%, rgba(79,168,69,.14), transparent 60%),
+      linear-gradient(180deg, var(--negro) 0%, var(--negro-2) 100%);
+    color:var(--blanco);
     min-height:100vh; display:flex; flex-direction:column; align-items:center;
-    padding:40px 20px;
+    padding:52px 20px 28px;
   }
-  .logo { height:120px; width:auto; border-radius:12px; margin-bottom:14px; }
-  h1 { font-size:26px; font-weight:800; letter-spacing:.02em; }
-  .sub { color:var(--gris-medio); font-size:14px; margin:6px 0 38px; }
-  .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:18px; width:100%; max-width:980px; }
+  .marca { display:flex; flex-direction:column; align-items:center; text-align:center; }
+  .logo-wrap {
+    background:#fff; border-radius:18px; padding:10px 26px;
+    box-shadow:0 8px 30px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06);
+    margin-bottom:22px;
+  }
+  .logo-wrap img { height:96px; width:auto; display:block; }
+  h1 { font-size:30px; font-weight:800; letter-spacing:.01em; }
+  h1 .verde { color:var(--verde); }
+  .sub { color:var(--gris); font-size:14.5px; margin:8px 0 0; }
+  .linea-verde {
+    width:64px; height:4px; border-radius:2px; margin:22px auto 34px;
+    background:linear-gradient(90deg, var(--verde), var(--verde-claro));
+  }
+
+  .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(272px, 1fr)); gap:20px; width:100%; max-width:1020px; }
   .card {
-    background:var(--acero); border:2px solid transparent; border-radius:14px;
-    padding:26px 22px; text-decoration:none; color:var(--blanco);
-    display:flex; flex-direction:column; gap:10px; transition:all .18s;
+    position:relative; overflow:hidden;
+    background:var(--panel); border:1px solid var(--gris-linea); border-radius:16px;
+    padding:26px 24px 22px; text-decoration:none; color:var(--blanco);
+    display:flex; flex-direction:column; gap:12px;
+    transition:transform .18s, border-color .18s, background .18s, box-shadow .18s;
   }
-  .card:hover { border-color:var(--dorado); transform:translateY(-3px); background:#2a323a; }
-  .card .icono { font-size:38px; }
-  .card h2 { font-size:17px; font-weight:800; }
-  .card p { font-size:13px; color:var(--gris-medio); line-height:1.5; flex:1; }
-  .card .ir { color:var(--dorado); font-size:13px; font-weight:700; }
-  .card.deshab { opacity:.55; cursor:not-allowed; }
-  .card.deshab:hover { border-color:transparent; transform:none; background:var(--acero); }
-  footer { margin-top:44px; font-size:11px; color:var(--gris-medio); text-align:center; }
+  .card::before {
+    content:''; position:absolute; inset:0 auto 0 0; width:4px;
+    background:linear-gradient(180deg, var(--verde), var(--verde-oscuro));
+    opacity:.85;
+  }
+  .card:hover {
+    border-color:var(--verde); background:var(--panel-hover);
+    transform:translateY(-4px); box-shadow:0 14px 34px rgba(0,0,0,.45);
+  }
+  .icono {
+    width:54px; height:54px; border-radius:13px; font-size:26px;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(79,168,69,.12); border:1px solid rgba(79,168,69,.35);
+  }
+  .card h2 { font-size:17.5px; font-weight:800; letter-spacing:.01em; }
+  .card p { font-size:13px; color:var(--gris); line-height:1.55; flex:1; }
+  .ir { color:var(--verde-claro); font-size:13px; font-weight:700; display:flex; align-items:center; gap:6px; }
+  .card:hover .ir { gap:10px; }
+  .ir::after { content:'→'; transition:margin .18s; }
+  .tag {
+    position:absolute; top:16px; right:16px; font-size:10px; font-weight:800;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--gris);
+    border:1px solid var(--gris-linea); border-radius:99px; padding:3px 9px;
+  }
+  .card.deshab { opacity:.5; cursor:not-allowed; }
+  .card.deshab:hover { border-color:var(--gris-linea); transform:none; background:var(--panel); box-shadow:none; }
+
+  footer { margin-top:auto; padding-top:40px; font-size:11.5px; color:var(--gris); text-align:center; line-height:1.7; }
+  footer .verde { color:var(--verde); font-weight:700; }
 </style>
 </head>
 <body>
 
-<img class="logo" src="img/logo.jpg" alt="Ibérica Seguridad">
-<h1>Ibérica Seguridad</h1>
-<div class="sub">Herramientas internas — elige a dónde quieres ir</div>
+<div class="marca">
+  <div class="logo-wrap"><img src="img/logo.jpg" alt="Ibérica Seguridad"></div>
+  <h1>Ibérica <span class="verde">Seguridad</span></h1>
+  <div class="sub">Herramientas internas · elige a dónde quieres ir</div>
+  <div class="linea-verde"></div>
+</div>
 
 <div class="cards">
   <a class="card" href="puertas.html">
+    <span class="tag">FACTUSOL · Serie 5</span>
     <div class="icono">🚪</div>
     <h2>Presupuestos de puertas</h2>
-    <p>Configurador de puertas de seguridad FICHET, KIUSO, blindadas y metálicas: paneles por caras, extras, descuentos, PDF comercial y grabación en FACTUSOL (serie 5 · Carpintería).</p>
-    <div class="ir">Entrar →</div>
+    <p>Configurador de puertas de seguridad FICHET, KIUSO, blindadas y metálicas: paneles por caras con tarifas de fábrica, extras, descuentos y PDF comercial.</p>
+    <div class="ir">Entrar</div>
   </a>
   <a class="card" href="tarifas.html">
+    <span class="tag">FACTUSOL · Serie 7</span>
     <div class="icono">📋</div>
-    <h2>Buscador de tarifas y presupuestos</h2>
-    <p>Busca artículos de la tarifa, monta presupuestos con carrito y conceptos extra, genera el PDF y graba en FACTUSOL (serie 7 · Particular).</p>
-    <div class="ir">Entrar →</div>
+    <h2>Tarifas y presupuestos</h2>
+    <p>Busca artículos de la tarifa, monta presupuestos con carrito y conceptos extra, genera el PDF y graba directamente en FACTUSOL.</p>
+    <div class="ir">Entrar</div>
   </a>
   <a class="card" id="cardBot" href="#">
+    <span class="tag">WhatsApp</span>
     <div class="icono">🤖</div>
-    <h2>Gestión del bot de WhatsApp</h2>
-    <p>Panel de administración del bot: conversaciones, partes de trabajo, contactos y campaña de captación.</p>
-    <div class="ir">Entrar →</div>
+    <h2>Gestión del bot</h2>
+    <p>Panel de administración del bot de WhatsApp: conversaciones, partes de trabajo, contactos y campaña de captación.</p>
+    <div class="ir">Entrar</div>
   </a>
 </div>
 
-<footer>Ibérica Seguridad · C/ San Leonardo 34, 04004 Almería · 950 088 086</footer>
+<footer>
+  <span class="verde">Ibérica Seguridad</span> · C/ San Leonardo 34, 04004 Almería<br>
+  950 088 086 · pedidos@ibericaseguridad.com
+</footer>
 
 <script>
-// URL del panel de administración del bot (servidor Railway).
+// URL del panel de administración del bot (servidor Railway, termina en /admin).
 // Déjala vacía para mostrar la tarjeta deshabilitada.
 const BOT_ADMIN_URL = '';
 
