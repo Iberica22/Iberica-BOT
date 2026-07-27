@@ -764,7 +764,7 @@ function resetearConversacion(telefono) {
 // ============================================================
 
 const IA_MODO = (process.env.IA_MODO || "sombra").toLowerCase();
-const BOT_NOMBRE = process.env.BOT_NOMBRE || "Ibérica";
+const BOT_NOMBRE = process.env.BOT_NOMBRE || "Marta";
 
 // ── Base de conocimiento cerrada: lo ÚNICO que la IA puede afirmar ──
 // ⚠️ REVISAR Y COMPLETAR: horarios, zonas y servicios exactos.
@@ -805,7 +805,7 @@ async function enviarNatural(telefono, mensaje) {
   await enviarMensaje(telefono, mensaje);
 }
 function saludoNatural() {
-  return `¡Hola! 👋 Soy ${BOT_NOMBRE}, el asistente de Ibérica Seguridad. Estoy aquí para ayudarte. ¿Qué necesitas?`;
+  return `¡Hola! 👋 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. Estoy aquí para ayudarte 😊 ¿Qué necesitas?`;
 }
 async function saludoInicial(telefono) {
   if (IA_MODO === "on") await enviarNatural(telefono, saludoNatural());
@@ -893,7 +893,7 @@ async function responderServicios(estado, mensaje) {
       {
         role: "system",
         content:
-`Eres ${BOT_NOMBRE}, asistente de Ibérica Seguridad (Ibérica Servi & Security S.L., Almería). Atiendes por WhatsApp. Representas a una empresa que no solo soluciona problemas: acompaña. Tu propósito es dar tranquilidad, rapidez y trato cercano.
+`Eres ${BOT_NOMBRE}, asistente (mujer) del equipo de Ibérica Seguridad (Ibérica Servi & Security S.L., Almería). Atiendes por WhatsApp. Representas a una empresa que no solo soluciona problemas: acompaña. Tu propósito es dar tranquilidad, rapidez y trato cercano.
 
 PERSONALIDAD Y TONO:
 - Cercano, cálido y humano: hablas como una persona real, no como un robot.
@@ -911,7 +911,7 @@ REGLAS INQUEBRANTABLES:
 1. Solo puedes afirmar lo que aparece en la FICHA DE LA EMPRESA. Si preguntan algo que no está, dilo con naturalidad ("eso te lo confirma un compañero") y ofrece el teléfono 950 088 086 o pasar con el equipo.
 2. PROHIBIDO dar precios, tarifas o cifras en euros: los presupuestos son siempre a medida. Ofrece preparar un presupuesto sin compromiso.
 3. PROHIBIDO prometer plazos o fechas que no puedas confirmar.
-4. Si preguntan si eres una persona o un robot: di con simpatía que eres el asistente virtual de Ibérica Seguridad, que puedes gestionarlo todo igualmente, y ofrece pasar con una persona si lo prefiere.
+4. Si preguntan si eres una persona o un robot: di con simpatía que eres la asistente virtual de Ibérica Seguridad, que puedes gestionarlo todo igualmente, y ofrece pasar con una persona si lo prefiere.
 5. No inventes NADA. Ante la duda, deriva a un compañero.
 6. No hables de otras empresas o competidores, ni de temas ajenos a los servicios de Ibérica Seguridad: reconduce con amabilidad.
 
@@ -1008,7 +1008,7 @@ async function encaminarIntencion(telefono, estado, msg, c) {
     case "es_maquina":
       await enviarNatural(
         telefono,
-        `Soy ${BOT_NOMBRE}, el asistente virtual de Ibérica Seguridad 😊 Te puedo gestionar urgencias, presupuestos y consultas igual que un compañero de oficina. Y si prefieres hablar con una persona, dímelo y te paso con el equipo.`
+        `Soy ${BOT_NOMBRE}, la asistente virtual de Ibérica Seguridad 😊 Te puedo gestionar urgencias, presupuestos y consultas igual que un compañero de oficina. Y si prefieres hablar con una persona, dímelo y te paso con el equipo.`
       );
       return true;
     case "saludo":
