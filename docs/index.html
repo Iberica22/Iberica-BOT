@@ -4,129 +4,262 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex">
+<meta name="theme-color" content="#0b0f13">
 <title>Ibérica Seguridad — Herramientas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --negro:#0d1117; --negro-2:#151b22; --panel:#1c242d; --panel-hover:#222d38;
-    --verde:#4fa845; --verde-claro:#5cbf51; --verde-oscuro:#2e6b28;
-    --blanco:#f5f7f9; --gris:#8b959e; --gris-linea:#2c3843;
+    --negro:#0b0f13; --negro-2:#10161c; --panel:#161e26; --panel-2:#1b242e;
+    --verde:#4fa845; --verde-claro:#6cc763; --verde-oscuro:#2e6b28;
+    --blanco:#f5f7f9; --gris:#8b959e; --gris-claro:#c3cad1; --linea:#242f3a;
+    --radius:18px;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { height:100%; }
+  html { -webkit-text-size-adjust:100%; }
   body {
-    font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-family:'Inter', 'Segoe UI', system-ui, sans-serif;
+    background:var(--negro); color:var(--blanco);
+    min-height:100vh; display:flex; flex-direction:column;
+  }
+  /* Fondo: malla sutil + halo verde */
+  body::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
     background:
-      radial-gradient(1100px 500px at 50% -10%, rgba(79,168,69,.14), transparent 60%),
+      radial-gradient(900px 420px at 18% -8%, rgba(79,168,69,.16), transparent 62%),
+      radial-gradient(700px 380px at 92% 108%, rgba(79,168,69,.07), transparent 60%),
       linear-gradient(180deg, var(--negro) 0%, var(--negro-2) 100%);
-    color:var(--blanco);
-    min-height:100vh; display:flex; flex-direction:column; align-items:center;
-    padding:52px 20px 28px;
   }
-  .marca { display:flex; flex-direction:column; align-items:center; text-align:center; }
-  .logo-wrap {
-    background:#fff; border-radius:18px; padding:10px 26px;
-    box-shadow:0 8px 30px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06);
-    margin-bottom:22px;
+  body::after {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.35;
+    background-image:
+      linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
+    background-size:44px 44px;
+    mask-image:radial-gradient(900px 600px at 50% 0%, #000 20%, transparent 75%);
+    -webkit-mask-image:radial-gradient(900px 600px at 50% 0%, #000 20%, transparent 75%);
   }
-  .logo-wrap img { height:96px; width:auto; display:block; }
-  h1 { font-size:30px; font-weight:800; letter-spacing:.01em; }
-  h1 .verde { color:var(--verde); }
-  .sub { color:var(--gris); font-size:14.5px; margin:8px 0 0; }
-  .linea-verde {
-    width:64px; height:4px; border-radius:2px; margin:22px auto 34px;
-    background:linear-gradient(90deg, var(--verde), var(--verde-claro));
-  }
+  main, header, footer { position:relative; z-index:1; }
 
-  .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(272px, 1fr)); gap:20px; width:100%; max-width:1020px; }
+  /* ── Cabecera ── */
+  header {
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    padding:18px clamp(18px, 4vw, 44px);
+    border-bottom:1px solid var(--linea);
+    backdrop-filter:blur(4px);
+  }
+  .brand { display:flex; align-items:center; gap:13px; }
+  .brand .logo {
+    height:46px; width:46px; border-radius:11px; background:#fff;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+    box-shadow:0 4px 14px rgba(0,0,0,.4);
+  }
+  .brand .logo img { height:40px; width:auto; }
+  .brand-txt strong { font-size:15.5px; font-weight:800; letter-spacing:.01em; display:block; }
+  .brand-txt span { font-size:11.5px; color:var(--gris); }
+  .fecha-hdr { font-size:12.5px; color:var(--gris); text-align:right; line-height:1.5; }
+  .fecha-hdr strong { color:var(--gris-claro); font-weight:600; }
+
+  /* ── Hero ── */
+  main {
+    flex:1; width:100%; max-width:1080px; margin:0 auto;
+    padding:clamp(30px, 5.5vh, 58px) clamp(18px, 4vw, 44px) 30px;
+  }
+  .hola { font-size:clamp(24px, 3.4vw, 34px); font-weight:800; letter-spacing:-.015em; }
+  .hola .verde { color:var(--verde-claro); }
+  .hola-sub { color:var(--gris); font-size:14.5px; margin-top:8px; }
+
+  /* ── Tarjetas ── */
+  .cards {
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+    gap:18px; margin-top:clamp(26px, 4.5vh, 42px);
+  }
   .card {
-    position:relative; overflow:hidden;
-    background:var(--panel); border:1px solid var(--gris-linea); border-radius:16px;
-    padding:26px 24px 22px; text-decoration:none; color:var(--blanco);
-    display:flex; flex-direction:column; gap:12px;
-    transition:transform .18s, border-color .18s, background .18s, box-shadow .18s;
+    position:relative; display:flex; flex-direction:column; gap:14px;
+    background:linear-gradient(180deg, var(--panel-2), var(--panel));
+    border:1px solid var(--linea); border-radius:var(--radius);
+    padding:24px 22px 20px; text-decoration:none; color:var(--blanco);
+    transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    outline:none;
   }
-  .card::before {
-    content:''; position:absolute; inset:0 auto 0 0; width:4px;
-    background:linear-gradient(180deg, var(--verde), var(--verde-oscuro));
-    opacity:.85;
+  .card:hover, .card:focus-visible {
+    transform:translateY(-4px); border-color:rgba(79,168,69,.65);
+    box-shadow:0 18px 42px rgba(0,0,0,.5), 0 0 0 1px rgba(79,168,69,.25);
   }
-  .card:hover {
-    border-color:var(--verde); background:var(--panel-hover);
-    transform:translateY(-4px); box-shadow:0 14px 34px rgba(0,0,0,.45);
-  }
+  .card-top { display:flex; align-items:center; justify-content:space-between; }
   .icono {
-    width:54px; height:54px; border-radius:13px; font-size:26px;
+    width:52px; height:52px; border-radius:14px;
     display:flex; align-items:center; justify-content:center;
-    background:rgba(79,168,69,.12); border:1px solid rgba(79,168,69,.35);
+    background:rgba(79,168,69,.1); border:1px solid rgba(79,168,69,.3);
+    color:var(--verde-claro);
   }
-  .card h2 { font-size:17.5px; font-weight:800; letter-spacing:.01em; }
-  .card p { font-size:13px; color:var(--gris); line-height:1.55; flex:1; }
-  .ir { color:var(--verde-claro); font-size:13px; font-weight:700; display:flex; align-items:center; gap:6px; }
-  .card:hover .ir { gap:10px; }
-  .ir::after { content:'→'; transition:margin .18s; }
+  .icono svg { width:26px; height:26px; }
   .tag {
-    position:absolute; top:16px; right:16px; font-size:10px; font-weight:800;
-    letter-spacing:.08em; text-transform:uppercase; color:var(--gris);
-    border:1px solid var(--gris-linea); border-radius:99px; padding:3px 9px;
+    font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--gris); border:1px solid var(--linea); border-radius:99px; padding:4px 10px;
+    background:rgba(255,255,255,.02);
   }
-  .card.deshab { opacity:.5; cursor:not-allowed; }
-  .card.deshab:hover { border-color:var(--gris-linea); transform:none; background:var(--panel); box-shadow:none; }
+  .card h2 { font-size:18px; font-weight:800; letter-spacing:-.01em; }
+  .card p { font-size:13px; color:var(--gris); line-height:1.6; flex:1; }
+  .card-foot {
+    display:flex; align-items:center; justify-content:space-between;
+    border-top:1px solid var(--linea); padding-top:14px; margin-top:2px;
+  }
+  .ir { color:var(--verde-claro); font-size:13px; font-weight:700; display:inline-flex; align-items:center; gap:7px; }
+  .ir svg { width:15px; height:15px; transition:transform .18s ease; }
+  .card:hover .ir svg, .card:focus-visible .ir svg { transform:translateX(4px); }
+  .atajos { display:flex; gap:6px; }
+  .atajo {
+    font-size:11px; color:var(--gris-claro); background:rgba(255,255,255,.04);
+    border:1px solid var(--linea); border-radius:8px; padding:4px 9px;
+    text-decoration:none; transition:border-color .15s, color .15s;
+  }
+  .atajo:hover { border-color:var(--verde); color:var(--verde-claro); }
 
-  footer { margin-top:auto; padding-top:40px; font-size:11.5px; color:var(--gris); text-align:center; line-height:1.7; }
+  /* Estado del bot */
+  .estado { display:inline-flex; align-items:center; gap:7px; font-size:11.5px; color:var(--gris); }
+  .punto { width:8px; height:8px; border-radius:50%; background:var(--gris); position:relative; }
+  .estado.online { color:var(--verde-claro); }
+  .estado.online .punto { background:var(--verde-claro); }
+  .estado.online .punto::after {
+    content:''; position:absolute; inset:-4px; border-radius:50%;
+    border:1.5px solid rgba(108,199,99,.5); animation:pulso 1.8s ease-out infinite;
+  }
+  .estado.offline { color:#d97575; }
+  .estado.offline .punto { background:#d97575; }
+  @keyframes pulso { 0%{transform:scale(.6);opacity:1} 100%{transform:scale(1.5);opacity:0} }
+
+  /* ── Pie ── */
+  footer {
+    border-top:1px solid var(--linea);
+    padding:18px clamp(18px, 4vw, 44px);
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    font-size:12px; color:var(--gris);
+  }
   footer .verde { color:var(--verde); font-weight:700; }
+  footer a { color:var(--gris-claro); text-decoration:none; }
+  footer a:hover { color:var(--verde-claro); }
+
+  @media (prefers-reduced-motion:reduce) {
+    .card, .ir svg { transition:none; }
+    .estado.online .punto::after { animation:none; }
+  }
+  @media (max-width:560px) {
+    .fecha-hdr { display:none; }
+  }
 </style>
 </head>
 <body>
 
-<div class="marca">
-  <div class="logo-wrap"><img src="img/logo.jpg" alt="Ibérica Seguridad"></div>
-  <h1>Ibérica <span class="verde">Seguridad</span></h1>
-  <div class="sub">Herramientas internas · elige a dónde quieres ir</div>
-  <div class="linea-verde"></div>
-</div>
+<header>
+  <div class="brand">
+    <div class="logo"><img src="img/logo.jpg" alt="Ibérica Seguridad"></div>
+    <div class="brand-txt">
+      <strong>Ibérica Seguridad</strong>
+      <span>Herramientas internas</span>
+    </div>
+  </div>
+  <div class="fecha-hdr" id="fechaHdr"></div>
+</header>
 
-<div class="cards">
-  <a class="card" href="puertas.html">
-    <span class="tag">FACTUSOL · Serie 5</span>
-    <div class="icono">🚪</div>
-    <h2>Presupuestos de puertas</h2>
-    <p>Configurador de puertas de seguridad FICHET, KIUSO, blindadas y metálicas: paneles por caras con tarifas de fábrica, extras, descuentos y PDF comercial.</p>
-    <div class="ir">Entrar</div>
-  </a>
-  <a class="card" href="tarifas.html">
-    <span class="tag">FACTUSOL · Serie 7</span>
-    <div class="icono">📋</div>
-    <h2>Tarifas y presupuestos</h2>
-    <p>Busca artículos de la tarifa, monta presupuestos con carrito y conceptos extra, genera el PDF y graba directamente en FACTUSOL.</p>
-    <div class="ir">Entrar</div>
-  </a>
-  <a class="card" id="cardBot" href="#">
-    <span class="tag">WhatsApp</span>
-    <div class="icono">🤖</div>
-    <h2>Gestión del bot</h2>
-    <p>Panel de administración del bot de WhatsApp: conversaciones, partes de trabajo, contactos y campaña de captación.</p>
-    <div class="ir">Entrar</div>
-  </a>
-</div>
+<main>
+  <h1 class="hola" id="saludo">Hola 👋 <span class="verde">¿Qué hacemos hoy?</span></h1>
+  <p class="hola-sub">Presupuestos, tarifas y gestión del bot — todo desde aquí, conectado con FACTUSOL.</p>
+
+  <div class="cards">
+
+    <a class="card" href="puertas.html">
+      <div class="card-top">
+        <div class="icono">
+          <!-- puerta -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 3.5 5 5v14l8 1.5V3.5z"/><path d="M13 4h5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5"/><circle cx="10.6" cy="12" r=".9" fill="currentColor" stroke="none"/>
+          </svg>
+        </div>
+        <span class="tag">Factusol · Serie 5</span>
+      </div>
+      <h2>Presupuestos de puertas</h2>
+      <p>Configurador FICHET, KIUSO, blindadas y metálicas: paneles por caras con tarifas de fábrica y fotos, extras, descuentos y PDF comercial listo para el cliente.</p>
+      <div class="card-foot">
+        <span class="ir">Abrir configurador
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </span>
+      </div>
+    </a>
+
+    <a class="card" href="tarifas.html">
+      <div class="card-top">
+        <div class="icono">
+          <!-- documento/lupa -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z"/><path d="M14 3v5h5"/><circle cx="11.2" cy="14" r="2.6"/><path d="m13.2 16 2.3 2.3"/>
+          </svg>
+        </div>
+        <span class="tag">Factusol · Serie 7</span>
+      </div>
+      <h2>Tarifas y presupuestos</h2>
+      <p>Busca cualquier artículo de la tarifa, monta el presupuesto con carrito y conceptos extra, genera el PDF y grábalo directamente en FACTUSOL.</p>
+      <div class="card-foot">
+        <span class="ir">Abrir buscador
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </span>
+      </div>
+    </a>
+
+    <a class="card" id="cardBot" href="https://iberica-bot-production.up.railway.app/admin">
+      <div class="card-top">
+        <div class="icono">
+          <!-- bot / chat -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4.5" y="8" width="15" height="11" rx="3"/><path d="M12 8V5"/><circle cx="12" cy="4" r="1" fill="currentColor" stroke="none"/><circle cx="9.3" cy="13" r="1" fill="currentColor" stroke="none"/><circle cx="14.7" cy="13" r="1" fill="currentColor" stroke="none"/><path d="M9.5 16.2h5"/>
+          </svg>
+        </div>
+        <span class="tag">WhatsApp</span>
+      </div>
+      <h2>Gestión del bot</h2>
+      <p>Panel de administración del bot de WhatsApp: conversaciones, partes de trabajo, contactos y campaña de captación de puertas.</p>
+      <div class="card-foot">
+        <span class="ir">Abrir panel
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </span>
+        <span class="estado" id="botEstado"><span class="punto"></span><span id="botEstadoTxt">Comprobando…</span></span>
+      </div>
+    </a>
+
+  </div>
+</main>
 
 <footer>
-  <span class="verde">Ibérica Seguridad</span> · C/ San Leonardo 34, 04004 Almería<br>
-  950 088 086 · pedidos@ibericaseguridad.com
+  <span><span class="verde">Ibérica Seguridad</span> · C/ San Leonardo 34, 04004 Almería</span>
+  <span><a href="tel:+34950088086">950 088 086</a> · <a href="mailto:pedidos@ibericaseguridad.com">pedidos@ibericaseguridad.com</a></span>
 </footer>
 
 <script>
-// URL del panel de administración del bot (servidor Railway, termina en /admin).
-// Déjala vacía para mostrar la tarjeta deshabilitada.
-const BOT_ADMIN_URL = 'https://iberica-bot-production.up.railway.app/admin';
+// Saludo según la hora
+(function () {
+  const h = new Date().getHours();
+  const saludo = h < 7 ? 'Buenas noches' : h < 14 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches';
+  document.getElementById('saludo').innerHTML = `${saludo} 👋 <span class="verde">¿Qué hacemos hoy?</span>`;
+  const f = new Date().toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  document.getElementById('fechaHdr').innerHTML = `<strong>${f.charAt(0).toUpperCase() + f.slice(1)}</strong>`;
+})();
 
-const cardBot = document.getElementById('cardBot');
-if (BOT_ADMIN_URL) {
-  cardBot.href = BOT_ADMIN_URL;
-} else {
-  cardBot.classList.add('deshab');
-  cardBot.querySelector('.ir').textContent = 'URL pendiente de configurar';
-  cardBot.addEventListener('click', e => { e.preventDefault(); alert('Falta configurar la URL del panel del bot (BOT_ADMIN_URL en index.html).'); });
-}
+// Estado del bot: ping a /health del servidor Railway.
+// fetch no-cors: si la red responde, el servidor está en pie.
+(function () {
+  const est = document.getElementById('botEstado');
+  const txt = document.getElementById('botEstadoTxt');
+  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000));
+  Promise.race([
+    fetch('https://iberica-bot-production.up.railway.app/health', { mode:'no-cors', cache:'no-store' }),
+    timeout,
+  ]).then(() => {
+    est.classList.add('online'); txt.textContent = 'Bot en línea';
+  }).catch(() => {
+    est.classList.add('offline'); txt.textContent = 'Sin respuesta';
+  });
+})();
 </script>
 </body>
 </html>
