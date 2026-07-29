@@ -865,10 +865,10 @@ const SALUDOS_INICIALES = [
   `¡Hola! Soy ${BOT_NOMBRE}, de Ibérica Seguridad 😊 ¿En qué puedo ayudarte hoy?`,
 ];
 const SALUDOS_RESPUESTA = [
-  `¡Hola! 😊 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. ¿En qué te puedo ayudar?\nPuedo gestionarte una urgencia, prepararte un presupuesto, informarte de nuestros servicios o mirar cómo va tu parte.`,
-  `¡Buenas! 👋 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. Cuéntame, ¿qué necesitas?`,
-  `¡Hola! 😊 Aquí ${BOT_NOMBRE}, de Ibérica Seguridad. Dime en qué te ayudo: ¿una urgencia, un presupuesto, alguna consulta?`,
-  `¡Hola! Soy ${BOT_NOMBRE}, de Ibérica Seguridad 😊 Si tienes una avería te la gestiono ahora mismo, y si buscas presupuesto o información, también. ¿Qué necesitas?`,
+  `¡Hola! 😊 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. Cuéntame, ¿qué necesitas?`,
+  `¡Buenas! 👋 Aquí ${BOT_NOMBRE}, de Ibérica Seguridad. Tú dirás, ¿en qué te ayudo?`,
+  `¡Hola! 😊 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. ¿En qué te echo una mano? ¿Alguna avería, un presupuesto...?`,
+  `¡Hola! Soy ${BOT_NOMBRE}, de Ibérica Seguridad 😊 Dime, ¿qué necesitas?`,
 ];
 const ultimoSaludoIdx = {}; // { telefono: índice del último saludo usado }
 function elegirSaludo(telefono, lista) {
