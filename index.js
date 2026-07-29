@@ -953,11 +953,12 @@ En "datos" extrae SOLO lo que el cliente haya dicho literalmente (nombre, teléf
 
 // ── Respuestas de la rama "servicios" con conocimiento cerrado ──
 // (sustituye a la antigua Assistants API, en vías de retirada por OpenAI)
-async function responderServicios(estado, mensaje) {
+async function responderServicios(estado, mensaje, contextoFlujo) {
   estado.historialIA = estado.historialIA || [];
   estado.historialIA.push({ role: "user", content: mensaje });
   estado.historialIA = estado.historialIA.slice(-12);
 
+  const mensajesExtra = contextoFlujo ? [{ role: "system", content: contextoFlujo }] : [];
   const res = await openai.chat.completions.create({
     model: "gpt-4o",
     temperature: 0.4,
@@ -992,6 +993,7 @@ FICHA DE LA EMPRESA:
 ${BASE_CONOCIMIENTO}`,
       },
       ...estado.historialIA,
+      ...mensajesExtra,
     ],
   });
 
@@ -1012,7 +1014,47 @@ const PREGUNTA_CAMPO = {
   telefono:    "¿En qué teléfono podemos localizarte?",
   direccion:   "¿En qué dirección está la avería?",
   descripcion: "Cuéntame brevemente qué ha pasado:",
+  confirmar:   "¿Es todo correcto? Responde sí o no 😊",
 };
+
+// ¿El mensaje parece una pregunta o un desvío, en vez de la respuesta al
+// dato pedido? En campos "laxos" (descripción) solo saltan las palabras
+// clave, porque una descripción puede llevar interrogantes legítimos.
+function pareceDesvio(msg, laxo) {
+  const m = msg.toLowerCase();
+  const clave = /\b(cu[aá]nto|precio|precios|costar|cuesta|vale|tarifa|robot|m[aá]quina|maquina|humano|persona de verdad|eres real)\b/.test(m);
+  if (laxo) return clave;
+  return clave || m.includes("?") || m.includes("¿");
+}
+
+// Atiende el desvío sin perder el hilo: responde la duda (sin precios ni
+// plazos) y retoma la pregunta pendiente. Devuelve true si lo gestionó.
+async function desvioAtendido(telefono, estado, msg, campo) {
+  if (IA_MODO !== "on") return false;
+  const laxo = campo === "descripcion";
+  const m = msg.toLowerCase();
+  // Cancelación explícita a mitad de flujo
+  if (/\b(cancela(r|lo)?|olv[ií]dalo|d[eé]jalo|ya no hace falta|nada ya)\b/.test(m)) {
+    resetearConversacion(telefono);
+    conversaciones[telefono].step = "menu_principal";
+    await enviarNatural(telefono, "Sin problema, lo dejamos aquí 😊 Si necesitas cualquier otra cosa, dime.");
+    return true;
+  }
+  if (!pareceDesvio(msg, laxo)) return false;
+  const pregunta = PREGUNTA_CAMPO[campo] || "el dato que te había pedido";
+  try {
+    const respuesta = await responderServicios(
+      estado,
+      msg,
+      `IMPORTANTE: el cliente está en mitad de un registro y le habías preguntado: "${pregunta}". Responde primero a su duda en 1-3 líneas (recuerda: PROHIBIDO dar precios o plazos; si pregunta por el precio, dile con naturalidad que depende de cada caso y que el técnico se lo confirma antes de hacer nada, sin compromiso). Termina retomando con naturalidad la pregunta pendiente: "${pregunta}".`
+    );
+    await enviarNatural(telefono, respuesta);
+  } catch (e) {
+    console.error("[IA] Desvío sin respuesta:", e.message);
+    await enviarNatural(telefono, `Buena pregunta 😊 Eso te lo confirma el técnico según el caso, antes de hacer nada y sin compromiso. Seguimos: ${pregunta}`);
+  }
+  return true; // el dato sigue pendiente; no se guarda la pregunta como respuesta
+}
 
 function aplicarDatosExtraidos(estado, datos) {
   if (!datos) return;
@@ -1315,6 +1357,8 @@ async function procesarMensaje(telefono, texto) {
 
   // ── Confirmación de urgencia con datos extraídos por la IA ──
   if (estado.step === "urg_confirmar") {
+    if (!["si", "sí", "s", "vale", "ok", "correcto", "no", "n"].includes(msgLower) &&
+        (await desvioAtendido(telefono, estado, msg, "confirmar"))) return;
     if (["si", "sí", "s", "vale", "ok", "correcto"].includes(msgLower)) {
       await crearUrgencia(telefono, estado);
       return;
@@ -1331,6 +1375,7 @@ async function procesarMensaje(telefono, texto) {
 
   // ── RAMA 1: URGENCIA / AVERÍA ────────────────────────────
   if (estado.step === "urg_nombre") {
+    if (await desvioAtendido(telefono, estado, msg, "nombre")) return;
     estado.nombre = msg;
     estado.step = "urg_telefono";
     await enviarMensaje(telefono, `Gracias, ${estado.nombre}. ¿Cuál es tu número de teléfono de contacto?`);
@@ -1338,6 +1383,7 @@ async function procesarMensaje(telefono, texto) {
   }
 
   if (estado.step === "urg_telefono") {
+    if (await desvioAtendido(telefono, estado, msg, "telefono")) return;
     const telLimpio = validarTelefono(msg);
     if (!telLimpio) {
       await enviarMensaje(
@@ -1353,6 +1399,7 @@ async function procesarMensaje(telefono, texto) {
   }
 
   if (estado.step === "urg_direccion") {
+    if (await desvioAtendido(telefono, estado, msg, "direccion")) return;
     estado.direccion = msg;
     estado.step = "urg_descripcion";
     await enviarMensaje(telefono, "Describe brevemente el problema o la avería:");
@@ -1360,6 +1407,7 @@ async function procesarMensaje(telefono, texto) {
   }
 
   if (estado.step === "urg_descripcion") {
+    if (await desvioAtendido(telefono, estado, msg, "descripcion")) return;
     estado.descripcion = msg;
     estado.step = "urg_crear";
     await crearUrgencia(telefono, estado);
@@ -1368,6 +1416,7 @@ async function procesarMensaje(telefono, texto) {
 
   // ── RAMA 2: PRESUPUESTO ──────────────────────────────────
   if (estado.step === "pres_nombre") {
+    if (await desvioAtendido(telefono, estado, msg, "nombre")) return;
     estado.nombre = msg;
     estado.step = "pres_descripcion";
     await enviarMensaje(
@@ -1378,6 +1427,7 @@ async function procesarMensaje(telefono, texto) {
   }
 
   if (estado.step === "pres_descripcion") {
+    if (await desvioAtendido(telefono, estado, msg, "descripcion")) return;
     estado.descripcion = msg;
     await finalizarPresupuesto(telefono, estado);
     return;
