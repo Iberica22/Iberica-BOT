@@ -856,11 +856,32 @@ async function enviarNatural(telefono, mensaje) {
   if (IA_MODO === "on") await esperaHumana();
   await enviarMensaje(telefono, mensaje);
 }
-function saludoNatural() {
-  return `¡Hola! 👋 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. Estoy aquí para ayudarte 😊 ¿Qué necesitas?`;
+// Saludos con variaciones: rotan para no sonar a frase enlatada, y no se
+// repite el mismo dos veces seguidas con el mismo cliente.
+const SALUDOS_INICIALES = [
+  `¡Hola! 👋 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. Estoy aquí para ayudarte 😊 ¿Qué necesitas?`,
+  `¡Buenas! 😊 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. Cuéntame, ¿en qué te echo una mano?`,
+  `¡Hola, hola! Soy ${BOT_NOMBRE}, del equipo de Ibérica Seguridad 👋 Tú dirás, ¿qué necesitas?`,
+  `¡Hola! Soy ${BOT_NOMBRE}, de Ibérica Seguridad 😊 ¿En qué puedo ayudarte hoy?`,
+];
+const SALUDOS_RESPUESTA = [
+  `¡Hola! 😊 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. ¿En qué te puedo ayudar?\nPuedo gestionarte una urgencia, prepararte un presupuesto, informarte de nuestros servicios o mirar cómo va tu parte.`,
+  `¡Buenas! 👋 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. Cuéntame, ¿qué necesitas?`,
+  `¡Hola! 😊 Aquí ${BOT_NOMBRE}, de Ibérica Seguridad. Dime en qué te ayudo: ¿una urgencia, un presupuesto, alguna consulta?`,
+  `¡Hola! Soy ${BOT_NOMBRE}, de Ibérica Seguridad 😊 Si tienes una avería te la gestiono ahora mismo, y si buscas presupuesto o información, también. ¿Qué necesitas?`,
+];
+const ultimoSaludoIdx = {}; // { telefono: índice del último saludo usado }
+function elegirSaludo(telefono, lista) {
+  let idx = Math.floor(Math.random() * lista.length);
+  if (lista.length > 1 && ultimoSaludoIdx[telefono] === idx) idx = (idx + 1) % lista.length;
+  ultimoSaludoIdx[telefono] = idx;
+  return lista[idx];
+}
+function saludoNatural(telefono) {
+  return elegirSaludo(telefono, SALUDOS_INICIALES);
 }
 async function saludoInicial(telefono) {
-  if (IA_MODO === "on") await enviarNatural(telefono, saludoNatural());
+  if (IA_MODO === "on") await enviarNatural(telefono, saludoNatural(telefono));
   else await enviarMensaje(telefono, MENU_PRINCIPAL);
 }
 
@@ -1063,10 +1084,7 @@ async function encaminarIntencion(telefono, estado, msg, c) {
       );
       return true;
     case "saludo":
-      await enviarNatural(
-        telefono,
-        `¡Hola! 😊 Soy ${BOT_NOMBRE}, de Ibérica Seguridad. ¿En qué te puedo ayudar?\nPuedo gestionarte una urgencia, prepararte un presupuesto, informarte de nuestros servicios o mirar cómo va tu parte.`
-      );
+      await enviarNatural(telefono, elegirSaludo(telefono, SALUDOS_RESPUESTA));
       return true;
     default:
       return false;
@@ -1222,7 +1240,7 @@ async function procesarMensaje(telefono, texto) {
     resetearConversacion(telefono);
     conversaciones[telefono].step = "menu_principal";
     if (IA_MODO === "on" && !esMenuExplicito) {
-      await enviarNatural(telefono, saludoNatural());
+      await enviarNatural(telefono, saludoNatural(telefono));
     } else {
       await enviarMensaje(telefono, MENU_PRINCIPAL);
     }
