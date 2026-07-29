@@ -1040,14 +1040,22 @@ async function desvioAtendido(telefono, estado, msg, campo) {
     await enviarNatural(telefono, "Sin problema, lo dejamos aquí 😊 Si necesitas cualquier otra cosa, dime.");
     return true;
   }
-  if (!pareceDesvio(msg, laxo)) return false;
+  if (!pareceDesvio(msg, laxo)) {
+    estado.desviosSeguidos = 0; // respuesta de verdad: se reinicia la cuenta
+    return false;
+  }
+  estado.desviosSeguidos = (estado.desviosSeguidos || 0) + 1;
   const pregunta = PREGUNTA_CAMPO[campo] || "el dato que te había pedido";
   try {
-    const respuesta = await responderServicios(
-      estado,
-      msg,
-      `IMPORTANTE: el cliente está en mitad de un registro y le habías preguntado: "${pregunta}". Responde primero a su duda en 1-3 líneas (recuerda: PROHIBIDO dar precios o plazos; si pregunta por el precio, dile con naturalidad que depende de cada caso y que el técnico se lo confirma antes de hacer nada, sin compromiso). Termina retomando con naturalidad la pregunta pendiente: "${pregunta}".`
-    );
+    const contexto =
+      `IMPORTANTE: el cliente está en mitad de un registro y la pregunta pendiente es: "${pregunta}". Responde su duda en 1-3 líneas y retoma la pregunta pendiente al final. Además:\n` +
+      `- NO repitas frases ni cierres que ya hayas usado en esta conversación: varía la redacción, que suene a persona (mira tus mensajes anteriores).\n` +
+      `- PROHIBIDO dar precios o plazos. Si pregunta por el precio, sin cifras: depende de cada caso y el técnico se lo confirma antes de hacer nada, sin compromiso.\n` +
+      `- Si ofrece mandar fotos: acéptalas con agrado ("mándala y se la paso al técnico para valorarlo mejor"), aclarando que la cifra se la confirmará el técnico.\n` +
+      (estado.desviosSeguidos >= 2
+        ? `- El cliente ya ha insistido ${estado.desviosSeguidos} veces: reconócelo con empatía (entiende que quiera saber el precio) y ofrécele pasar con un compañero del equipo si lo prefiere.\n`
+        : "");
+    const respuesta = await responderServicios(estado, msg, contexto);
     await enviarNatural(telefono, respuesta);
   } catch (e) {
     console.error("[IA] Desvío sin respuesta:", e.message);
@@ -2175,9 +2183,17 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // A partir de aquí, el flujo normal solo continúa con mensajes de TEXTO
-    // (una imagen que no sea de captación se ignora, como antes).
+    // A partir de aquí, el flujo normal solo continúa con mensajes de TEXTO.
     if (tipo !== "TEXT") {
+      // Foto/documento fuera de la campaña: con la IA activa, agradecerla en
+      // vez de ignorarla en silencio (la oficina la ve en la bandeja).
+      if (
+        esImagen && IA_MODO === "on" &&
+        conversaciones[telefono]?.memberId &&
+        botActivo[`${channelId}_${telefono}`] !== false
+      ) {
+        await enviarNatural(telefono, "¡Gracias por la foto! 📸 Se la paso al equipo para que lo valore mejor. Seguimos por aquí 😊");
+      }
       return res.sendStatus(200);
     }
 
