@@ -58,12 +58,36 @@ function esEnvioDelBot(telefono, texto) {
 
 // Un mensaje SALIENTE que el bot no envió = una persona de la oficina está
 // atendiendo la conversación → pausamos el bot para no pisarla.
+function extraerTextoEvento(body) {
+  return (
+    body?.data?.text ||
+    body?.data?.message?.text ||
+    body?.data?.body ||
+    body?.text ||
+    (Array.isArray(body?.response) ? body.response.map((r) => r?.text).find(Boolean) : null) ||
+    null
+  );
+}
 function detectarIntervencionHumana(body) {
-  const texto = body?.data?.text;
-  const canal = body?.channel;
+  const texto = extraerTextoEvento(body);
+  const canal = body?.channel || body?.channelId;
   if (!texto || !canal) return;
-  const candidatos = [body?.to, body?.from].filter(Boolean);
-  const telefono = candidatos.find((t) => conversaciones[t]);
+  // Buscar al cliente entre varios campos posibles, normalizando el número
+  // (Woztell puede mandarlo con +, espacios o prefijos distintos).
+  const candidatos = [body?.to, body?.from, body?.recipient, body?.data?.to, body?.member]
+    .filter(Boolean)
+    .map((t) => String(t));
+  const clavesConv = Object.keys(conversaciones);
+  let telefono = candidatos.find((t) => conversaciones[t]);
+  if (!telefono) {
+    const digitos = (s) => String(s).replace(/\D/g, "");
+    for (const cand of candidatos) {
+      const d = digitos(cand);
+      if (!d) continue;
+      const hit = clavesConv.find((k) => digitos(k) === d || digitos(k).endsWith(d.slice(-9)));
+      if (hit) { telefono = hit; break; }
+    }
+  }
   if (!telefono) return;                       // no es un cliente conocido
   if (esEnvioDelBot(telefono, texto)) return;  // es el eco de un envío del bot
   const clave = `${canal}_${telefono}`;
@@ -2127,12 +2151,15 @@ app.post("/webhook", async (req, res) => {
     // - eventType !== "INBOUND": mensajes OUTBOUND (los que el propio bot envía)
     //   Woztell los refleja de vuelta al webhook y causarían un bucle infinito.
     if (eventType !== "INBOUND") {
-      // Mensaje saliente: si no lo envió el bot, es una persona de la
+      // Mensaje saliente/eco: si no lo envió el bot, es una persona de la
       // oficina escribiendo al cliente → pausa automática (auto-takeover).
-      if (eventType === "OUTBOUND") {
-        try { detectarIntervencionHumana(req.body); }
-        catch (e) { console.error("[Takeover] Error:", e.message); }
-      }
+      try {
+        const t = extraerTextoEvento(req.body);
+        console.log(
+          `[Takeover?] evento=${eventType || "?"} tipo=${tipo || "?"} from=${req.body?.from || "-"} to=${req.body?.to || "-"} canal=${req.body?.channel || "-"} texto="${(t || "").slice(0, 60)}"`
+        );
+        if (t) detectarIntervencionHumana(req.body);
+      } catch (e) { console.error("[Takeover] Error:", e.message); }
       return res.sendStatus(200);
     }
 
