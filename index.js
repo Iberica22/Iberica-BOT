@@ -2159,6 +2159,7 @@ app.post("/webhook", async (req, res) => {
           `[Takeover?] evento=${eventType || "?"} tipo=${tipo || "?"} from=${req.body?.from || "-"} to=${req.body?.to || "-"} canal=${req.body?.channel || "-"} texto="${(t || "").slice(0, 60)}"`
         );
         if (t) detectarIntervencionHumana(req.body);
+        else console.log("[Takeover-diag] body:", JSON.stringify(req.body).slice(0, 700));
       } catch (e) { console.error("[Takeover] Error:", e.message); }
       return res.sendStatus(200);
     }
@@ -2173,7 +2174,12 @@ app.post("/webhook", async (req, res) => {
 
     // Ignorar el resto de eventos (READ, DELIVERED, SENT, etc.)
     if (tipo !== "TEXT" && !esImagen) {
-      console.log(`[Webhook] Evento ignorado (type: ${tipo}, eventType: ${eventType})`);
+      if (tipo === "SENT") {
+        // Diagnóstico takeover: ver qué trae el acuse de los envíos
+        console.log("[Takeover-diag SENT] body:", JSON.stringify(req.body).slice(0, 700));
+      } else {
+        console.log(`[Webhook] Evento ignorado (type: ${tipo}, eventType: ${eventType})`);
+      }
       return res.sendStatus(200);
     }
 
