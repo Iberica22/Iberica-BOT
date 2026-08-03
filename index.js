@@ -56,6 +56,27 @@ function esEnvioDelBot(telefono, texto) {
   return (enviosBot[telefono] || []).some((e) => ahora - e.ts < 10 * 60 * 1000 && e.t === texto);
 }
 
+// IDs (wamid) de los mensajes que el propio bot ha enviado, extraídos de la
+// respuesta de la API de Woztell. Los mensajes manuales de la oficina no
+// generan evento de texto en el webhook, pero sí un acuse SENT con su wamid:
+// un acuse cuyo wamid no está aquí = mensaje escrito a mano → auto-takeover.
+const wamidsBot = new Map(); // wamid -> ts
+function registrarWamidsEnvio(resData) {
+  try {
+    for (const r of resData?.sendResult?.result || []) {
+      const ids = [
+        r?.messageEvent?.messageId,
+        ...(r?.result?.messages || []).map((m) => m?.id),
+      ].filter(Boolean);
+      for (const id of ids) wamidsBot.set(id, Date.now());
+    }
+    if (wamidsBot.size > 500) {
+      const limite = Date.now() - 24 * 3600 * 1000;
+      for (const [id, ts] of wamidsBot) if (ts < limite) wamidsBot.delete(id);
+    }
+  } catch (_) { /* nunca romper un envío por el registro */ }
+}
+
 // Un mensaje SALIENTE que el bot no envió = una persona de la oficina está
 // atendiendo la conversación → pausamos el bot para no pisarla.
 function extraerTextoEvento(body) {
@@ -100,6 +121,34 @@ function detectarIntervencionHumana(body) {
     return;
   }
   pausarBot(clave, PAUSA_TAKEOVER_H, "intervención humana detectada (mensaje manual de oficina)");
+}
+
+// Acuse SENT: llega para TODO mensaje que sale del número de empresa, con
+// from = teléfono del cliente y data.messageId = wamid. Si el wamid no lo
+// generó el bot, es una respuesta manual de la oficina.
+function manejarAcuseSent(body) {
+  const wamid    = body?.data?.messageId || body?.messageId;
+  const telefono = body?.from;   // en los acuses SENT, from = cliente
+  const canal    = body?.channel;
+  if (!wamid || !telefono || !canal) return;
+  if (wamidsBot.has(wamid)) return;        // acuse de un envío del propio bot
+  if (NOMBRES_AGENTES[telefono]) return;   // notificación interna a un agente
+  // El acuse puede llegar antes de que procesemos la respuesta HTTP del envío
+  // del bot (donde registramos el wamid): esperar y volver a comprobar.
+  setTimeout(() => {
+    if (wamidsBot.has(wamid)) return;
+    if (!conversaciones[telefono]) return; // número que el bot no atiende
+    const clave = `${canal}_${telefono}`;
+    console.log(`[Takeover] Acuse SENT ajeno para ${telefono} (canal ${canal}) — respuesta manual de oficina`);
+    if (botActivo[clave] === false) {
+      if (pausaExpira[clave]) {
+        pausaExpira[clave] = Date.now() + PAUSA_TAKEOVER_H * 3600 * 1000;
+        redisSet("iberica:pausaExpira", pausaExpira);
+      }
+      return;
+    }
+    pausarBot(clave, PAUSA_TAKEOVER_H, "respuesta manual de oficina (acuse SENT ajeno)");
+  }, 4000);
 }
 
 // ── Registro de actividad por cliente (para el panel admin) ─
@@ -282,6 +331,7 @@ async function enviarNotificacionAgente(destinatario, datos) {
 
   try {
     const res = await enviar(body);
+    registrarWamidsEnvio(res.data);
     const sendResult = res.data?.sendResult?.result?.[0];
     const templateOk = sendResult?.ok !== 0;
 
@@ -310,6 +360,7 @@ async function enviarNotificacionAgente(destinatario, datos) {
       response:  [{ type: "TEXT", text: textoFallback }],
     };
     const res2 = await enviar(bodyTexto);
+    registrarWamidsEnvio(res2.data);
     if (res2.data?.ok === 1) {
       console.log(`[Notificación] ✅ Texto plano enviado a ${destinatario.nombre}`);
     } else {
@@ -749,6 +800,7 @@ async function enviarMensaje(telefono, mensaje) {
       body
     );
     console.log(`[Woztell] HTTP ${res.status} | Response:`, JSON.stringify(res.data));
+    registrarWamidsEnvio(res.data);
 
     if (res.data?.ok === 1) {
       console.log(`[Woztell] ✅ Mensaje enviado correctamente.`);
@@ -2175,8 +2227,8 @@ app.post("/webhook", async (req, res) => {
     // Ignorar el resto de eventos (READ, DELIVERED, SENT, etc.)
     if (tipo !== "TEXT" && !esImagen) {
       if (tipo === "SENT") {
-        // Diagnóstico takeover: ver qué trae el acuse de los envíos
-        console.log("[Takeover-diag SENT] body:", JSON.stringify(req.body).slice(0, 700));
+        // Acuse de envío: detectar respuestas manuales de la oficina
+        try { manejarAcuseSent(req.body); } catch (e) { console.error("[Takeover] Error acuse SENT:", e.message); }
       } else {
         console.log(`[Webhook] Evento ignorado (type: ${tipo}, eventType: ${eventType})`);
       }
