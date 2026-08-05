@@ -2229,6 +2229,10 @@ app.post("/webhook", async (req, res) => {
       if (tipo === "SENT") {
         // Acuse de envío: detectar respuestas manuales de la oficina
         try { manejarAcuseSent(req.body); } catch (e) { console.error("[Takeover] Error acuse SENT:", e.message); }
+      } else if (tipo === "FAILED") {
+        // Un envío (plantilla de encuesta/reseña, notificación...) NO llegó al
+        // cliente. Registrar el motivo que devuelve WhatsApp para diagnóstico.
+        console.error("[Fallo envío] body:", JSON.stringify(req.body).slice(0, 900));
       } else {
         console.log(`[Webhook] Evento ignorado (type: ${tipo}, eventType: ${eventType})`);
       }
