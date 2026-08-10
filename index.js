@@ -80,14 +80,20 @@ function registrarWamidsEnvio(resData) {
 // Un mensaje SALIENTE que el bot no envió = una persona de la oficina está
 // atendiendo la conversación → pausamos el bot para no pisarla.
 function extraerTextoEvento(body) {
-  return (
+  const t = (
     body?.data?.text ||
     body?.data?.message?.text ||
     body?.data?.body ||
     body?.text ||
+    // Ecos de coexistencia (formato Meta): data.messages[].text.body
+    body?.data?.messages?.[0]?.text?.body ||
+    body?.data?.message?.text?.body ||
     (Array.isArray(body?.response) ? body.response.map((r) => r?.text).find(Boolean) : null) ||
     null
   );
+  // data.text puede ser objeto ({body: "..."}) según el tipo de evento
+  if (t && typeof t === "object") return t.body || null;
+  return t;
 }
 function detectarIntervencionHumana(body) {
   const texto = extraerTextoEvento(body);
@@ -95,7 +101,12 @@ function detectarIntervencionHumana(body) {
   if (!texto || !canal) return;
   // Buscar al cliente entre varios campos posibles, normalizando el número
   // (Woztell puede mandarlo con +, espacios o prefijos distintos).
-  const candidatos = [body?.to, body?.from, body?.recipient, body?.data?.to, body?.member]
+  const candidatos = [
+    body?.to, body?.from, body?.recipient,
+    body?.data?.to, body?.data?.recipient,
+    body?.data?.messages?.[0]?.to,   // ecos de coexistencia (formato Meta)
+    body?.member,
+  ]
     .filter(Boolean)
     .map((t) => String(t));
   const clavesConv = Object.keys(conversaciones);
@@ -2236,11 +2247,13 @@ app.post("/webhook", async (req, res) => {
         console.error("[Fallo envío] body:", JSON.stringify(req.body).slice(0, 900));
       } else {
         console.log(`[Webhook] Evento ignorado (type: ${tipo}, eventType: ${eventType})`);
-        // Diagnóstico takeover: los tipos que no conocemos pueden ser el eco
-        // de una respuesta manual de la oficina (p. ej. modo coexistencia con
-        // la app de WhatsApp Business). Registrar su contenido para verlos.
+        // Los tipos que no conocemos pueden ser el eco de una respuesta manual
+        // de la oficina (modo coexistencia con la app de WhatsApp Business).
+        // Registrar su contenido y pasarlos por la detección de intervención
+        // humana, que solo pausa si hay texto ajeno en un chat conocido.
         if (!["READ", "DELIVERED"].includes(tipo)) {
           console.log("[Diag evento] body:", JSON.stringify(req.body).slice(0, 900));
+          try { detectarIntervencionHumana(req.body); } catch (e) { console.error("[Takeover] Error:", e.message); }
         }
       }
       return res.sendStatus(200);
