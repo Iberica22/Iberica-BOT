@@ -131,6 +131,7 @@ function manejarAcuseSent(body) {
   const telefono = body?.from;   // en los acuses SENT, from = cliente
   const canal    = body?.channel;
   if (!wamid || !telefono || !canal) return;
+  console.log(`[SENT] from=${telefono} propio=${wamidsBot.has(wamid)} wamid=...${String(wamid).slice(-12)}`);
   if (wamidsBot.has(wamid)) return;        // acuse de un envío del propio bot
   if (NOMBRES_AGENTES[telefono]) return;   // notificación interna a un agente
   // El acuse puede llegar antes de que procesemos la respuesta HTTP del envío
@@ -2235,6 +2236,12 @@ app.post("/webhook", async (req, res) => {
         console.error("[Fallo envío] body:", JSON.stringify(req.body).slice(0, 900));
       } else {
         console.log(`[Webhook] Evento ignorado (type: ${tipo}, eventType: ${eventType})`);
+        // Diagnóstico takeover: los tipos que no conocemos pueden ser el eco
+        // de una respuesta manual de la oficina (p. ej. modo coexistencia con
+        // la app de WhatsApp Business). Registrar su contenido para verlos.
+        if (!["READ", "DELIVERED"].includes(tipo)) {
+          console.log("[Diag evento] body:", JSON.stringify(req.body).slice(0, 900));
+        }
       }
       return res.sendStatus(200);
     }
