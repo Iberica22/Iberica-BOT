@@ -1646,6 +1646,24 @@ function normalizaTxt(t) {
 function esInicioCampana(texto) {
   return normalizaTxt(texto).includes(FRASE_CAMPANA);
 }
+// ── Señales de que un contacto viene del anuncio de puertas de Meta ──
+// Referral que WhatsApp adjunta al primer mensaje de un anuncio click-to-WhatsApp
+function tieneReferralAnuncio(body) {
+  const ref = body?.data?.referral || body?.referral || {};
+  return !!(ref.ctwa_clid || ref.source_id || ref.source_type || ref.headline || ref.source_url);
+}
+function mencionaAnuncio(texto) {
+  const n = normalizaTxt(texto);
+  return /(vi (tu|el|vuestro|su) anuncio|del anuncio|por el anuncio|en instagram|en facebook|me interesa la puerta)/.test(n);
+}
+function esTemaPuertas(texto) {
+  const n = normalizaTxt(texto);
+  return /(puerta (blindada|acorazada|de entrada|de seguridad|nueva)|(cambiar|renovar|poner|sustituir|presupuesto de) (la |mi |una )?puerta|blindar la puerta|acorazad)/.test(n);
+}
+// ¿Es su primer mensaje de la historia? (actividad persiste en Redis)
+function esContactoNuevo(telefono) {
+  return (actividad[telefono]?.mensajesTotal || 0) <= 1;
+}
 // ¿El contacto está dentro del flujo de captación? (con caducidad de 24 h)
 function captacionActiva(telefono) {
   const lead = captacionLeads[telefono];
@@ -1657,37 +1675,31 @@ function captacionActiva(telefono) {
   return true;
 }
 
+// Guion de cualificación de leads del anuncio de puertas. Tono útil y
+// tranquilizador desde el primer mensaje: nada de humor, nunca insinuar que
+// una puerta se abre fácil, nunca precios cerrados (líneas rojas de marca).
 const CAP = {
   bienvenida:
-    "¡Hola! 👋 Gracias por escribir a *Ibérica Seguridad*.\n" +
-    "Somos especialistas en puertas de entrada y seguridad en Almería y provincia, con más de 20 años instalando.\n\n" +
-    "Te hago un par de preguntas rápidas para orientarte bien 👇\n\n" +
-    "¿En qué *localidad* estás?",
-  necesidad:
-    "¡Genial! ¿Qué te gustaría mejorar sobre todo? Responde con un número:\n\n" +
-    "1️⃣ Seguridad\n2️⃣ Ruido / frío\n3️⃣ Estética\n4️⃣ Un poco de todo",
-  fotos:
-    "Perfecto. Para decirte qué te conviene de verdad, mándame *dos fotos de tu puerta*:\n\n" +
-    "📸 una por dentro\n📸 una por fuera\n\n" +
-    "Con eso te oriento sin ningún compromiso. (Si ahora no puedes, escribe *más tarde* y seguimos igualmente.)",
-  plazo:
-    "¡Gracias! 🙌 Última pregunta: ¿para cuándo lo necesitas? Responde con un número:\n\n" +
-    "1️⃣ Cuanto antes\n2️⃣ En 1-3 meses\n3️⃣ Solo me estoy informando",
+    "¡Hola! 👋 Soy Marta, de Ibérica Seguridad. Puertas y seguridad en Almería desde 1996, con taller propio: quien te atiende es de la casa, sin intermediarios.",
+  foto:
+    "Para ayudarte mejor, ¿me mandas una foto de tu puerta actual? (y de la cerradura si puedes 📸) Así uno de nuestros técnicos la valora gratis y sin compromiso.",
+  zona: "¿En qué zona o localidad estás?",
+  mejora: "¿Y qué te gustaría mejorar: más seguridad, cambiarla entera, aislamiento, ruido…?",
+  plazo: "Última pregunta 🙂 ¿Para cuándo lo necesitas?",
   cierre:
-    "¡Perfecto! 🙌 Un especialista revisa tus datos y te orienta enseguida sobre la mejor opción para tu vivienda.\n" +
-    "Estás en buenas manos. 🙂",
+    "Con esto ya lo veo claro. Te paso con un compañero del equipo para concretar y darte una valoración. En breve te escribe. 🔐",
   precio:
-    "Buena pregunta 🙂 El precio depende del tipo de puerta, las medidas y el estado del hueco, así que darte una cifra al aire sería engañarte.\n" +
-    "Con tus dos fotos te oriento gratis y, si encaja, hacemos medición y presupuesto cerrado sin compromiso.",
-  reintenta: "Por favor, responde con uno de los números de la lista 🙂",
-  NECESIDAD: { "1": "Seguridad", "2": "Ruido / frío", "3": "Estética", "4": "Un poco de todo" },
-  PLAZO: { "1": "Cuanto antes", "2": "En 1-3 meses", "3": "Solo se informa" },
+    "Te entiendo, pero darte una cifra al aire sería engañarte: el precio depende del tipo de puerta, las medidas y lo que se instale.\n" +
+    "Con la foto de tu puerta, el técnico te da una valoración gratis y sin compromiso.",
+  duda: "Eso te lo concreta el técnico al valorar tu puerta, gratis y sin compromiso 🙂",
+  sin_foto: "Sin problema, me la mandas cuando puedas 🙂",
+  gracias_foto: "¡Recibida, gracias! 📸",
   pregunta(step) {
     return {
-      cap_localidad: "¿En qué *localidad* estás?",
-      cap_necesidad: this.necesidad,
-      cap_fotos: this.fotos,
-      cap_plazo: this.plazo,
+      cap_inicio: this.foto,
+      cap_zona:   this.zona,
+      cap_mejora: this.mejora,
+      cap_plazo:  this.plazo,
     }[step] || null;
   },
 };
@@ -1695,10 +1707,11 @@ const CAP = {
 // Envía un texto al lead usando su canal/miembro de Woztell (aislado de enviarMensaje)
 async function enviarCap(lead, mensaje) {
   try {
-    await axios.post(
+    const res = await axios.post(
       `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
       { channelId: lead.channelId, memberId: lead.memberId, response: [{ type: "TEXT", text: mensaje }] }
     );
+    registrarWamidsEnvio(res.data);
     console.log(`[Captación] ✅ → ${lead.telefono}: "${mensaje.slice(0, 50)}..."`);
   } catch (e) {
     console.error(`[Captación] ❌ Envío falló:`, e.response?.data || e.message);
@@ -1710,18 +1723,19 @@ async function notificarLeadPuertas(datos) {
   try {
     const dest = determinarDestinatarioNotificacion();
     const texto =
-      `🚪 *Nuevo LEAD de puertas (campaña)*\n` +
+      `🚪 *Nuevo LEAD de puertas (anuncio)*\n` +
       `📞 Teléfono: ${datos.telefono}\n` +
-      `📍 Localidad: ${datos.localidad || "—"}\n` +
-      `🎯 Quiere mejorar: ${datos.necesidad || "—"}\n` +
+      `📍 Zona: ${datos.zona || "—"}\n` +
+      `🎯 Quiere mejorar: ${datos.mejora || "—"}\n` +
       `⏱️ Plazo: ${datos.plazo || "—"}\n` +
       `📷 Fotos: ${datos.fotos ? "sí" : "no"}\n` +
       `📢 Origen: ${datos.origen || "—"}\n\n` +
       `Atiéndelo desde el inbox de Woztell.`;
-    await axios.post(
+    const res = await axios.post(
       `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
       { channelId: dest.channelId, memberId: dest.memberId, response: [{ type: "TEXT", text: texto }] }
     );
+    registrarWamidsEnvio(res.data);
     console.log(`[Captación] ✅ Aviso de lead enviado a ${dest.nombre}`);
   } catch (e) {
     console.error(`[Captación] ❌ Aviso de lead falló:`, e.response?.data || e.message);
@@ -1734,7 +1748,7 @@ async function handoffCaptacion(telefono, channelId) {
   const lead = captacionLeads[telefono] || {};
   const datos = {
     telefono,
-    localidad: lead.localidad, necesidad: lead.necesidad,
+    zona: lead.zona, mejora: lead.mejora,
     plazo: lead.plazo, fotos: !!lead.fotos, origen: lead.origen,
   };
   console.log(`[Captación] ✅ Lead cualificado:`, JSON.stringify(datos));
@@ -1748,21 +1762,24 @@ async function handoffCaptacion(telefono, channelId) {
   delete captacionLeads[telefono];
 }
 
-// Máquina de estados de la captación
+// Máquina de estados de la cualificación: saludo+foto → zona → mejora →
+// plazo → cierre con derivación al equipo. Respuestas en texto libre (sin
+// menús numerados); las preguntas se hacen de una en una.
 async function manejarCaptacion({ telefono, memberId, channelId, texto, esImagen, req }) {
   let lead = captacionLeads[telefono];
 
-  // Primer contacto (viene del anuncio) → bienvenida y captura de origen
+  // Primer contacto (viene del anuncio) → bienvenida, foto y captura de origen
   if (!lead) {
-    console.log(`[Captación] PRIMER CONTACTO — payload:`, JSON.stringify(req.body));
+    console.log(`[Captación] PRIMER CONTACTO — payload:`, JSON.stringify(req.body).slice(0, 600));
     const ref = req.body?.data?.referral || req.body?.referral || {};
     const origen = ref.headline || ref.source_id || ref.ctwa_clid || ref.body || null;
     lead = captacionLeads[telefono] = {
-      telefono, step: "cap_localidad",
-      localidad: null, necesidad: null, plazo: null, fotos: false,
+      telefono, step: "cap_inicio",
+      zona: null, mejora: null, plazo: null, fotos: !!esImagen,
       origen, memberId, channelId, updatedAt: Date.now(),
     };
     await enviarCap(lead, CAP.bienvenida);
+    await enviarCap(lead, CAP.foto);
     return;
   }
 
@@ -1771,54 +1788,71 @@ async function manejarCaptacion({ telefono, memberId, channelId, texto, esImagen
   lead.updatedAt = Date.now();
 
   const msg = (texto || "").trim();
-  const low = msg.toLowerCase();
+  const low = normalizaTxt(msg);
 
-  // Globales
-  if (/(agente|persona|humano|hablar con)/i.test(low)) {
-    await enviarCap(lead, "Claro, te paso con una persona del equipo que te atiende enseguida. 🙂");
+  // Foto en cualquier momento: agradecer y seguir con la pregunta que toque
+  if (esImagen) {
+    lead.fotos = true;
+    await enviarCap(lead, CAP.gracias_foto);
+    if (lead.step === "cap_inicio") {
+      lead.step = "cap_zona";
+      await enviarCap(lead, CAP.zona);
+    }
+    return;
+  }
+  if (!msg) return;
+
+  // Pide una persona → derivar ya
+  if (/(agente|persona|humano|hablar con alguien|que me llam)/.test(low)) {
+    await enviarCap(lead, "Claro, te paso con un compañero del equipo que te atiende enseguida 🙂");
     return handoffCaptacion(telefono, channelId);
   }
-  if (/(precio|cu[aá]nto|coste|cuesta|vale|presupuesto)/i.test(low) && lead.step !== "cap_plazo") {
+  // Pregunta por precio → nunca cifras: reconducir a la foto y la valoración
+  if (/(precio|cuant.* (cuesta|vale|es|sale)|coste|cuesta|presupuesto|euros)/.test(low)) {
     await enviarCap(lead, CAP.precio);
     const q = CAP.pregunta(lead.step);
     if (q) await enviarCap(lead, q);
     return;
   }
+  // Pregunta suelta que no es la respuesta → contestar breve y repetir pregunta.
+  // Ojo: "cuanto antes" o "cuando pueda" son respuestas válidas de plazo, no
+  // preguntas — por eso los interrogativos temporales no cuentan sin "?".
+  const esPregunta = /\?/.test(msg) || /^¿/.test(msg) || /^(que|cual|como|donde|por que)\s/.test(low);
 
   switch (lead.step) {
-    case "cap_localidad":
-      lead.localidad = msg;
-      lead.step = "cap_necesidad";
-      await enviarCap(lead, CAP.necesidad);
-      return;
-
-    case "cap_necesidad":
-      if (!CAP.NECESIDAD[low]) { await enviarCap(lead, CAP.reintenta); return; }
-      lead.necesidad = CAP.NECESIDAD[low];
-      lead.step = "cap_fotos";
-      await enviarCap(lead, CAP.fotos);
-      return;
-
-    case "cap_fotos":
-      if (esImagen) lead.fotos = true;
-      if (esImagen || /(m[aá]s tarde|luego|despu[eé]s|ya|listo|enviad|hecho|no tengo|no puedo)/i.test(low)) {
-        lead.step = "cap_plazo";
-        if (esImagen) await enviarCap(lead, "¡Recibidas, gracias! 📷");
-        await enviarCap(lead, CAP.plazo);
-      } else {
-        await enviarCap(lead, "Cuando puedas, mándame las dos fotos (dentro y fuera). Si prefieres seguir sin ellas, escribe *más tarde*. 🙂");
+    case "cap_inicio": // respondió con texto a la petición de foto
+      if (/(no puedo|no tengo|luego|mas tarde|despues|ahora no)/.test(low)) {
+        await enviarCap(lead, CAP.sin_foto);
+      } else if (esPregunta) {
+        await enviarCap(lead, CAP.duda);
       }
+      lead.step = "cap_zona";
+      await enviarCap(lead, CAP.zona);
+      return;
+
+    case "cap_zona":
+      if (esPregunta) { await enviarCap(lead, CAP.duda); await enviarCap(lead, CAP.zona); return; }
+      lead.zona = msg;
+      lead.step = "cap_mejora";
+      await enviarCap(lead, CAP.mejora);
+      return;
+
+    case "cap_mejora":
+      if (esPregunta) { await enviarCap(lead, CAP.duda); await enviarCap(lead, CAP.mejora); return; }
+      lead.mejora = msg;
+      lead.step = "cap_plazo";
+      await enviarCap(lead, CAP.plazo);
       return;
 
     case "cap_plazo":
-      if (!CAP.PLAZO[low]) { await enviarCap(lead, CAP.reintenta); return; }
-      lead.plazo = CAP.PLAZO[low];
+      if (esPregunta) { await enviarCap(lead, CAP.duda); await enviarCap(lead, CAP.plazo); return; }
+      lead.plazo = msg;
       await enviarCap(lead, CAP.cierre);
       return handoffCaptacion(telefono, channelId);
 
     default:
-      lead.step = "cap_localidad";
-      await enviarCap(lead, CAP.bienvenida);
+      lead.step = "cap_inicio";
+      await enviarCap(lead, CAP.foto);
       return;
   }
 }
@@ -2281,19 +2315,25 @@ app.post("/webhook", async (req, res) => {
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // CAPTACIÓN — Campaña de puertas (leads de anuncios)
-    // Flujo aislado. Se activa 24/7 si el primer mensaje trae la frase de
-    // la campaña, o si el contacto ya está dentro del flujo de captación.
-    // Los clientes normales NUNCA envían esa frase → siguen con el menú.
+    // CAPTACIÓN — Leads del anuncio de puertas (regla especial, con
+    // prioridad sobre el saludo genérico)
+    // En el canal de la campaña, TODO contacto nuevo viene del anuncio →
+    // se asume puertas directamente (aunque solo diga "hola").
     // ══════════════════════════════════════════════════════════════════
     if (CAMPANA_CHANNEL_ID && channelId === CAMPANA_CHANNEL_ID &&
-        (esInicioCampana(texto) || captacionActiva(telefono))) {
+        (esInicioCampana(texto) || captacionActiva(telefono) || esContactoNuevo(telefono) ||
+         tieneReferralAnuncio(req.body) || mencionaAnuncio(texto) || esTemaPuertas(texto))) {
       await manejarCaptacion({ telefono, memberId, channelId, texto, esImagen, req });
       return res.sendStatus(200);
     }
 
     // A partir de aquí, el flujo normal solo continúa con mensajes de TEXTO.
     if (tipo !== "TEXT") {
+      // Un lead en cualificación puede mandar su foto por un canal normal
+      if (esImagen && captacionActiva(telefono) && botActivo[`${channelId}_${telefono}`] !== false) {
+        await manejarCaptacion({ telefono, memberId, channelId, texto: "", esImagen, req });
+        return res.sendStatus(200);
+      }
       // Foto/documento fuera de la campaña: con la IA activa, agradecerla en
       // vez de ignorarla en silencio (la oficina la ve en la bandeja).
       if (
@@ -2368,6 +2408,18 @@ app.post("/webhook", async (req, res) => {
     console.log(`[Horario] Canal: ${channelId} | Minutos Madrid: ${minutosMadrid} | Bot activo: ${activo}`);
     if (!activo) {
       console.log(`[Webhook] Horario comercial — bot inactivo para canal ${channelId}, mensaje ignorado`);
+      return res.sendStatus(200);
+    }
+
+    // ── Leads del anuncio de puertas en los canales normales ──────────
+    // Un contacto NUEVO que llega con el referral del anuncio, lo menciona
+    // o pregunta directamente por puertas → cualificación de lead. Un "hola"
+    // suelto aquí sigue el flujo normal (solo en el canal de campaña se
+    // asume puertas); urgencias, domótica, etc. no cambian.
+    if (captacionActiva(telefono) ||
+        (!conversaciones[telefono] && esContactoNuevo(telefono) &&
+         (tieneReferralAnuncio(req.body) || mencionaAnuncio(texto) || esTemaPuertas(texto)))) {
+      await manejarCaptacion({ telefono, memberId, channelId, texto, esImagen, req });
       return res.sendStatus(200);
     }
 
