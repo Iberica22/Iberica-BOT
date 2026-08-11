@@ -1680,9 +1680,9 @@ function captacionActiva(telefono) {
 // una puerta se abre fácil, nunca precios cerrados (líneas rojas de marca).
 const CAP = {
   bienvenida:
-    "¡Hola! 👋 Soy Marta, de Ibérica Seguridad. Puertas y seguridad en Almería desde 1996, con taller propio: quien te atiende es de la casa, sin intermediarios.",
+    "¡Hola! 👋 Soy Marta, de Ibérica Seguridad. ¿Me mandas una foto de tu puerta actual? (y de la cerradura si puedes 📸) Así uno de nuestros técnicos la valora gratis y sin compromiso.",
   foto:
-    "Para ayudarte mejor, ¿me mandas una foto de tu puerta actual? (y de la cerradura si puedes 📸) Así uno de nuestros técnicos la valora gratis y sin compromiso.",
+    "Cuando puedas, mándame una foto de tu puerta actual (y de la cerradura si puedes 📸) y uno de nuestros técnicos la valora gratis y sin compromiso.",
   zona: "¿En qué zona o localidad estás?",
   mejora: "¿Y qué te gustaría mejorar: más seguridad, cambiarla entera, aislamiento, ruido…?",
   plazo: "Última pregunta 🙂 ¿Para cuándo lo necesitas?",
@@ -1779,7 +1779,6 @@ async function manejarCaptacion({ telefono, memberId, channelId, texto, esImagen
       origen, memberId, channelId, updatedAt: Date.now(),
     };
     await enviarCap(lead, CAP.bienvenida);
-    await enviarCap(lead, CAP.foto);
     return;
   }
 
