@@ -928,6 +928,9 @@ SERVICIOS:
 - Financiación disponible: 12 cuotas sin intereses con Cetelem.
 `;
 
+// ── Últimos eventos crudos del webhook (GET /admin/api/eventos) ──
+const eventosRecientes = [];
+
 // ── Registro de decisiones (visible en GET /admin/api/ia-log) ──
 const iaLog = [];
 function registrarDecisionIA(entrada) {
@@ -2228,6 +2231,11 @@ app.get("/admin/api/ia-log", authAdmin, (req, res) => {
   res.json({ modo: IA_MODO, nombre: BOT_NOMBRE, decisiones: iaLog });
 });
 
+// ── Últimos eventos crudos del webhook (diagnóstico) ─────────
+app.get("/admin/api/eventos", authAdmin, (req, res) => {
+  res.json({ total: eventosRecientes.length, eventos: eventosRecientes });
+});
+
 // ── Health check ─────────────────────────────────────────────
 app.get("/health", (req, res) => {
   res.json({
@@ -2241,6 +2249,10 @@ app.get("/health", (req, res) => {
 // ── Webhook de Woztell ───────────────────────────────────────
 app.post("/webhook", async (req, res) => {
   try {
+    // Guardar el evento crudo para diagnóstico (GET /admin/api/eventos)
+    eventosRecientes.unshift({ ts: new Date().toISOString(), body: req.body });
+    if (eventosRecientes.length > 80) eventosRecientes.pop();
+
     const tipo       = (req.body?.type || "").toUpperCase();
     const eventType  = (req.body?.eventType || "").toUpperCase();
 
