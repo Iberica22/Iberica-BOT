@@ -2315,6 +2315,21 @@ app.get("/admin/api/eventos", authAdmin, (req, res) => {
   res.json({ total: eventosRecientes.length, eventos: eventosRecientes });
 });
 
+// ── Prueba de la llamada de aviso desde el navegador ─────────
+// GET /admin/api/test-llamada           → llama al teléfono de turno
+// GET /admin/api/test-llamada?tel=34... → llama a ese número
+app.get("/admin/api/test-llamada", authAdmin, async (req, res) => {
+  const resultado = await llamarAvisoParte({
+    refParte:    "PRUEBA-001",
+    nombre:      "Cliente de Prueba",
+    telefono:    "600123456",
+    direccion:   "Calle San Leonardo 34, Almería",
+    descripcion: "Esto es una prueba del aviso por voz. Si la oyes entera, funciona.",
+    numeroAviso: req.query.tel || null,
+  });
+  res.json(resultado);
+});
+
 // ── Webhook de Zoho Flow: parte creado → llamada de aviso ────
 // Zoho Flow llama aquí cuando se crea un parte en el CRM y el bot lanza la
 // llamada de voz al teléfono de turno. Seguridad: ?k=<AVISO_LLAMADA_KEY>.
