@@ -134,32 +134,61 @@ function detectarIntervencionHumana(body) {
   pausarBot(clave, PAUSA_TAKEOVER_H, "intervención humana detectada (mensaje manual de oficina)");
 }
 
-// Acuse SENT: llega para TODO mensaje que sale del número de empresa, con
-// from = teléfono del cliente y data.messageId = wamid. Si el wamid no lo
-// generó el bot, es una respuesta manual de la oficina.
-function manejarAcuseSent(body) {
+// ¿wamid de un mensaje escrito desde la app de WhatsApp Business (modo
+// coexistencia)? Los mensajes enviados por la API llevan el número del
+// destinatario codificado en el wamid; los escritos a mano desde la app
+// llevan un id interno tipo "ES.2075163706548740". Es la única señal que
+// Woztell nos da de esos mensajes (no llegan ecos con el texto, y tampoco
+// generan acuse SENT — solo DELIVERED y READ).
+function esWamidDeApp(wamid) {
+  try {
+    const dec = Buffer.from(String(wamid).replace(/^wamid\./, ""), "base64").toString("latin1");
+    return /[A-Z]{2}\.\d{6,}/.test(dec);
+  } catch (_) { return false; }
+}
+
+function pausarPorIntervencion(canal, telefono, motivo) {
+  const clave = `${canal}_${telefono}`;
+  if (botActivo[clave] === false) {
+    // Ya pausado: si era pausa temporal, extenderla mientras siga la persona
+    if (pausaExpira[clave]) {
+      pausaExpira[clave] = Date.now() + PAUSA_TAKEOVER_H * 3600 * 1000;
+      redisSet("iberica:pausaExpira", pausaExpira);
+    }
+    return;
+  }
+  console.log(`[Takeover] ${motivo} — ${telefono} (canal ${canal})`);
+  pausarBot(clave, PAUSA_TAKEOVER_H, motivo);
+}
+
+// Acuses de envío (SENT/DELIVERED/READ): llegan para TODO mensaje que sale
+// del número de empresa, con from = teléfono del cliente y data.messageId =
+// wamid. Si el wamid no lo generó el bot, lo envió una persona.
+function manejarAcuseEnvio(body, tipo) {
   const wamid    = body?.data?.messageId || body?.messageId;
-  const telefono = body?.from;   // en los acuses SENT, from = cliente
+  const telefono = body?.from;   // en los acuses, from = cliente
   const canal    = body?.channel;
   if (!wamid || !telefono || !canal) return;
-  console.log(`[SENT] from=${telefono} propio=${wamidsBot.has(wamid)} wamid=...${String(wamid).slice(-12)}`);
   if (wamidsBot.has(wamid)) return;        // acuse de un envío del propio bot
   if (NOMBRES_AGENTES[telefono]) return;   // notificación interna a un agente
-  // El acuse puede llegar antes de que procesemos la respuesta HTTP del envío
-  // del bot (donde registramos el wamid): esperar y volver a comprobar.
+
+  // Mensaje escrito desde la app del móvil → intervención humana segura
+  if (esWamidDeApp(wamid)) {
+    if (!conversaciones[telefono]) return; // chat que el bot no atiende
+    pausarPorIntervencion(canal, telefono, "respuesta manual desde la app de WhatsApp");
+    return;
+  }
+
+  // DELIVERED/READ de envíos API con wamid desconocido: pueden ser mensajes
+  // del propio bot anteriores a un reinicio (el registro vive en memoria) —
+  // no son señal fiable. Solo el acuse SENT desconocido indica un envío
+  // API ajeno (p. ej. inbox de Woztell), con margen por si el acuse llega
+  // antes que la respuesta HTTP del envío del bot.
+  if (tipo !== "SENT") return;
   setTimeout(() => {
     if (wamidsBot.has(wamid)) return;
-    if (!conversaciones[telefono]) return; // número que el bot no atiende
-    const clave = `${canal}_${telefono}`;
-    console.log(`[Takeover] Acuse SENT ajeno para ${telefono} (canal ${canal}) — respuesta manual de oficina`);
-    if (botActivo[clave] === false) {
-      if (pausaExpira[clave]) {
-        pausaExpira[clave] = Date.now() + PAUSA_TAKEOVER_H * 3600 * 1000;
-        redisSet("iberica:pausaExpira", pausaExpira);
-      }
-      return;
-    }
-    pausarBot(clave, PAUSA_TAKEOVER_H, "respuesta manual de oficina (acuse SENT ajeno)");
+    if (!conversaciones[telefono]) return;
+    pausarPorIntervencion(canal, telefono, "respuesta manual de oficina (acuse SENT ajeno)");
   }, 4000);
 }
 
@@ -2283,9 +2312,9 @@ app.post("/webhook", async (req, res) => {
 
     // Ignorar el resto de eventos (READ, DELIVERED, SENT, etc.)
     if (tipo !== "TEXT" && !esImagen) {
-      if (tipo === "SENT") {
-        // Acuse de envío: detectar respuestas manuales de la oficina
-        try { manejarAcuseSent(req.body); } catch (e) { console.error("[Takeover] Error acuse SENT:", e.message); }
+      if (["SENT", "DELIVERED", "READ"].includes(tipo)) {
+        // Acuses de envío: detectar respuestas manuales de la oficina
+        try { manejarAcuseEnvio(req.body, tipo); } catch (e) { console.error("[Takeover] Error acuse:", e.message); }
       } else if (tipo === "FAILED") {
         // Un envío (plantilla de encuesta/reseña, notificación...) NO llegó al
         // cliente. Registrar el motivo que devuelve WhatsApp para diagnóstico.
