@@ -1707,31 +1707,32 @@ function captacionActiva(telefono) {
   return true;
 }
 
-// Guion de cualificación de leads del anuncio de puertas. Tono útil y
-// tranquilizador desde el primer mensaje: nada de humor, nunca insinuar que
-// una puerta se abre fácil, nunca precios cerrados (líneas rojas de marca).
+// Guion de cualificación de leads del anuncio de puertas — versión con guía.
+// Primero VALOR (la guía gratis), la guía trabaja, y cuando el lead responde
+// se le invita a la foto para la valoración del técnico. Tono útil y
+// tranquilizador: nada de humor, nunca insinuar que una puerta se abre
+// fácil, nunca precios cerrados (líneas rojas de marca).
+const GUIA_URL = "https://iberica22.github.io/Iberica-BOT/guia-cambiar-puerta.pdf";
 const CAP = {
   bienvenida:
-    "¡Hola! 👋 Soy Marta, de Ibérica Seguridad. ¿Me mandas una foto de tu puerta actual? (y de la cerradura si puedes 📸) Así uno de nuestros técnicos la valora gratis y sin compromiso.",
+    "¡Hola! 👋 Soy Marta, de Ibérica Seguridad: puertas y seguridad en Almería, con taller propio desde 1996 y sin intermediarios.\n" +
+    "Te paso una guía rápida y gratis para saber si de verdad te toca cambiar tu puerta, sin compromiso 🙂 👉 " + GUIA_URL,
   foto:
-    "Cuando puedas, mándame una foto de tu puerta actual (y de la cerradura si puedes 📸) y uno de nuestros técnicos la valora gratis y sin compromiso.",
+    "Si quieres algo a tu medida, mándame una foto de tu puerta y de la cerradura y te la valora un técnico gratis y sin compromiso 📸",
   zona: "¿En qué zona o localidad estás?",
-  mejora: "¿Y qué te gustaría mejorar: más seguridad, cambiarla entera, aislamiento, ruido…?",
-  plazo: "Última pregunta 🙂 ¿Para cuándo lo necesitas?",
   cierre:
     "Con esto ya lo veo claro. Te paso con un compañero del equipo para concretar y darte una valoración. En breve te escribe. 🔐",
   precio:
-    "Te entiendo, pero darte una cifra al aire sería engañarte: el precio depende del tipo de puerta, las medidas y lo que se instale.\n" +
-    "Con la foto de tu puerta, el técnico te da una valoración gratis y sin compromiso.",
+    "Te entiendo, pero darte una cifra al aire sería engañarte: depende de las medidas y del modelo.\n" +
+    "Si quieres algo a tu medida, mándame una foto de tu puerta y de la cerradura y te la valora un técnico gratis y sin compromiso 📸",
   duda: "Eso te lo concreta el técnico al valorar tu puerta, gratis y sin compromiso 🙂",
   sin_foto: "Sin problema, me la mandas cuando puedas 🙂",
   gracias_foto: "¡Recibida, gracias! 📸",
   pregunta(step) {
     return {
-      cap_inicio: this.foto,
-      cap_zona:   this.zona,
-      cap_mejora: this.mejora,
-      cap_plazo:  this.plazo,
+      cap_guia: this.foto,
+      cap_foto: this.foto,
+      cap_zona: this.zona,
     }[step] || null;
   },
 };
@@ -1794,19 +1795,19 @@ async function handoffCaptacion(telefono, channelId) {
   delete captacionLeads[telefono];
 }
 
-// Máquina de estados de la cualificación: saludo+foto → zona → mejora →
-// plazo → cierre con derivación al equipo. Respuestas en texto libre (sin
-// menús numerados); las preguntas se hacen de una en una.
+// Máquina de estados de la cualificación (versión con guía):
+//   saludo+guía → (el lead responde) → invitación a la foto → foto → zona →
+//   cierre derivando al equipo. Respuestas en texto libre, sin menús.
 async function manejarCaptacion({ telefono, memberId, channelId, texto, esImagen, req }) {
   let lead = captacionLeads[telefono];
 
-  // Primer contacto (viene del anuncio) → bienvenida, foto y captura de origen
+  // Primer contacto (viene del anuncio) → saludo + guía y captura de origen
   if (!lead) {
     console.log(`[Captación] PRIMER CONTACTO — payload:`, JSON.stringify(req.body).slice(0, 600));
     const ref = req.body?.data?.referral || req.body?.referral || {};
     const origen = ref.headline || ref.source_id || ref.ctwa_clid || ref.body || null;
     lead = captacionLeads[telefono] = {
-      telefono, step: "cap_inicio",
+      telefono, step: "cap_guia",
       zona: null, mejora: null, plazo: null, fotos: !!esImagen,
       origen, memberId, channelId, updatedAt: Date.now(),
     };
@@ -1821,11 +1822,11 @@ async function manejarCaptacion({ telefono, memberId, channelId, texto, esImagen
   const msg = (texto || "").trim();
   const low = normalizaTxt(msg);
 
-  // Foto en cualquier momento: agradecer y seguir con la pregunta que toque
+  // Foto en cualquier momento: agradecer y pasar a la zona
   if (esImagen) {
     lead.fotos = true;
     await enviarCap(lead, CAP.gracias_foto);
-    if (lead.step === "cap_inicio") {
+    if (lead.step === "cap_guia" || lead.step === "cap_foto") {
       lead.step = "cap_zona";
       await enviarCap(lead, CAP.zona);
     }
@@ -1838,24 +1839,28 @@ async function manejarCaptacion({ telefono, memberId, channelId, texto, esImagen
     await enviarCap(lead, "Claro, te paso con un compañero del equipo que te atiende enseguida 🙂");
     return handoffCaptacion(telefono, channelId);
   }
-  // Pregunta por precio → nunca cifras: reconducir a la foto y la valoración
+  // Pregunta por precio → nunca cifras: depende de medidas y modelo, y la
+  // respuesta ya invita a la foto (paso exacto de la guía)
   if (/(precio|cuant.* (cuesta|vale|es|sale)|coste|cuesta|presupuesto|euros)/.test(low)) {
     await enviarCap(lead, CAP.precio);
-    const q = CAP.pregunta(lead.step);
-    if (q) await enviarCap(lead, q);
+    if (lead.step === "cap_guia") lead.step = "cap_foto";
+    else if (lead.step === "cap_zona") await enviarCap(lead, CAP.zona);
     return;
   }
-  // Pregunta suelta que no es la respuesta → contestar breve y repetir pregunta.
-  // Ojo: "cuanto antes" o "cuando pueda" son respuestas válidas de plazo, no
-  // preguntas — por eso los interrogativos temporales no cuentan sin "?".
+  // Pregunta suelta que no es la respuesta → contestar breve y seguir
   const esPregunta = /\?/.test(msg) || /^¿/.test(msg) || /^(que|cual|como|donde|por que)\s/.test(low);
 
   switch (lead.step) {
-    case "cap_inicio": // respondió con texto a la petición de foto
+    case "cap_guia": // respondió algo tras recibir la guía → invitar a la foto
+      if (esPregunta) await enviarCap(lead, CAP.duda);
+      lead.step = "cap_foto";
+      await enviarCap(lead, CAP.foto);
+      return;
+
+    case "cap_foto": // le hemos pedido la foto y responde con texto
+      if (esPregunta) { await enviarCap(lead, CAP.duda); await enviarCap(lead, CAP.foto); return; }
       if (/(no puedo|no tengo|luego|mas tarde|despues|ahora no)/.test(low)) {
         await enviarCap(lead, CAP.sin_foto);
-      } else if (esPregunta) {
-        await enviarCap(lead, CAP.duda);
       }
       lead.step = "cap_zona";
       await enviarCap(lead, CAP.zona);
@@ -1864,25 +1869,11 @@ async function manejarCaptacion({ telefono, memberId, channelId, texto, esImagen
     case "cap_zona":
       if (esPregunta) { await enviarCap(lead, CAP.duda); await enviarCap(lead, CAP.zona); return; }
       lead.zona = msg;
-      lead.step = "cap_mejora";
-      await enviarCap(lead, CAP.mejora);
-      return;
-
-    case "cap_mejora":
-      if (esPregunta) { await enviarCap(lead, CAP.duda); await enviarCap(lead, CAP.mejora); return; }
-      lead.mejora = msg;
-      lead.step = "cap_plazo";
-      await enviarCap(lead, CAP.plazo);
-      return;
-
-    case "cap_plazo":
-      if (esPregunta) { await enviarCap(lead, CAP.duda); await enviarCap(lead, CAP.plazo); return; }
-      lead.plazo = msg;
       await enviarCap(lead, CAP.cierre);
       return handoffCaptacion(telefono, channelId);
 
     default:
-      lead.step = "cap_inicio";
+      lead.step = "cap_foto";
       await enviarCap(lead, CAP.foto);
       return;
   }
