@@ -319,8 +319,19 @@ async function llamarAvisoParte(datos) {
     console.log("[Aviso-voz] ElevenLabs no configurado — llamada omitida");
     return { ok: false, motivo: "elevenlabs_no_configurado" };
   }
-  const dest   = determinarDestinatarioNotificacion();
-  const numero = datos.numeroAviso || dest.telefono;
+  const dest = determinarDestinatarioNotificacion();
+  let nombreDest = dest.nombre;
+  let numero     = datos.numeroAviso || dest.telefono;
+  // De 15:00 a 17:00 (L-V) la llamada de aviso va al fijo de la oficina
+  if (!datos.numeroAviso) {
+    const dia = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", weekday: "long" })
+      .format(new Date()).toLowerCase();
+    const min = minutosActualesMadrid();
+    if (!["sábado", "domingo"].includes(dia) && min >= 15 * 60 && min < 17 * 60) {
+      nombreDest = "Oficina";
+      numero = "34950088086";
+    }
+  }
   if (!numero) return { ok: false, motivo: "sin_telefono_de_turno" };
   const proveedor = process.env.ELEVENLABS_PROVIDER === "sip-trunk" ? "sip-trunk" : "twilio";
   try {
@@ -332,7 +343,7 @@ async function llamarAvisoParte(datos) {
         to_number: "+" + String(numero).replace(/^\+/, ""),
         conversation_initiation_client_data: {
           dynamic_variables: {
-            agente:           dest.nombre,
+            agente:           nombreDest,
             cliente:          datos.nombre      || "no indicado",
             telefono_cliente: datos.telefono    || "no indicado",
             direccion:        datos.direccion   || "no indicada",
@@ -343,8 +354,8 @@ async function llamarAvisoParte(datos) {
       },
       { headers: { "xi-api-key": ELEVENLABS_API_KEY }, timeout: 15000 }
     );
-    console.log(`[Aviso-voz] ✅ Llamando a ${dest.nombre} (${numero}) — parte ${datos.refParte || "—"}`);
-    return { ok: true, destinatario: dest.nombre, numero };
+    console.log(`[Aviso-voz] ✅ Llamando a ${nombreDest} (${numero}) — parte ${datos.refParte || "—"}`);
+    return { ok: true, destinatario: nombreDest, numero };
   } catch (e) {
     console.error("[Aviso-voz] ❌ Falló la llamada:", e.response?.status, JSON.stringify(e.response?.data || e.message).slice(0, 300));
     return { ok: false, motivo: "error_api" };
