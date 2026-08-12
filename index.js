@@ -322,12 +322,11 @@ async function llamarAvisoParte(datos) {
   const dest = determinarDestinatarioNotificacion();
   let nombreDest = dest.nombre;
   let numero     = datos.numeroAviso || dest.telefono;
-  // De 15:00 a 17:00 (L-V) la llamada de aviso va al fijo de la oficina
+  // De 15:00 a 17:00 (todos los días, fines de semana incluidos) la llamada
+  // de aviso va al fijo de la oficina
   if (!datos.numeroAviso) {
-    const dia = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", weekday: "long" })
-      .format(new Date()).toLowerCase();
     const min = minutosActualesMadrid();
-    if (!["sábado", "domingo"].includes(dia) && min >= 15 * 60 && min < 17 * 60) {
+    if (min >= 15 * 60 && min < 17 * 60) {
       nombreDest = "Oficina";
       numero = "34950088086";
     }
