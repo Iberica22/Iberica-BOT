@@ -1715,8 +1715,8 @@ function captacionActiva(telefono) {
 const GUIA_URL = "https://iberica22.github.io/Iberica-BOT/guia-cambiar-puerta.pdf";
 const CAP = {
   bienvenida:
-    "¡Hola! 👋 Soy Marta, de Ibérica Seguridad: puertas y seguridad en Almería, con taller propio desde 1996 y sin intermediarios.\n" +
-    "Te paso una guía rápida y gratis para saber si de verdad te toca cambiar tu puerta, sin compromiso 🙂 👉 " + GUIA_URL,
+    "¡Hola! 👋 Soy Marta, de Ibérica Seguridad 🙂\n" +
+    "Te dejo una guía rápida y gratis para saber si de verdad te toca cambiar tu puerta — sin compromiso 👉 " + GUIA_URL,
   foto:
     "Si quieres algo a tu medida, mándame una foto de tu puerta y de la cerradura y te la valora un técnico gratis y sin compromiso 📸",
   zona: "¿En qué zona o localidad estás?",
