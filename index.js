@@ -289,18 +289,67 @@ const NOTIFICACIONES_CONFIG = {
     nombre: "Mari",
     channelId: CANAL_NOTIFICACIONES,         // Canal de Noe
     memberId: "69af09efc4b8eeaf96583f6e",   // ✅ Mari (34674163817) → canal Noe
+    telefono: "34674163817",
   },
   nieves: {
     nombre: "Nieves",
     channelId: CANAL_NOTIFICACIONES,         // Canal de Noe
     memberId: "69af09f1eb88709353922dbb",   // ✅ Nieves (34663303461) → canal Noe
+    telefono: "34663303461",
   },
   guardia: {
     nombre: "Guardia",
     channelId: CANAL_NOTIFICACIONES,         // Canal de Noe
     memberId: "69af09f1be5f7a26df1c2d32",   // ✅ Guardia (34674891529) → canal Noe
+    telefono: "34674891529",
   },
 };
+
+// ── Aviso por LLAMADA de voz (ElevenLabs Agents) ─────────────
+// Al abrirse un parte, además de la plantilla de WhatsApp se puede avisar
+// con una llamada: un agente de voz llama al teléfono de turno y le lee los
+// datos del parte. Requiere configurar en Railway:
+//   ELEVENLABS_API_KEY   → clave de la cuenta de ElevenLabs
+//   ELEVENLABS_AGENT_ID  → id del agente de voz "aviso de partes"
+//   ELEVENLABS_PHONE_ID  → id del número de teléfono importado en ElevenLabs
+//   ELEVENLABS_PROVIDER  → "twilio" (por defecto) o "sip-trunk"
+async function llamarAvisoParte(datos) {
+  const { ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID, ELEVENLABS_PHONE_ID } = process.env;
+  if (!ELEVENLABS_API_KEY || !ELEVENLABS_AGENT_ID || !ELEVENLABS_PHONE_ID) {
+    console.log("[Aviso-voz] ElevenLabs no configurado — llamada omitida");
+    return { ok: false, motivo: "elevenlabs_no_configurado" };
+  }
+  const dest   = determinarDestinatarioNotificacion();
+  const numero = datos.numeroAviso || dest.telefono;
+  if (!numero) return { ok: false, motivo: "sin_telefono_de_turno" };
+  const proveedor = process.env.ELEVENLABS_PROVIDER === "sip-trunk" ? "sip-trunk" : "twilio";
+  try {
+    const res = await axios.post(
+      `https://api.elevenlabs.io/v1/convai/${proveedor}/outbound-call`,
+      {
+        agent_id: ELEVENLABS_AGENT_ID,
+        agent_phone_number_id: ELEVENLABS_PHONE_ID,
+        to_number: "+" + String(numero).replace(/^\+/, ""),
+        conversation_initiation_client_data: {
+          dynamic_variables: {
+            agente:           dest.nombre,
+            cliente:          datos.nombre      || "no indicado",
+            telefono_cliente: datos.telefono    || "no indicado",
+            direccion:        datos.direccion   || "no indicada",
+            descripcion:      datos.descripcion || "sin descripción",
+            ref_parte:        datos.refParte    || "sin referencia",
+          },
+        },
+      },
+      { headers: { "xi-api-key": ELEVENLABS_API_KEY }, timeout: 15000 }
+    );
+    console.log(`[Aviso-voz] ✅ Llamando a ${dest.nombre} (${numero}) — parte ${datos.refParte || "—"}`);
+    return { ok: true, destinatario: dest.nombre, numero };
+  } catch (e) {
+    console.error("[Aviso-voz] ❌ Falló la llamada:", e.response?.status, JSON.stringify(e.response?.data || e.message).slice(0, 300));
+    return { ok: false, motivo: "error_api" };
+  }
+}
 
 /**
  * Devuelve el destinatario correcto de la notificación según el día y la hora.
@@ -2254,6 +2303,25 @@ app.get("/admin/api/ia-log", authAdmin, (req, res) => {
 // ── Últimos eventos crudos del webhook (diagnóstico) ─────────
 app.get("/admin/api/eventos", authAdmin, (req, res) => {
   res.json({ total: eventosRecientes.length, eventos: eventosRecientes });
+});
+
+// ── Webhook de Zoho Flow: parte creado → llamada de aviso ────
+// Zoho Flow llama aquí cuando se crea un parte en el CRM y el bot lanza la
+// llamada de voz al teléfono de turno. Seguridad: ?k=<AVISO_LLAMADA_KEY>.
+app.post("/zoho/parte-creado", async (req, res) => {
+  const clave = process.env.AVISO_LLAMADA_KEY;
+  if (!clave || req.query.k !== clave) return res.status(401).json({ error: "no autorizado" });
+  const d = req.body || {};
+  console.log("[Aviso-voz] Parte creado en Zoho:", JSON.stringify(d).slice(0, 400));
+  const resultado = await llamarAvisoParte({
+    refParte:    d.refParte || d.ref || d.numero || null,
+    nombre:      d.nombre || d.cliente || null,
+    telefono:    d.telefono || null,
+    direccion:   d.direccion || null,
+    descripcion: d.descripcion || d.asunto || null,
+    numeroAviso: d.numeroAviso || null,  // opcional: forzar a quién se llama
+  });
+  res.json(resultado);
 });
 
 // ── Health check ─────────────────────────────────────────────
