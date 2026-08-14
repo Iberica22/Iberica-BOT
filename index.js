@@ -381,6 +381,36 @@ function claveClientePorTelefono(t) {
   return null;
 }
 
+// Envía la pregunta de la encuesta como PLANTILLA aprobada (fuera de la
+// ventana de 24h el texto libre está prohibido por Meta). El nombre de la
+// plantilla se configura en RESENA_TEMPLATE (p. ej. "encuesta_postventa"),
+// con una única variable {{1}} = nombre del cliente.
+async function enviarPlantillaResena(telefono, nombre) {
+  const estado = conversaciones[telefono];
+  try {
+    const res = await axios.post(
+      `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
+      {
+        channelId: estado.channelId,
+        memberId:  estado.memberId,
+        response: [{
+          type: "TEMPLATE",
+          elementName: process.env.RESENA_TEMPLATE,
+          languageCode: "es",
+          components: [{ type: "body", parameters: [{ type: "text", text: nombre || "de nuevo" }] }],
+        }],
+      }
+    );
+    registrarWamidsEnvio(res.data);
+    const ok = res.data?.ok === 1 && res.data?.sendResult?.result?.[0]?.ok !== 0;
+    if (!ok) console.error("[Reseñas] ❌ Plantilla rechazada:", JSON.stringify(res.data).slice(0, 300));
+    return ok;
+  } catch (e) {
+    console.error("[Reseñas] ❌ Error enviando plantilla:", e.response?.data || e.message);
+    return false;
+  }
+}
+
 async function pedirResena({ telefono, nombre, refParte }) {
   const clave = claveClientePorTelefono(telefono);
   if (!clave) return { ok: false, motivo: "cliente_sin_whatsapp_conocido" };
@@ -388,10 +418,6 @@ async function pedirResena({ telefono, nombre, refParte }) {
   const memberId  = conversaciones[clave]?.memberId  || act.memberId;
   const channelId = conversaciones[clave]?.channelId || act.canalId;
   if (!memberId || !channelId) return { ok: false, motivo: "sin_datos_de_envio" };
-  // Solo se puede escribir texto libre dentro de la ventana de 24h de WhatsApp
-  if (!act.ultimaActividad || Date.now() - act.ultimaActividad > 23 * 3600 * 1000) {
-    return { ok: false, motivo: "fuera_de_ventana_24h" };
-  }
   // No interrumpir si una persona de la oficina está atendiendo el chat
   if (botActivo[`${channelId}_${clave}`] === false) {
     return { ok: false, motivo: "conversacion_atendida_por_persona" };
@@ -400,6 +426,11 @@ async function pedirResena({ telefono, nombre, refParte }) {
   if (Date.now() - (resenasPedidas[clave] || 0) < 7 * 24 * 3600 * 1000) {
     return { ok: false, motivo: "ya_pedida_recientemente" };
   }
+  // Texto libre solo dentro de la ventana de 24h; fuera, plantilla aprobada
+  const fueraDeVentana = !act.ultimaActividad || Date.now() - act.ultimaActividad > 23 * 3600 * 1000;
+  if (fueraDeVentana && !process.env.RESENA_TEMPLATE) {
+    return { ok: false, motivo: "fuera_de_ventana_24h_y_sin_plantilla_configurada" };
+  }
 
   if (!conversaciones[clave]) resetearConversacion(clave);
   const estado = conversaciones[clave];
@@ -407,16 +438,25 @@ async function pedirResena({ telefono, nombre, refParte }) {
   estado.channelId = channelId;
   estado.step   = "resena_nps";
   estado.resena = { refParte: refParte || null, intentos: 0 };
+
+  const nombreCorto = nombre ? String(nombre).trim().split(/\s+/)[0] : null;
+  if (fueraDeVentana) {
+    const okTpl = await enviarPlantillaResena(clave, nombreCorto);
+    if (!okTpl) {
+      estado.step = "menu_principal";
+      return { ok: false, motivo: "plantilla_fallida" };
+    }
+  } else {
+    const saludo = nombreCorto ? `¡Hola, ${nombreCorto}!` : "¡Hola!";
+    await enviarMensaje(
+      clave,
+      `${saludo} Soy Marta, de Ibérica Seguridad 😊 Me dicen que el trabajo ya está terminado. ¿Qué tal ha quedado todo? Del 0 al 10, ¿qué nota nos pondrías?`
+    );
+  }
   resenasPedidas[clave] = Date.now();
   redisSet("iberica:resenasPedidas", resenasPedidas);
-
-  const saludo = nombre ? `¡Hola, ${String(nombre).trim().split(/\s+/)[0]}!` : "¡Hola!";
-  await enviarMensaje(
-    clave,
-    `${saludo} Soy Marta, de Ibérica Seguridad 😊 Me dicen que el trabajo ya está terminado. ¿Qué tal ha quedado todo? Del 0 al 10, ¿qué nota nos pondrías?`
-  );
-  console.log(`[Reseñas] Encuesta postventa enviada a ${clave} (parte ${refParte || "—"})`);
-  return { ok: true, telefono: clave };
+  console.log(`[Reseñas] Encuesta postventa enviada a ${clave} (parte ${refParte || "—"}, ${fueraDeVentana ? "plantilla" : "chat abierto"})`);
+  return { ok: true, telefono: clave, via: fueraDeVentana ? "plantilla" : "chat" };
 }
 
 /**
