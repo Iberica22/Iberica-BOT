@@ -1398,6 +1398,16 @@ async function crearUrgencia(telefono, estado) {
       agente:      agente,
     });
 
+    // Y aviso por llamada de voz al turno que toque (si ElevenLabs está
+    // configurado; llamarAvisoParte nunca lanza excepción)
+    llamarAvisoParte({
+      refParte,
+      nombre:      estado.nombre,
+      telefono:    estado.telefono,
+      direccion:   estado.direccion,
+      descripcion: estado.descripcion,
+    });
+
   } catch (err) {
     console.error("[Bot] Error en creación de parte:", err.message);
     await enviarMensaje(
