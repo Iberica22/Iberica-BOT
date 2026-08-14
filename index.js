@@ -361,6 +361,64 @@ async function llamarAvisoParte(datos) {
   }
 }
 
+// ── Reseñas de Google: encuesta postventa en el propio chat ──
+// Al cerrarse un parte (webhook desde el workflow del CRM), Marta pregunta
+// la nota del 0 al 10 en el chat que el cliente ya conoce. 9-10 → enlace
+// directo de reseña; 8 o menos → pregunta qué mejorar y avisa al equipo.
+const RESENA_URL = "https://g.page/r/CXgW_wAoTj0cEAE/review";
+const resenasPedidas = {}; // { telefono: ts de la última petición }
+
+// Localiza la clave del cliente (formato Woztell "34XXXXXXXXX") a partir de
+// un teléfono en cualquier formato de Zoho (+34 600..., 600 11 12 22...)
+function claveClientePorTelefono(t) {
+  const d = String(t || "").replace(/\D/g, "");
+  if (d.length < 9) return null;
+  const ult9 = d.slice(-9);
+  if (conversaciones[`34${ult9}`] || actividad[`34${ult9}`]) return `34${ult9}`;
+  for (const k of new Set([...Object.keys(conversaciones), ...Object.keys(actividad)])) {
+    if (k.replace(/\D/g, "").endsWith(ult9)) return k;
+  }
+  return null;
+}
+
+async function pedirResena({ telefono, nombre, refParte }) {
+  const clave = claveClientePorTelefono(telefono);
+  if (!clave) return { ok: false, motivo: "cliente_sin_whatsapp_conocido" };
+  const act       = actividad[clave] || {};
+  const memberId  = conversaciones[clave]?.memberId  || act.memberId;
+  const channelId = conversaciones[clave]?.channelId || act.canalId;
+  if (!memberId || !channelId) return { ok: false, motivo: "sin_datos_de_envio" };
+  // Solo se puede escribir texto libre dentro de la ventana de 24h de WhatsApp
+  if (!act.ultimaActividad || Date.now() - act.ultimaActividad > 23 * 3600 * 1000) {
+    return { ok: false, motivo: "fuera_de_ventana_24h" };
+  }
+  // No interrumpir si una persona de la oficina está atendiendo el chat
+  if (botActivo[`${channelId}_${clave}`] === false) {
+    return { ok: false, motivo: "conversacion_atendida_por_persona" };
+  }
+  // No insistir si ya se le pidió hace poco
+  if (Date.now() - (resenasPedidas[clave] || 0) < 7 * 24 * 3600 * 1000) {
+    return { ok: false, motivo: "ya_pedida_recientemente" };
+  }
+
+  if (!conversaciones[clave]) resetearConversacion(clave);
+  const estado = conversaciones[clave];
+  estado.memberId  = memberId;
+  estado.channelId = channelId;
+  estado.step   = "resena_nps";
+  estado.resena = { refParte: refParte || null, intentos: 0 };
+  resenasPedidas[clave] = Date.now();
+  redisSet("iberica:resenasPedidas", resenasPedidas);
+
+  const saludo = nombre ? `¡Hola, ${String(nombre).trim().split(/\s+/)[0]}!` : "¡Hola!";
+  await enviarMensaje(
+    clave,
+    `${saludo} Soy Marta, de Ibérica Seguridad 😊 Me dicen que el trabajo ya está terminado. ¿Qué tal ha quedado todo? Del 0 al 10, ¿qué nota nos pondrías?`
+  );
+  console.log(`[Reseñas] Encuesta postventa enviada a ${clave} (parte ${refParte || "—"})`);
+  return { ok: true, telefono: clave };
+}
+
 /**
  * Devuelve el destinatario correcto de la notificación según el día y la hora.
  * - Lunes-Viernes 07:30-15:00 → Mari
@@ -505,14 +563,16 @@ async function redisSet(key, value) {
 }
 
 async function cargarEstadoDesdeRedis() {
-  const [botActivoGuardado, actividadGuardada, pausasGuardadas] = await Promise.all([
+  const [botActivoGuardado, actividadGuardada, pausasGuardadas, resenasGuardadas] = await Promise.all([
     redisGet("iberica:botActivo"),
     redisGet("iberica:actividad"),
     redisGet("iberica:pausaExpira"),
+    redisGet("iberica:resenasPedidas"),
   ]);
   if (botActivoGuardado) Object.assign(botActivo, botActivoGuardado);
   if (actividadGuardada) Object.assign(actividad, actividadGuardada);
   if (pausasGuardadas) Object.assign(pausaExpira, pausasGuardadas);
+  if (resenasGuardadas) Object.assign(resenasPedidas, resenasGuardadas);
   console.log(`[Redis] Estado cargado — ${Object.keys(actividad).length} contactos, ${Object.keys(botActivo).length} estados de bot`);
 }
 
@@ -1486,6 +1546,56 @@ async function procesarMensaje(telefono, texto) {
     return;
   }
 
+  // ── Encuesta postventa y reseñas de Google ──────────────
+  if (estado.step === "resena_nps") {
+    const m = msg.match(/\b(10|[0-9])\b/);
+    const n = m ? parseInt(m[1]) : null;
+    const low = normalizaTxt(msg);
+    const positivo = /(genial|perfecto|muy bien|fenomenal|estupendo|excelente|encantad|de lujo|maravilla|todo bien|muy content)/.test(low);
+    const negativo = /(mal|fatal|regular|desastre|queja|no .{0,20}(bien|content)|pesimo)/.test(low);
+    if ((n !== null && n >= 9) || (n === null && positivo && !negativo)) {
+      estado.step = "menu_principal";
+      await enviarMensaje(
+        telefono,
+        "¡Qué alegría leer eso! 🙏 ¿Nos dejarías esa valoración en una reseña de Google? Es solo un minuto y a nosotros nos ayuda muchísimo 👉 " +
+        RESENA_URL + "\n\n¡Mil gracias de parte de todo el equipo!"
+      );
+      return;
+    }
+    if (n !== null || negativo) {
+      estado.step = "resena_feedback";
+      await enviarMensaje(telefono, "Muchas gracias por la sinceridad 🙏 ¿Qué podríamos haber hecho mejor? Se lo paso tal cual al equipo.");
+      return;
+    }
+    if ((estado.resena?.intentos || 0) >= 1) {
+      estado.step = "menu_principal";
+      await enviarMensaje(telefono, "¡Gracias por tu tiempo! 😊 Si necesitas cualquier cosa, aquí estamos.");
+      return;
+    }
+    estado.resena = estado.resena || {};
+    estado.resena.intentos = 1;
+    await enviarMensaje(telefono, "¿Me lo dices con una nota del 0 al 10? 🙂");
+    return;
+  }
+  if (estado.step === "resena_feedback") {
+    estado.step = "menu_principal";
+    await enviarMensaje(telefono, "Gracias de verdad — ahora mismo se lo traslado al equipo. 🙏");
+    try {
+      const destinatario = determinarDestinatarioNotificacion();
+      const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+      await enviarNotificacionAgente(destinatario, {
+        nombre:      estado.nombre || `Cliente ${telefono.slice(-9)}`,
+        telefono:    telefono.slice(-9),
+        direccion:   "—",
+        descripcion: `Valoración postventa BAJA (parte ${estado.resena?.refParte || "—"}): "${msg.slice(0, 150)}"`,
+        apertura:    ahoraStr,
+        refParte:    estado.resena?.refParte || "—",
+        agente:      "Postventa",
+      });
+    } catch (e) { console.error("[Reseñas] No se pudo avisar al equipo:", e.message); }
+    return;
+  }
+
   // ── Selección del menú principal ────────────────────────
   if (estado.step === "menu_principal") {
     if (["1", "urgencia", "averia", "avería", "emergencia"].includes(msgLower)) {
@@ -2340,6 +2450,23 @@ app.get("/admin/api/test-llamada", authAdmin, async (req, res) => {
   res.json(resultado);
 });
 
+// ── Webhook del CRM: parte CERRADO → encuesta postventa/reseña ──
+// El workflow de Zoho CRM (estado → Cerrado) llama aquí y Marta pregunta la
+// nota en el chat del cliente. Seguridad: ?k=<AVISO_LLAMADA_KEY>.
+app.post("/zoho/parte-cerrado", async (req, res) => {
+  const clave = process.env.AVISO_LLAMADA_KEY;
+  if (!clave || req.query.k !== clave) return res.status(401).json({ error: "no autorizado" });
+  const d = req.body || {};
+  console.log("[Reseñas] Parte cerrado en Zoho:", JSON.stringify(d).slice(0, 400));
+  const resultado = await pedirResena({
+    telefono: d.telefono || d.movil || d.phone || null,
+    nombre:   d.nombre || d.cliente || null,
+    refParte: d.refParte || d.ref || d.numero || null,
+  });
+  console.log("[Reseñas] Resultado:", JSON.stringify(resultado));
+  res.json(resultado);
+});
+
 // ── Webhook de Zoho Flow: parte creado → llamada de aviso ────
 // Zoho Flow llama aquí cuando se crea un parte en el CRM y el bot lanza la
 // llamada de voz al teléfono de turno. Seguridad: ?k=<AVISO_LLAMADA_KEY>.
@@ -2439,7 +2566,8 @@ app.post("/webhook", async (req, res) => {
     actividad[telefono].ultimoMensaje  = texto;
     actividad[telefono].ultimaActividad = Date.now();
     actividad[telefono].mensajesTotal++;
-    actividad[telefono].canalId = channelId;
+    actividad[telefono].canalId  = channelId;
+    actividad[telefono].memberId = memberId;  // para poder escribirle (reseñas) tras un reinicio
     redisSet("iberica:actividad", actividad);
 
     // ── Ignorar mensajes de agentes internos (no son clientes) ──────────
@@ -2480,9 +2608,13 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    // Una respuesta a la encuesta postventa se procesa siempre, aunque el
+    // canal esté en pausa o fuera de horario (es un intercambio puntual).
+    const enFlujoResena = (conversaciones[telefono]?.step || "").startsWith("resena_");
+
     // ── Comprobar si el bot está pausado para este cliente en este canal ──
     const claveBot = `${channelId}_${telefono}`;
-    if (botActivo[claveBot] === false) {
+    if (botActivo[claveBot] === false && !enFlujoResena) {
       if (pausaExpira[claveBot] && Date.now() > pausaExpira[claveBot]) {
         botActivo[claveBot] = true;
         delete pausaExpira[claveBot];
@@ -2540,7 +2672,7 @@ app.post("/webhook", async (req, res) => {
     const minutosMadrid = minutosActualesMadrid();
     const activo = dentroDeHorario(channelId);
     console.log(`[Horario] Canal: ${channelId} | Minutos Madrid: ${minutosMadrid} | Bot activo: ${activo}`);
-    if (!activo) {
+    if (!activo && !enFlujoResena) {
       console.log(`[Webhook] Horario comercial — bot inactivo para canal ${channelId}, mensaje ignorado`);
       return res.sendStatus(200);
     }
