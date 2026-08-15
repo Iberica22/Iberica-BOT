@@ -459,6 +459,68 @@ async function pedirResena({ telefono, nombre, refParte }) {
   return { ok: true, telefono: clave, via: fueraDeVentana ? "plantilla" : "chat" };
 }
 
+// ── Sondeo de partes cerrados (sin tocar el CRM) ─────────────
+// Cada 5 minutos el bot pregunta a Zoho por los últimos partes modificados;
+// los que hayan pasado a "Cerrado" en las últimas horas disparan la
+// encuesta postventa. Desactivable con RESENAS_AUTO=off en Railway.
+const cierresProcesados = {}; // { caseId: ts en que se registró }
+let sondeoEnCurso = false;
+
+async function sondearPartesCerrados() {
+  if ((process.env.RESENAS_AUTO || "on").toLowerCase() === "off") return { ok: false, motivo: "desactivado_por_RESENAS_AUTO" };
+  if (sondeoEnCurso) return { ok: false, motivo: "sondeo_ya_en_curso" };
+  sondeoEnCurso = true;
+  const resumen = { vistos: 0, cerradosNuevos: 0, encuestas: [], errores: [] };
+  try {
+    const token = await obtenerTokenZoho();
+    const res = await axios.get("https://www.zohoapis.eu/crm/v2/Cases", {
+      params: { sort_by: "Modified_Time", sort_order: "desc", per_page: 30 },
+      headers: { Authorization: `Zoho-oauthtoken ${token}` },
+    });
+    const casos = res.data?.data || [];
+    resumen.vistos = casos.length;
+    const limite = Date.now() - 3 * 3600 * 1000; // solo cierres de las últimas 3h
+    for (const caso of casos) {
+      if (caso.Status !== "Cerrado") continue;
+      if (cierresProcesados[caso.id]) continue;
+      cierresProcesados[caso.id] = Date.now();
+      const modificado = new Date(caso.Modified_Time || 0).getTime();
+      if (!modificado || modificado < limite) continue; // cierre antiguo: registrar sin escribir
+      resumen.cerradosNuevos++;
+      // Teléfono y nombre del contacto vinculado al parte
+      let telefonoCli = null;
+      let nombreCli   = caso.Related_To?.name || null;
+      try {
+        if (caso.Related_To?.id) {
+          const c = await axios.get(`https://www.zohoapis.eu/crm/v2/Contacts/${caso.Related_To.id}`, {
+            headers: { Authorization: `Zoho-oauthtoken ${token}` },
+          });
+          const contacto = c.data?.data?.[0] || {};
+          telefonoCli = contacto.Mobile || contacto.Phone || null;
+          nombreCli   = contacto.First_Name || contacto.Full_Name || nombreCli;
+        }
+      } catch (e) { resumen.errores.push(`contacto de ${caso.ref_Parte || caso.id}: ${e.message}`); }
+      if (!telefonoCli) {
+        resumen.encuestas.push({ parte: caso.ref_Parte || caso.id, resultado: "sin_telefono_en_zoho" });
+        continue;
+      }
+      const r = await pedirResena({ telefono: telefonoCli, nombre: nombreCli, refParte: caso.ref_Parte });
+      resumen.encuestas.push({ parte: caso.ref_Parte || caso.id, resultado: r.ok ? `enviada_por_${r.via}` : r.motivo });
+    }
+    // Olvidar registros de más de 30 días y persistir
+    const caduca = Date.now() - 30 * 24 * 3600 * 1000;
+    for (const [id, ts] of Object.entries(cierresProcesados)) if (ts < caduca) delete cierresProcesados[id];
+    redisSet("iberica:cierresProcesados", cierresProcesados);
+    if (resumen.cerradosNuevos > 0) console.log("[Reseñas] Sondeo:", JSON.stringify(resumen));
+    return { ok: true, ...resumen };
+  } catch (e) {
+    console.error("[Reseñas] Sondeo falló:", e.response?.status || "", e.message);
+    return { ok: false, motivo: `error: ${e.message}` };
+  } finally {
+    sondeoEnCurso = false;
+  }
+}
+
 /**
  * Devuelve el destinatario correcto de la notificación según el día y la hora.
  * - Lunes-Viernes 07:30-15:00 → Mari
@@ -603,16 +665,18 @@ async function redisSet(key, value) {
 }
 
 async function cargarEstadoDesdeRedis() {
-  const [botActivoGuardado, actividadGuardada, pausasGuardadas, resenasGuardadas] = await Promise.all([
+  const [botActivoGuardado, actividadGuardada, pausasGuardadas, resenasGuardadas, cierresGuardados] = await Promise.all([
     redisGet("iberica:botActivo"),
     redisGet("iberica:actividad"),
     redisGet("iberica:pausaExpira"),
     redisGet("iberica:resenasPedidas"),
+    redisGet("iberica:cierresProcesados"),
   ]);
   if (botActivoGuardado) Object.assign(botActivo, botActivoGuardado);
   if (actividadGuardada) Object.assign(actividad, actividadGuardada);
   if (pausasGuardadas) Object.assign(pausaExpira, pausasGuardadas);
   if (resenasGuardadas) Object.assign(resenasPedidas, resenasGuardadas);
+  if (cierresGuardados) Object.assign(cierresProcesados, cierresGuardados);
   console.log(`[Redis] Estado cargado — ${Object.keys(actividad).length} contactos, ${Object.keys(botActivo).length} estados de bot`);
 }
 
@@ -2490,6 +2554,11 @@ app.get("/admin/api/test-llamada", authAdmin, async (req, res) => {
   res.json(resultado);
 });
 
+// ── Sondeo manual de cierres desde el panel (diagnóstico) ────
+app.get("/admin/api/test-cierres", authAdmin, async (req, res) => {
+  res.json(await sondearPartesCerrados());
+});
+
 // ── Webhook del CRM: parte CERRADO → encuesta postventa/reseña ──
 // El workflow de Zoho CRM (estado → Cerrado) llama aquí y Marta pregunta la
 // nota en el chat del cliente. Seguridad: ?k=<AVISO_LLAMADA_KEY>.
@@ -2969,6 +3038,10 @@ app.listen(PORT, async () => {
   } catch (err) {
     console.warn("⚠️  No se pudo cargar el estado desde Redis:", err.message);
   }
+
+  // Sondeo de partes cerrados → encuesta postventa/reseñas (cada 5 min)
+  setTimeout(sondearPartesCerrados, 90 * 1000);
+  setInterval(sondearPartesCerrados, 5 * 60 * 1000);
 
   // Pre-cargar el token de Zoho al arrancar para detectar errores de configuración
   try {
