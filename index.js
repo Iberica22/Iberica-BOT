@@ -480,8 +480,12 @@ async function sondearPartesCerrados() {
     const casos = res.data?.data || [];
     resumen.vistos = casos.length;
     const limite = Date.now() - 3 * 3600 * 1000; // solo cierres de las últimas 3h
+    // Misma condición que la regla "Encueste pere" del CRM: solo trabajo
+    // terminado de verdad (no cierres por anulación u otros subestados).
+    const SUBESTADOS_ENCUESTA = ["Acabado", "Solucionado"];
     for (const caso of casos) {
       if (caso.Status !== "Cerrado") continue;
+      if (!SUBESTADOS_ENCUESTA.includes(caso.Subestado)) continue;
       if (cierresProcesados[caso.id]) continue;
       cierresProcesados[caso.id] = Date.now();
       const modificado = new Date(caso.Modified_Time || 0).getTime();
