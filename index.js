@@ -411,7 +411,24 @@ async function enviarPlantillaResena(telefono, nombre) {
   }
 }
 
-async function pedirResena({ telefono, nombre, refParte }) {
+// Deja constancia de la respuesta de la encuesta en el propio parte del CRM
+// (Notas del módulo Partes), para no perder la información que daba PERE.
+async function crearNotaParte(caseId, contenido) {
+  if (!caseId) return;
+  try {
+    const token = await obtenerTokenZoho();
+    await axios.post(
+      "https://www.zohoapis.eu/crm/v2/Notes",
+      { data: [{ Note_Title: "Encuesta postventa (Marta)", Note_Content: contenido, Parent_Id: caseId, se_module: "Cases" }] },
+      { headers: { Authorization: `Zoho-oauthtoken ${token}`, "Content-Type": "application/json" } }
+    );
+    console.log(`[Reseñas] Respuesta registrada como nota en el parte ${caseId}`);
+  } catch (e) {
+    console.error("[Reseñas] No se pudo registrar la nota en Zoho:", JSON.stringify(e.response?.data || e.message).slice(0, 200));
+  }
+}
+
+async function pedirResena({ telefono, nombre, refParte, caseId }) {
   const clave = claveClientePorTelefono(telefono);
   if (!clave) return { ok: false, motivo: "cliente_sin_whatsapp_conocido" };
   const act       = actividad[clave] || {};
@@ -437,7 +454,7 @@ async function pedirResena({ telefono, nombre, refParte }) {
   estado.memberId  = memberId;
   estado.channelId = channelId;
   estado.step   = "resena_nps";
-  estado.resena = { refParte: refParte || null, intentos: 0 };
+  estado.resena = { refParte: refParte || null, caseId: caseId || null, intentos: 0 };
 
   const nombreCorto = nombre ? String(nombre).trim().split(/\s+/)[0] : null;
   if (fueraDeVentana) {
@@ -508,7 +525,7 @@ async function sondearPartesCerrados() {
         resumen.encuestas.push({ parte: caso.ref_Parte || caso.id, resultado: "sin_telefono_en_zoho" });
         continue;
       }
-      const r = await pedirResena({ telefono: telefonoCli, nombre: nombreCli, refParte: caso.ref_Parte });
+      const r = await pedirResena({ telefono: telefonoCli, nombre: nombreCli, refParte: caso.ref_Parte, caseId: caso.id });
       resumen.encuestas.push({ parte: caso.ref_Parte || caso.id, resultado: r.ok ? `enviada_por_${r.via}` : r.motivo });
     }
     // Olvidar registros de más de 30 días y persistir
@@ -1668,10 +1685,13 @@ async function procesarMensaje(telefono, texto) {
         "¡Qué alegría leer eso! 🙏 ¿Nos dejarías esa valoración en una reseña de Google? Es solo un minuto y a nosotros nos ayuda muchísimo 👉 " +
         RESENA_URL + "\n\n¡Mil gracias de parte de todo el equipo!"
       );
+      crearNotaParte(estado.resena?.caseId, `Nota del cliente: ${n !== null ? n + "/10" : `positiva ("${msg.slice(0, 80)}")`}. Se le envió el enlace de reseña de Google.`);
       return;
     }
     if (n !== null || negativo) {
       estado.step = "resena_feedback";
+      estado.resena = estado.resena || {};
+      estado.resena.nota = n !== null ? `${n}/10` : `negativa ("${msg.slice(0, 80)}")`;
       await enviarMensaje(telefono, "Muchas gracias por la sinceridad 🙏 ¿Qué podríamos haber hecho mejor? Se lo paso tal cual al equipo.");
       return;
     }
@@ -1688,6 +1708,7 @@ async function procesarMensaje(telefono, texto) {
   if (estado.step === "resena_feedback") {
     estado.step = "menu_principal";
     await enviarMensaje(telefono, "Gracias de verdad — ahora mismo se lo traslado al equipo. 🙏");
+    crearNotaParte(estado.resena?.caseId, `Nota del cliente: ${estado.resena?.nota || "baja"}. Qué podríamos mejorar: "${msg.slice(0, 300)}"`);
     try {
       const destinatario = determinarDestinatarioNotificacion();
       const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
