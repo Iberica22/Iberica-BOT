@@ -172,9 +172,12 @@ function manejarAcuseEnvio(body, tipo) {
   if (wamidsBot.has(wamid)) return;        // acuse de un envío del propio bot
   if (NOMBRES_AGENTES[telefono]) return;   // notificación interna a un agente
 
-  // Mensaje escrito desde la app del móvil → intervención humana segura
+  // Mensaje escrito desde la app del móvil → intervención humana segura.
+  // Ojo: usar `actividad` (persistente en Redis) y no solo `conversaciones`
+  // (memoria volátil): tras un redeploy las conversaciones se vacían y las
+  // respuestas manuales deben seguir pausando/renovando la pausa igualmente.
   if (esWamidDeApp(wamid)) {
-    if (!conversaciones[telefono]) return; // chat que el bot no atiende
+    if (!conversaciones[telefono] && !actividad[telefono]) return; // número desconocido
     pausarPorIntervencion(canal, telefono, "respuesta manual desde la app de WhatsApp");
     return;
   }
@@ -187,7 +190,7 @@ function manejarAcuseEnvio(body, tipo) {
   if (tipo !== "SENT") return;
   setTimeout(() => {
     if (wamidsBot.has(wamid)) return;
-    if (!conversaciones[telefono]) return;
+    if (!conversaciones[telefono] && !actividad[telefono]) return;
     pausarPorIntervencion(canal, telefono, "respuesta manual de oficina (acuse SENT ajeno)");
   }, 4000);
 }
