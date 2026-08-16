@@ -1146,8 +1146,13 @@ async function enviarMensaje(telefono, mensaje) {
     console.log(`[Woztell] HTTP ${res.status} | Response:`, JSON.stringify(res.data));
     registrarWamidsEnvio(res.data);
 
-    if (res.data?.ok === 1) {
+    // Woztell puede devolver ok:1 arriba y aun así traer un rechazo de Meta
+    // dentro de sendResult (p. ej. propiedad del hilo en Instagram).
+    const falloInterno = res.data?.sendResult?.result?.find?.((r) => r?.ok === 0);
+    if (res.data?.ok === 1 && !falloInterno) {
       console.log(`[Woztell] ✅ Mensaje enviado correctamente.`);
+    } else if (falloInterno) {
+      console.error(`[Woztell] ❌ Meta rechazó el envío a ${telefono}:`, JSON.stringify(falloInterno.error).slice(0, 300));
     } else {
       console.error(`[Woztell] ❌ ok:0 — ${JSON.stringify(res.data)}`);
     }
