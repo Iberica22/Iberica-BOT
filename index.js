@@ -212,6 +212,7 @@ const CANALES_AGENTES = {
   "69bd11ce7614bf4b4d6f2d3c": "Isabel",
   "69c3a0276c369daa9f0bbf81": "Nieves",
   "69fda40ba6876fcf26d5407f": "Soporte",  // Canal oficial 24h (661665929)
+  "6a804571292b8b00616d71f9": "Instagram", // DMs de @ibericaseguridad (24/7, sin horario)
 };
 
 // ── Horarios de activación del bot por canal ──────────────────
