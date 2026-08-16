@@ -305,19 +305,60 @@ const NOTIFICACIONES_CONFIG = {
   },
 };
 
-// ── Aviso por LLAMADA de voz (ElevenLabs Agents) ─────────────
-// Al abrirse un parte, además de la plantilla de WhatsApp se puede avisar
-// con una llamada: un agente de voz llama al teléfono de turno y le lee los
-// datos del parte. Requiere configurar en Railway:
-//   ELEVENLABS_API_KEY   → clave de la cuenta de ElevenLabs
-//   ELEVENLABS_AGENT_ID  → id del agente de voz "aviso de partes"
-//   ELEVENLABS_PHONE_ID  → id del número de teléfono importado en ElevenLabs
-//   ELEVENLABS_PROVIDER  → "twilio" (por defecto) o "sip-trunk"
+// ── Aviso por LLAMADA de voz ─────────────────────────────────
+// Al abrirse un parte, además de la plantilla de WhatsApp se avisa con una
+// llamada al teléfono de turno. Dos vías, en orden de preferencia:
+//   1) Twilio directo (barato, sin cuotas): lee el parte con la voz
+//      integrada. Requiere TWILIO_SID, TWILIO_TOKEN y TWILIO_FROM (un
+//      número propio de Twilio o un caller ID verificado, p. ej.
+//      +34950088086).
+//   2) ElevenLabs Agents (voz conversacional): requiere ELEVENLABS_API_KEY,
+//      ELEVENLABS_AGENT_ID y ELEVENLABS_PHONE_ID (+ ELEVENLABS_PROVIDER
+//      "twilio" o "sip-trunk").
+function xmlEscape(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+async function llamarAvisoTwilio(numero, nombreDest, datos) {
+  const { TWILIO_SID, TWILIO_TOKEN, TWILIO_FROM } = process.env;
+  const telDeletreado = String(datos.telefono || "").replace(/\D/g, "").split("").join(" ") || "no indicado";
+  const cuerpo =
+    `Cliente: ${datos.nombre || "no indicado"}. ` +
+    `Teléfono: ${telDeletreado}. ` +
+    `Dirección: ${datos.direccion || "no indicada"}. ` +
+    `Motivo: ${datos.descripcion || "sin descripción"}. ` +
+    `Referencia: ${datos.refParte || "sin referencia"}.`;
+  const say = (t) => `<Say language="es-ES" voice="Polly.Lucia">${xmlEscape(t)}</Say>`;
+  const twiml =
+    `<Response><Pause length="1"/>` +
+    say(`Hola ${nombreDest}. Soy Marta, de Ibérica Seguridad. Ha entrado un parte nuevo. ${cuerpo}`) +
+    `<Pause length="1"/>` +
+    say(`Repito. ${cuerpo}`) +
+    say(`Tienes todos los datos también en el WhatsApp. Hasta ahora.`) +
+    `</Response>`;
+  const params = new URLSearchParams({
+    To:   "+" + String(numero).replace(/^\+/, ""),
+    From: TWILIO_FROM,
+    Twiml: twiml,
+  });
+  await axios.post(
+    `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Calls.json`,
+    params.toString(),
+    {
+      auth: { username: TWILIO_SID, password: TWILIO_TOKEN },
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      timeout: 15000,
+    }
+  );
+}
+
 async function llamarAvisoParte(datos) {
+  const twilioListo = !!(process.env.TWILIO_SID && process.env.TWILIO_TOKEN && process.env.TWILIO_FROM);
   const { ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID, ELEVENLABS_PHONE_ID } = process.env;
-  if (!ELEVENLABS_API_KEY || !ELEVENLABS_AGENT_ID || !ELEVENLABS_PHONE_ID) {
-    console.log("[Aviso-voz] ElevenLabs no configurado — llamada omitida");
-    return { ok: false, motivo: "elevenlabs_no_configurado" };
+  const elevenListo = !!(ELEVENLABS_API_KEY && ELEVENLABS_AGENT_ID && ELEVENLABS_PHONE_ID);
+  if (!twilioListo && !elevenListo) {
+    console.log("[Aviso-voz] Ni Twilio ni ElevenLabs configurados — llamada omitida");
+    return { ok: false, motivo: "sin_proveedor_de_voz_configurado" };
   }
   const dest = determinarDestinatarioNotificacion();
   let nombreDest = dest.nombre;
@@ -332,6 +373,20 @@ async function llamarAvisoParte(datos) {
     }
   }
   if (!numero) return { ok: false, motivo: "sin_telefono_de_turno" };
+
+  // Vía preferente: Twilio directo (voz integrada, sin cuotas)
+  if (twilioListo) {
+    try {
+      await llamarAvisoTwilio(numero, nombreDest, datos);
+      console.log(`[Aviso-voz] ✅ Llamando (Twilio) a ${nombreDest} (${numero}) — parte ${datos.refParte || "—"}`);
+      return { ok: true, via: "twilio", destinatario: nombreDest, numero };
+    } catch (e) {
+      console.error("[Aviso-voz] ❌ Twilio falló:", e.response?.status, JSON.stringify(e.response?.data || e.message).slice(0, 300));
+      if (!elevenListo) return { ok: false, motivo: "error_twilio" };
+      // si ElevenLabs está configurado, probamos con él como respaldo
+    }
+  }
+
   const proveedor = process.env.ELEVENLABS_PROVIDER === "sip-trunk" ? "sip-trunk" : "twilio";
   try {
     const res = await axios.post(
@@ -353,8 +408,8 @@ async function llamarAvisoParte(datos) {
       },
       { headers: { "xi-api-key": ELEVENLABS_API_KEY }, timeout: 15000 }
     );
-    console.log(`[Aviso-voz] ✅ Llamando a ${nombreDest} (${numero}) — parte ${datos.refParte || "—"}`);
-    return { ok: true, destinatario: nombreDest, numero };
+    console.log(`[Aviso-voz] ✅ Llamando (ElevenLabs) a ${nombreDest} (${numero}) — parte ${datos.refParte || "—"}`);
+    return { ok: true, via: "elevenlabs", destinatario: nombreDest, numero };
   } catch (e) {
     console.error("[Aviso-voz] ❌ Falló la llamada:", e.response?.status, JSON.stringify(e.response?.data || e.message).slice(0, 300));
     return { ok: false, motivo: "error_api" };
