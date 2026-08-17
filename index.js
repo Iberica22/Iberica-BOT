@@ -745,18 +745,20 @@ async function redisSet(key, value) {
 }
 
 async function cargarEstadoDesdeRedis() {
-  const [botActivoGuardado, actividadGuardada, pausasGuardadas, resenasGuardadas, cierresGuardados] = await Promise.all([
+  const [botActivoGuardado, actividadGuardada, pausasGuardadas, resenasGuardadas, cierresGuardados, reglasGuardadas] = await Promise.all([
     redisGet("iberica:botActivo"),
     redisGet("iberica:actividad"),
     redisGet("iberica:pausaExpira"),
     redisGet("iberica:resenasPedidas"),
     redisGet("iberica:cierresProcesados"),
+    redisGet("iberica:reglasComentarios"),
   ]);
   if (botActivoGuardado) Object.assign(botActivo, botActivoGuardado);
   if (actividadGuardada) Object.assign(actividad, actividadGuardada);
   if (pausasGuardadas) Object.assign(pausaExpira, pausasGuardadas);
   if (resenasGuardadas) Object.assign(resenasPedidas, resenasGuardadas);
   if (cierresGuardados) Object.assign(cierresProcesados, cierresGuardados);
+  if (Array.isArray(reglasGuardadas)) reglasComentarios = reglasGuardadas;
   console.log(`[Redis] Estado cargado — ${Object.keys(actividad).length} contactos, ${Object.keys(botActivo).length} estados de bot`);
 }
 
@@ -2171,6 +2173,11 @@ async function handoffCaptacion(telefono, channelId) {
 // Un comentario dispara un DM privado de Marta ofreciendo la guía, y el
 // autor queda dentro del flujo de leads (si responde al DM, sigue la
 // cualificación normal). Un DM por comentario, sin repetir.
+//
+// Reglas por palabra clave (editables en /admin/comentarios, persistidas en
+// Redis): si el comentario contiene la palabra, se envía ese mensaje/enlace
+// en vez de la guía por defecto. La primera regla que encaje gana.
+let reglasComentarios = []; // [{ palabra, mensaje, enlace?, publica? }]
 const comentariosRespondidos = {}; // { commentId: ts }
 async function manejarComentarioIG(body) {
   const usuario   = body?.data?.from?.id || body?.from;
@@ -2193,13 +2200,22 @@ async function manejarComentarioIG(body) {
   const conv = conversaciones[usuario];
   if (conv && conv.step && conv.step !== "menu_principal") return;
 
+  // ¿Alguna regla por palabra clave encaja con el texto del comentario?
+  const regla = reglasComentarios.find(
+    (r) => r?.palabra && normalizaTxt(texto).includes(normalizaTxt(r.palabra))
+  );
+
   captacionLeads[usuario] = {
     telefono: usuario, step: "cap_guia",
     zona: null, mejora: null, plazo: null, fotos: false,
-    origen: `comentario en ${String(body?.data?.media?.media_product_type || "post").toLowerCase()} (@${username})`,
+    origen: `comentario en ${String(body?.data?.media?.media_product_type || "post").toLowerCase()} (@${username})` +
+            (regla ? ` [${regla.palabra}]` : ""),
     memberId, channelId: canal, updatedAt: Date.now(),
   };
-  await enviarCap(captacionLeads[usuario], CAP.bienvenida);
+  const mensajeDM = regla
+    ? `${regla.mensaje}${regla.enlace ? " 👉 " + regla.enlace : ""}`
+    : CAP.bienvenida;
+  await enviarCap(captacionLeads[usuario], mensajeDM);
 
   // Respuesta pública bajo el comentario (texto fijo, nunca IA en público).
   // Requiere INSTAGRAM_TOKEN en Railway: el Access Token del canal de
@@ -2208,7 +2224,7 @@ async function manejarComentarioIG(body) {
     try {
       await axios.post(`https://graph.facebook.com/${commentId}/replies`, null, {
         params: {
-          message: "¡Te hemos escrito por privado! 📩 Revisa tus mensajes 😊",
+          message: (regla?.publica || "").trim() || "¡Te hemos escrito por privado! 📩 Revisa tus mensajes 😊",
           access_token: process.env.INSTAGRAM_TOKEN,
         },
         timeout: 10000,
@@ -2694,6 +2710,91 @@ app.get("/admin/api/test-llamada", authAdmin, async (req, res) => {
     numeroAviso: req.query.tel || null,
   });
   res.json(resultado);
+});
+
+// ── Reglas de comentarios de Instagram (palabra clave → DM) ──
+app.get("/admin/api/comentarios-reglas", authAdmin, (req, res) => {
+  res.json({ reglas: reglasComentarios });
+});
+app.post("/admin/api/comentarios-reglas", authAdmin, (req, res) => {
+  const reglas = req.body?.reglas;
+  if (!Array.isArray(reglas)) return res.status(400).json({ error: "se espera { reglas: [...] }" });
+  reglasComentarios = reglas
+    .filter((r) => r && typeof r.palabra === "string" && r.palabra.trim() && typeof r.mensaje === "string" && r.mensaje.trim())
+    .map((r) => ({
+      palabra: r.palabra.trim(),
+      mensaje: r.mensaje.trim(),
+      enlace:  (r.enlace || "").trim() || null,
+      publica: (r.publica || "").trim() || null,
+    }));
+  redisSet("iberica:reglasComentarios", reglasComentarios);
+  console.log(`[Comentarios] Reglas actualizadas: ${reglasComentarios.length}`);
+  res.json({ ok: true, reglas: reglasComentarios });
+});
+
+// ── Pantalla de gestión de las reglas de comentarios ─────────
+app.get("/admin/comentarios", authAdmin, (req, res) => {
+  res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comentarios de Instagram — Ibérica</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F5F7F5; color: #2A2A2A; padding: 24px; }
+  h1 { color: #1A5C2B; font-size: 1.3rem; margin-bottom: 6px; }
+  p.ayuda { color: #747576; font-size: .9rem; margin-bottom: 18px; max-width: 720px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(26,92,43,.09); }
+  th { background: #1A5C2B; color: #fff; text-align: left; padding: 10px 12px; font-size: .8rem; }
+  td { padding: 8px 10px; border-top: 1px solid #E0E8E2; vertical-align: top; }
+  input, textarea { width: 100%; padding: 8px; border: 1px solid #E0E8E2; border-radius: 6px; font: inherit; font-size: .85rem; }
+  textarea { min-height: 64px; resize: vertical; }
+  button { cursor: pointer; border: none; border-radius: 8px; padding: 10px 18px; font-weight: 700; }
+  .add { background: #E8F1EA; color: #1A5C2B; margin: 14px 8px 0 0; }
+  .save { background: #26843D; color: #fff; margin-top: 14px; }
+  .del { background: #fbe9e7; color: #c62828; padding: 6px 10px; }
+  .aviso { margin-top: 12px; font-size: .9rem; color: #1A5C2B; font-weight: 600; min-height: 1.2em; }
+</style></head><body>
+<h1>Comentarios de Instagram → respuesta de Marta</h1>
+<p class="ayuda">Si un comentario contiene la <b>palabra clave</b>, Marta envía por DM ese <b>mensaje</b> (con su enlace si lo pones) en vez de la guía de puertas. En "respuesta pública" puedes personalizar lo que se escribe debajo del comentario (vacío = "¡Te hemos escrito por privado! 📩"). Si ninguna palabra encaja, se envía la guía de siempre. Ejemplo de uso en el pie del post: <i>"Comenta CERROJO y te mandamos la información"</i>.</p>
+<table id="tabla"><thead><tr><th style="width:14%">Palabra clave</th><th style="width:36%">Mensaje del DM</th><th style="width:22%">Enlace (opcional)</th><th style="width:22%">Respuesta pública (opcional)</th><th></th></tr></thead><tbody></tbody></table>
+<button class="add" onclick="fila()">+ Añadir regla</button>
+<button class="save" onclick="guardar()">Guardar cambios</button>
+<div class="aviso" id="aviso"></div>
+<script>
+const tbody = document.querySelector('#tabla tbody');
+function fila(r = {}) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = '<td><input class="palabra" value=""></td>' +
+    '<td><textarea class="mensaje"></textarea></td>' +
+    '<td><input class="enlace" value=""></td>' +
+    '<td><input class="publica" value=""></td>' +
+    '<td><button class="del" onclick="this.closest(\\'tr\\').remove()">✕</button></td>';
+  tr.querySelector('.palabra').value = r.palabra || '';
+  tr.querySelector('.mensaje').value = r.mensaje || '';
+  tr.querySelector('.enlace').value  = r.enlace  || '';
+  tr.querySelector('.publica').value = r.publica || '';
+  tbody.appendChild(tr);
+}
+async function cargar() {
+  const res = await fetch('/admin/api/comentarios-reglas');
+  const j = await res.json();
+  (j.reglas || []).forEach(fila);
+  if (!j.reglas || !j.reglas.length) fila();
+}
+async function guardar() {
+  const reglas = [...tbody.querySelectorAll('tr')].map(tr => ({
+    palabra: tr.querySelector('.palabra').value,
+    mensaje: tr.querySelector('.mensaje').value,
+    enlace:  tr.querySelector('.enlace').value,
+    publica: tr.querySelector('.publica').value,
+  })).filter(r => r.palabra.trim() && r.mensaje.trim());
+  const res = await fetch('/admin/api/comentarios-reglas', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reglas }),
+  });
+  document.getElementById('aviso').textContent = res.ok ? '✅ Guardado — activo desde ya' : '❌ Error al guardar';
+}
+cargar();
+</script></body></html>`);
 });
 
 // ── Sondeo manual de cierres desde el panel (diagnóstico) ────
