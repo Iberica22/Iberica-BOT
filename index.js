@@ -2802,6 +2802,88 @@ app.get("/admin/api/test-cierres", authAdmin, async (req, res) => {
   res.json(await sondearPartesCerrados());
 });
 
+// ══════════════════════════════════════════════════════════════
+// HERRAMIENTAS DEL AGENTE DE VOZ (ElevenLabs) — Marta al teléfono
+// El agente telefónico llama a estos endpoints durante la llamada.
+// Seguridad: ?k=<AVISO_LLAMADA_KEY> en la URL de cada tool.
+// ══════════════════════════════════════════════════════════════
+
+// Crear un parte de urgencia desde una llamada. El agente debe haber
+// recogido antes los cuatro datos. Devuelve la referencia para leérsela.
+app.post("/voz/crear-parte", async (req, res) => {
+  const clave = process.env.AVISO_LLAMADA_KEY;
+  if (!clave || req.query.k !== clave) return res.status(401).json({ error: "no autorizado" });
+  const d = req.body || {};
+  console.log("[Voz] Crear parte:", JSON.stringify(d).slice(0, 300));
+  const faltan = ["nombre", "telefono", "direccion", "descripcion"].filter((c) => !String(d[c] || "").trim());
+  if (faltan.length) return res.json({ ok: false, motivo: "faltan_datos", faltan });
+  try {
+    const { refParte } = await crearParteZoho({
+      nombre:      String(d.nombre).trim(),
+      telefono:    String(d.telefono).replace(/\D/g, ""),
+      direccion:   String(d.direccion).trim(),
+      descripcion: String(d.descripcion).trim(),
+      agente:      "Marta (teléfono)",
+    });
+    // Avisos al turno (plantilla de WhatsApp + llamada), sin bloquear la respuesta
+    const destinatario = determinarDestinatarioNotificacion();
+    const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+    enviarNotificacionAgente(destinatario, {
+      nombre: d.nombre, telefono: String(d.telefono).slice(-9), direccion: d.direccion,
+      descripcion: `[Llamada] ${d.descripcion}`, apertura: ahoraStr, refParte, agente: "Marta (teléfono)",
+    }).catch((e) => console.error("[Voz] Aviso WhatsApp falló:", e.message));
+    llamarAvisoParte({ refParte, nombre: d.nombre, telefono: d.telefono, direccion: d.direccion, descripcion: d.descripcion });
+    console.log(`[Voz] ✅ Parte ${refParte} creado desde llamada telefónica`);
+    res.json({ ok: true, refParte });
+  } catch (e) {
+    console.error("[Voz] ❌ Error creando parte:", e.message);
+    res.json({ ok: false, motivo: "error_al_crear", detalle: "No se pudo registrar el parte; toma los datos y di que llamaremos nosotros." });
+  }
+});
+
+// Consultar el estado de un parte por su referencia (ej: "2026-11300")
+app.post("/voz/consultar-parte", async (req, res) => {
+  const clave = process.env.AVISO_LLAMADA_KEY;
+  if (!clave || req.query.k !== clave) return res.status(401).json({ error: "no autorizado" });
+  const ref = String(req.body?.refParte || req.body?.referencia || "").trim();
+  console.log("[Voz] Consultar parte:", ref);
+  if (!ref) return res.json({ ok: false, motivo: "falta_referencia" });
+  try {
+    const caso = await consultarParteZoho(ref);
+    if (!caso) return res.json({ ok: false, motivo: "no_encontrado" });
+    res.json({
+      ok: true,
+      referencia: caso.ref_Parte || ref,
+      asunto:     caso.Subject || null,
+      estado:     caso.Status || "N/D",
+      subestado:  caso.Subestado || null,
+      operario:   caso.Operario || null,
+    });
+  } catch (e) { res.json({ ok: false, motivo: "error_zoho" }); }
+});
+
+// Buscar el parte más reciente por teléfono (cuando no recuerdan la referencia)
+app.post("/voz/parte-por-telefono", async (req, res) => {
+  const clave = process.env.AVISO_LLAMADA_KEY;
+  if (!clave || req.query.k !== clave) return res.status(401).json({ error: "no autorizado" });
+  const tel = String(req.body?.telefono || "").replace(/\D/g, "");
+  console.log("[Voz] Partes por teléfono:", tel.slice(-9));
+  if (tel.length < 9) return res.json({ ok: false, motivo: "telefono_invalido" });
+  try {
+    const partes = await consultarPartesPorContacto(tel);
+    if (!partes.length) return res.json({ ok: false, motivo: "sin_partes" });
+    const p = partes[0];
+    res.json({
+      ok: true,
+      referencia: p.ref_Parte || "N/D",
+      asunto:     p.Subject || null,
+      estado:     p.Status || "N/D",
+      subestado:  p.Subestado || null,
+      totalPartes: partes.length,
+    });
+  } catch (e) { res.json({ ok: false, motivo: "error_zoho" }); }
+});
+
 // ── Webhook del CRM: parte CERRADO → encuesta postventa/reseña ──
 // El workflow de Zoho CRM (estado → Cerrado) llama aquí y Marta pregunta la
 // nota en el chat del cliente. Seguridad: ?k=<AVISO_LLAMADA_KEY>.
