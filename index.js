@@ -2167,6 +2167,41 @@ async function handoffCaptacion(telefono, channelId) {
   delete captacionLeads[telefono];
 }
 
+// ── Comentarios de Instagram (posts y reels) ─────────────────
+// Un comentario dispara un DM privado de Marta ofreciendo la guía, y el
+// autor queda dentro del flujo de leads (si responde al DM, sigue la
+// cualificación normal). Un DM por comentario, sin repetir.
+const comentariosRespondidos = {}; // { commentId: ts }
+async function manejarComentarioIG(body) {
+  const usuario   = body?.data?.from?.id || body?.from;
+  const username  = body?.data?.from?.username || "";
+  const texto     = body?.data?.text || "";
+  const canal     = body?.channel;
+  const memberId  = body?.member;
+  const commentId = body?.comment_id || body?.data?.id;
+  if (!usuario || !canal || !memberId || !commentId) return;
+  if (usuario === body?.to) return;               // comentario de la propia cuenta
+  if (comentariosRespondidos[commentId]) return;  // ya respondido
+  comentariosRespondidos[commentId] = Date.now();
+  if (Object.keys(comentariosRespondidos).length > 500) {
+    const limite = Date.now() - 30 * 24 * 3600 * 1000;
+    for (const [id, ts] of Object.entries(comentariosRespondidos)) if (ts < limite) delete comentariosRespondidos[id];
+  }
+  console.log(`[Comentarios] @${username} comentó "${texto.slice(0, 60)}" en ${body?.data?.media?.media_product_type || "post"}`);
+  // No interrumpir si ya está en mitad de otro flujo o en plena cualificación
+  if (captacionActiva(usuario)) return;
+  const conv = conversaciones[usuario];
+  if (conv && conv.step && conv.step !== "menu_principal") return;
+
+  captacionLeads[usuario] = {
+    telefono: usuario, step: "cap_guia",
+    zona: null, mejora: null, plazo: null, fotos: false,
+    origen: `comentario en ${String(body?.data?.media?.media_product_type || "post").toLowerCase()} (@${username})`,
+    memberId, channelId: canal, updatedAt: Date.now(),
+  };
+  await enviarCap(captacionLeads[usuario], CAP.bienvenida);
+}
+
 // Máquina de estados de la cualificación (versión con guía):
 //   saludo+guía → (el lead responde) → invitación a la foto → foto → zona →
 //   cierre derivando al equipo. Respuestas en texto libre, sin menús.
@@ -2738,6 +2773,11 @@ app.post("/webhook", async (req, res) => {
         // Un envío (plantilla de encuesta/reseña, notificación...) NO llegó al
         // cliente. Registrar el motivo que devuelve WhatsApp para diagnóstico.
         console.error("[Fallo envío] body:", JSON.stringify(req.body).slice(0, 900));
+      } else if (tipo === "COMMENT") {
+        // Comentario en un post/reel de Instagram → DM privado con la guía.
+        // (Se maneja aquí a propósito: un comentario trae texto del CLIENTE y
+        // no debe pasar por la detección de intervención humana.)
+        try { await manejarComentarioIG(req.body); } catch (e) { console.error("[Comentarios] Error:", e.message); }
       } else {
         console.log(`[Webhook] Evento ignorado (type: ${tipo}, eventType: ${eventType})`);
         // Los tipos que no conocemos pueden ser el eco de una respuesta manual
