@@ -2200,6 +2200,24 @@ async function manejarComentarioIG(body) {
     memberId, channelId: canal, updatedAt: Date.now(),
   };
   await enviarCap(captacionLeads[usuario], CAP.bienvenida);
+
+  // Respuesta pública bajo el comentario (texto fijo, nunca IA en público).
+  // Requiere INSTAGRAM_TOKEN en Railway: el Access Token del canal de
+  // Instagram que muestra Woztell en Canales → Instagram → Plataforma.
+  if (process.env.INSTAGRAM_TOKEN) {
+    try {
+      await axios.post(`https://graph.facebook.com/${commentId}/replies`, null, {
+        params: {
+          message: "¡Te hemos escrito por privado! 📩 Revisa tus mensajes 😊",
+          access_token: process.env.INSTAGRAM_TOKEN,
+        },
+        timeout: 10000,
+      });
+      console.log(`[Comentarios] ✅ Respuesta pública publicada bajo el comentario de @${username}`);
+    } catch (e) {
+      console.error("[Comentarios] ❌ No se pudo responder públicamente:", JSON.stringify(e.response?.data || e.message).slice(0, 300));
+    }
+  }
 }
 
 // Máquina de estados de la cualificación (versión con guía):
