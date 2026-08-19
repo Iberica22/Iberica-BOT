@@ -2149,6 +2149,26 @@ async function notificarLeadPuertas(datos) {
   }
 }
 
+// Un lead que recibió la guía pero no terminó el embudo (ni foto ni zona)
+// NO puede morir en silencio: pasados 45 min sin actividad, se avisa al
+// equipo con los datos que haya para que lo atienda una persona.
+async function barrerLeadsAbandonados() {
+  const ahora = Date.now();
+  for (const [telefono, lead] of Object.entries(captacionLeads)) {
+    if (lead.avisado) continue;
+    if (ahora - (lead.updatedAt || 0) < 45 * 60 * 1000) continue;
+    lead.avisado = true;
+    console.log(`[Captación] Lead sin terminar → aviso al equipo: ${telefono} (${lead.origen || "origen desconocido"})`);
+    await notificarLeadPuertas({
+      telefono,
+      zona: lead.zona, mejora: lead.mejora, plazo: lead.plazo,
+      fotos: !!lead.fotos,
+      origen: `${lead.origen || "—"} · SIN TERMINAR (dejó de responder en ${lead.step})`,
+    });
+  }
+}
+setInterval(() => barrerLeadsAbandonados().catch((e) => console.error("[Captación] Barrido falló:", e.message)), 10 * 60 * 1000);
+
 // Cierra el lead: pausa el bot para ese contacto (lo atiende una persona),
 // avisa al equipo y limpia el estado de captación.
 async function handoffCaptacion(telefono, channelId) {
@@ -2246,7 +2266,8 @@ async function manejarCaptacion({ telefono, memberId, channelId, texto, esImagen
   if (!lead) {
     console.log(`[Captación] PRIMER CONTACTO — payload:`, JSON.stringify(req.body).slice(0, 600));
     const ref = req.body?.data?.referral || req.body?.referral || {};
-    const origen = ref.headline || ref.source_id || ref.ctwa_clid || ref.body || null;
+    const origen = ref.headline || ref.source_id || ref.ctwa_clid || ref.body ||
+      (channelId === CAMPANA_CHANNEL_ID ? "canal de campaña" : "mención del anuncio en el chat");
     lead = captacionLeads[telefono] = {
       telefono, step: "cap_guia",
       zona: null, mejora: null, plazo: null, fotos: !!esImagen,
@@ -2797,6 +2818,18 @@ cargar();
 </script></body></html>`);
 });
 
+// ── Barrido manual de leads abandonados (diagnóstico) ────────
+app.get("/admin/api/test-leads-abandonados", authAdmin, async (req, res) => {
+  await barrerLeadsAbandonados();
+  res.json({
+    ok: true,
+    leadsActivos: Object.entries(captacionLeads).map(([t, l]) => ({
+      telefono: t, step: l.step, origen: l.origen, avisado: !!l.avisado,
+      minutosSinActividad: Math.round((Date.now() - (l.updatedAt || 0)) / 60000),
+    })),
+  });
+});
+
 // ── Sondeo manual de cierres desde el panel (diagnóstico) ────
 app.get("/admin/api/test-cierres", authAdmin, async (req, res) => {
   res.json(await sondearPartesCerrados());
@@ -3117,13 +3150,14 @@ app.post("/webhook", async (req, res) => {
     }
 
     // ── Leads del anuncio de puertas en los canales normales ──────────
-    // Un contacto NUEVO que llega con el referral del anuncio, lo menciona
-    // o pregunta directamente por puertas → cualificación de lead. Un "hola"
-    // suelto aquí sigue el flujo normal (solo en el canal de campaña se
-    // asume puertas); urgencias, domótica, etc. no cambian.
+    // Solo se considera lead del anuncio a quien llega CON SEÑAL del
+    // anuncio: el referral de Meta o una mención explícita ("vi tu
+    // anuncio"). Quien pregunta por puertas de forma orgánica sigue el
+    // flujo normal de Marta (presupuesto, urgencia...), que recoge sus
+    // datos y avisa a la oficina como corresponde.
     if (captacionActiva(telefono) ||
         (!conversaciones[telefono] && esContactoNuevo(telefono) &&
-         (tieneReferralAnuncio(req.body) || mencionaAnuncio(texto) || esTemaPuertas(texto)))) {
+         (tieneReferralAnuncio(req.body) || mencionaAnuncio(texto)))) {
       await manejarCaptacion({ telefono, memberId, channelId, texto, esImagen, req });
       return res.sendStatus(200);
     }
