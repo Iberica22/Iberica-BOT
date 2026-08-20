@@ -2835,6 +2835,21 @@ app.get("/admin/api/test-cierres", authAdmin, async (req, res) => {
   res.json(await sondearPartesCerrados());
 });
 
+// Comprueba la clave ?k= de los webhooks y herramientas de voz. Tolera
+// espacios o saltos de línea colados al copiar, y deja en el log el motivo
+// exacto de cada rechazo (sin exponer las claves completas).
+function claveWebhookValida(req) {
+  const esperada = (process.env.AVISO_LLAMADA_KEY || "").trim();
+  const recibida = String(req.query.k || "").trim();
+  if (esperada && recibida === esperada) return true;
+  const pista = (s) => (s ? `${s.slice(0, 3)}…${s.slice(-3)} (${s.length} caracteres)` : "vacía");
+  console.warn(
+    `[Auth] ${req.path}: clave rechazada — recibida ${pista(recibida)}, esperada ${pista(esperada)}` +
+    (esperada ? "" : " ⚠️ AVISO_LLAMADA_KEY no está configurada en Railway")
+  );
+  return false;
+}
+
 // ══════════════════════════════════════════════════════════════
 // HERRAMIENTAS DEL AGENTE DE VOZ (ElevenLabs) — Marta al teléfono
 // El agente telefónico llama a estos endpoints durante la llamada.
@@ -2844,8 +2859,7 @@ app.get("/admin/api/test-cierres", authAdmin, async (req, res) => {
 // Crear un parte de urgencia desde una llamada. El agente debe haber
 // recogido antes los cuatro datos. Devuelve la referencia para leérsela.
 app.post("/voz/crear-parte", async (req, res) => {
-  const clave = process.env.AVISO_LLAMADA_KEY;
-  if (!clave || req.query.k !== clave) return res.status(401).json({ error: "no autorizado" });
+  if (!claveWebhookValida(req)) return res.status(401).json({ error: "no autorizado" });
   const d = req.body || {};
   console.log("[Voz] Crear parte:", JSON.stringify(d).slice(0, 300));
   const faltan = ["nombre", "telefono", "direccion", "descripcion"].filter((c) => !String(d[c] || "").trim());
@@ -2876,8 +2890,7 @@ app.post("/voz/crear-parte", async (req, res) => {
 
 // Consultar el estado de un parte por su referencia (ej: "2026-11300")
 app.post("/voz/consultar-parte", async (req, res) => {
-  const clave = process.env.AVISO_LLAMADA_KEY;
-  if (!clave || req.query.k !== clave) return res.status(401).json({ error: "no autorizado" });
+  if (!claveWebhookValida(req)) return res.status(401).json({ error: "no autorizado" });
   const ref = String(req.body?.refParte || req.body?.referencia || "").trim();
   console.log("[Voz] Consultar parte:", ref);
   if (!ref) return res.json({ ok: false, motivo: "falta_referencia" });
@@ -2897,8 +2910,7 @@ app.post("/voz/consultar-parte", async (req, res) => {
 
 // Buscar el parte más reciente por teléfono (cuando no recuerdan la referencia)
 app.post("/voz/parte-por-telefono", async (req, res) => {
-  const clave = process.env.AVISO_LLAMADA_KEY;
-  if (!clave || req.query.k !== clave) return res.status(401).json({ error: "no autorizado" });
+  if (!claveWebhookValida(req)) return res.status(401).json({ error: "no autorizado" });
   const tel = String(req.body?.telefono || "").replace(/\D/g, "");
   console.log("[Voz] Partes por teléfono:", tel.slice(-9));
   if (tel.length < 9) return res.json({ ok: false, motivo: "telefono_invalido" });
@@ -2921,8 +2933,7 @@ app.post("/voz/parte-por-telefono", async (req, res) => {
 // El workflow de Zoho CRM (estado → Cerrado) llama aquí y Marta pregunta la
 // nota en el chat del cliente. Seguridad: ?k=<AVISO_LLAMADA_KEY>.
 app.post("/zoho/parte-cerrado", async (req, res) => {
-  const clave = process.env.AVISO_LLAMADA_KEY;
-  if (!clave || req.query.k !== clave) return res.status(401).json({ error: "no autorizado" });
+  if (!claveWebhookValida(req)) return res.status(401).json({ error: "no autorizado" });
   const d = req.body || {};
   console.log("[Reseñas] Parte cerrado en Zoho:", JSON.stringify(d).slice(0, 400));
   const resultado = await pedirResena({
@@ -2938,8 +2949,7 @@ app.post("/zoho/parte-cerrado", async (req, res) => {
 // Zoho Flow llama aquí cuando se crea un parte en el CRM y el bot lanza la
 // llamada de voz al teléfono de turno. Seguridad: ?k=<AVISO_LLAMADA_KEY>.
 app.post("/zoho/parte-creado", async (req, res) => {
-  const clave = process.env.AVISO_LLAMADA_KEY;
-  if (!clave || req.query.k !== clave) return res.status(401).json({ error: "no autorizado" });
+  if (!claveWebhookValida(req)) return res.status(401).json({ error: "no autorizado" });
   const d = req.body || {};
   console.log("[Aviso-voz] Parte creado en Zoho:", JSON.stringify(d).slice(0, 400));
   const resultado = await llamarAvisoParte({
