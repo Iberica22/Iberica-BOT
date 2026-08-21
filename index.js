@@ -535,6 +535,21 @@ async function pedirResena({ telefono, nombre, refParte, caseId }) {
   return { ok: true, telefono: clave, via: fueraDeVentana ? "plantilla" : "chat" };
 }
 
+// ¿El parte viene de una compañía de seguros? El nombre técnico del campo
+// varía según cómo se creara en Zoho ("Compañía de seguros" → p. ej.
+// "Compa_a_de_seguros"), así que se busca por aproximación cualquier campo
+// cuyo nombre hable de compañía de seguros/aseguradora y tenga valor.
+function parteDeAseguradora(caso) {
+  const vacios = new Set(["", "no", "ninguna", "ninguno", "false", "-", "—", "n/a", "null"]);
+  return Object.entries(caso || {}).some(([campo, valor]) => {
+    const n = campo.toLowerCase();
+    const esCampoSeguro = (n.includes("compa") && n.includes("segur")) || n.includes("asegurador");
+    if (!esCampoSeguro || valor == null) return false;
+    const texto = typeof valor === "object" ? (valor.name || valor.id || "sí") : String(valor);
+    return !vacios.has(texto.trim().toLowerCase());
+  });
+}
+
 // ── Sondeo de partes cerrados (sin tocar el CRM) ─────────────
 // Cada 5 minutos el bot pregunta a Zoho por los últimos partes modificados;
 // los que hayan pasado a "Cerrado" en las últimas horas disparan la
@@ -566,6 +581,14 @@ async function sondearPartesCerrados() {
       cierresProcesados[caso.id] = Date.now();
       const modificado = new Date(caso.Modified_Time || 0).getTime();
       if (!modificado || modificado < limite) continue; // cierre antiguo: registrar sin escribir
+      // Partes de compañías de seguros: fuera de la encuesta. El cliente no
+      // nos eligió y el alcance lo marca la aseguradora — segmento de riesgo
+      // para reseñas y sin valor de NPS propio.
+      if (parteDeAseguradora(caso)) {
+        console.log(`[Reseñas] Parte ${caso.ref_Parte || caso.id} omitido: viene de compañía de seguros`);
+        resumen.encuestas.push({ parte: caso.ref_Parte || caso.id, resultado: "omitido_aseguradora" });
+        continue;
+      }
       resumen.cerradosNuevos++;
       // Teléfono y nombre del contacto vinculado al parte
       let telefonoCli = null;
