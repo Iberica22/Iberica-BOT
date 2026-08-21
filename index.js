@@ -2855,6 +2855,21 @@ app.get("/admin/api/test-leads-abandonados", authAdmin, async (req, res) => {
 });
 
 // ── Sondeo manual de cierres desde el panel (diagnóstico) ────
+// ── Estado del circuito de reseñas de un vistazo ─────────────
+app.get("/admin/api/resenas-stats", authAdmin, (req, res) => {
+  const ahora = Date.now();
+  const pedidas = Object.entries(resenasPedidas)
+    .sort((a, b) => b[1] - a[1])
+    .map(([tel, ts]) => ({ telefono: tel, hace_horas: Math.round((ahora - ts) / 3600000) }));
+  res.json({
+    plantillaConfigurada: !!process.env.RESENA_TEMPLATE,
+    nombrePlantilla: process.env.RESENA_TEMPLATE || null,
+    encuestasPedidasTotal: pedidas.length,
+    ultimas: pedidas.slice(0, 25),
+    cierresProcesadosRegistrados: Object.keys(cierresProcesados).length,
+  });
+});
+
 app.get("/admin/api/test-cierres", authAdmin, async (req, res) => {
   res.json(await sondearPartesCerrados());
 });
