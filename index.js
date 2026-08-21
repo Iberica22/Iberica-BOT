@@ -581,10 +581,11 @@ async function sondearPartesCerrados() {
       cierresProcesados[caso.id] = Date.now();
       const modificado = new Date(caso.Modified_Time || 0).getTime();
       if (!modificado || modificado < limite) continue; // cierre antiguo: registrar sin escribir
-      // Partes de compañías de seguros: fuera de la encuesta. El cliente no
-      // nos eligió y el alcance lo marca la aseguradora — segmento de riesgo
-      // para reseñas y sin valor de NPS propio.
-      if (parteDeAseguradora(caso)) {
+      // Partes de compañías de seguros: encuestables por defecto (son la
+      // mayoría del volumen y su NPS histórico es excelente). Si algún día
+      // se quiere excluirlos, basta con RESENAS_EXCLUIR_ASEGURADORAS=on en
+      // Railway — sin tocar código.
+      if ((process.env.RESENAS_EXCLUIR_ASEGURADORAS || "off").toLowerCase() === "on" && parteDeAseguradora(caso)) {
         console.log(`[Reseñas] Parte ${caso.ref_Parte || caso.id} omitido: viene de compañía de seguros`);
         resumen.encuestas.push({ parte: caso.ref_Parte || caso.id, resultado: "omitido_aseguradora" });
         continue;
