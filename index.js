@@ -570,6 +570,16 @@ async function sondearPartesCerrados() {
     });
     const casos = res.data?.data || [];
     resumen.vistos = casos.length;
+    // Radiografía de lo que ve el sondeo (para diagnóstico en /admin/api/test-cierres):
+    // estados y subestados reales de los últimos partes modificados.
+    resumen.muestra = casos.map((c) => ({
+      ref: c.ref_Parte || c.id,
+      estado: c.Status || null,
+      subestado: c.Subestado || null,
+      modificado: c.Modified_Time || null,
+      aseguradora: parteDeAseguradora(c) || undefined,
+      yaProcesado: !!cierresProcesados[c.id] || undefined,
+    }));
     const limite = Date.now() - 3 * 3600 * 1000; // solo cierres de las últimas 3h
     // Misma condición que la regla "Encueste pere" del CRM: solo trabajo
     // terminado de verdad (no cierres por anulación u otros subestados).
