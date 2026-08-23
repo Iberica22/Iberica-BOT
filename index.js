@@ -582,11 +582,13 @@ async function sondearPartesCerrados() {
     }));
     const limite = Date.now() - 3 * 3600 * 1000; // solo cierres de las últimas 3h
     // Misma condición que la regla "Encueste pere" del CRM: solo trabajo
-    // terminado de verdad (no cierres por anulación u otros subestados).
-    const SUBESTADOS_ENCUESTA = ["Acabado", "Solucionado"];
+    // terminado de verdad. OJO: en Zoho el subestado es UN valor literal
+    // "Acabado / Solucionado" — se comprueba por contenido para cubrir esa
+    // forma y cualquier variante (Acabado, Solucionado, con/sin espacios).
     for (const caso of casos) {
       if (caso.Status !== "Cerrado") continue;
-      if (!SUBESTADOS_ENCUESTA.includes(caso.Subestado)) continue;
+      const sub = normalizaTxt(caso.Subestado || "");
+      if (!sub.includes("acabado") && !sub.includes("solucionado")) continue;
       if (cierresProcesados[caso.id]) continue;
       cierresProcesados[caso.id] = Date.now();
       const modificado = new Date(caso.Modified_Time || 0).getTime();
