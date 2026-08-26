@@ -88,6 +88,8 @@ function extraerTextoEvento(body) {
     // Ecos de coexistencia (formato Meta): data.messages[].text.body
     body?.data?.messages?.[0]?.text?.body ||
     body?.data?.message?.text?.body ||
+    // Eventos MANUAL/API_OUTBOUND (p. ej. envíos manuales en Instagram)
+    body?.messageEvent?.data?.text ||
     (Array.isArray(body?.response) ? body.response.map((r) => r?.text).find(Boolean) : null) ||
     null
   );
@@ -105,6 +107,7 @@ function detectarIntervencionHumana(body) {
     body?.to, body?.from, body?.recipient,
     body?.data?.to, body?.data?.recipient,
     body?.data?.messages?.[0]?.to,   // ecos de coexistencia (formato Meta)
+    body?.messageEvent?.to,          // eventos MANUAL/API_OUTBOUND (Instagram)
     body?.member,
   ]
     .filter(Boolean)
@@ -2149,6 +2152,10 @@ const CAP = {
 
 // Envía un texto al lead usando su canal/miembro de Woztell (aislado de enviarMensaje)
 async function enviarCap(lead, mensaje) {
+  // Registrar el texto como envío propio: sin esto, el eco MANUAL de estos
+  // mensajes (Instagram) se confundiría con una intervención humana y el
+  // bot se pausaría a sí mismo en plena cualificación.
+  registrarEnvioBot(lead.telefono, mensaje);
   try {
     const res = await axios.post(
       `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
