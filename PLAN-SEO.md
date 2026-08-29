@@ -4,69 +4,72 @@
 
 > Versión con formato: https://claude.ai/code/artifact/77ad99d1-1f2f-4242-a880-4213d65c2d6b
 
-## Veredicto
+## Veredicto (confirmado leyendo la ficha)
 
-**Dos correcciones sobre la primera versión.** La cifra de ~60 reseñas salía de un directorio
-externo y estaba desfasada: el volumen real supera al de las fichas que sí aparecen en el mapa.
-Y con los dos datos aportados —la ficha sale entera al buscar el nombre exacto, y hay dos fichas,
-una por exposición— el diagnóstico queda cerrado.
+La ficha está bien en todo lo que se suele mirar: verificada, visible, categoría correcta
+(«Cerrajero en Almería»), 4,8 de nota, 108 reseñas, web enlazada. Nada de eso es el problema.
 
-Si tenemos más reseñas que cualquiera de los que salen y aun así no aparecemos, no es
-posicionamiento: el posicionamiento es un gradiente, más reseñas suben puestos, no hacen
-invisible a nadie. Y no es suspensión, porque la ficha aparece con el nombre exacto.
+**El problema está en el campo de la dirección:**
 
-**Lo que pasa: las reseñas están acumuladas en una sola de las dos fichas, y no es la que
-Google enseña donde buscan los clientes.**
+```
+Calle Estaño, 101 C. San Leonardo, 34, 04004, 04009 Almería
+```
 
-La causa está en el código: `index.js:429` fija un `RESENA_URL` único
-(`https://g.page/r/CXgW_wAoTj0cEAE/review`) que el bot manda en todos los partes, venga de la
-exposición que venga. El 100 % de las reseñas que genera Marta caen en esa ficha; la otra lleva
-desde siempre casi a cero.
+Son **dos direcciones y dos códigos postales fundidos en un solo campo**. Google no puede
+convertir eso en un punto del mapa. Y como la distancia entre el cliente y ese punto es el
+factor que más pesa en el posicionamiento local, una ficha que no se puede situar **no entra
+a competir en ninguna búsqueda por cercanía**. Por eso se pueden tener 108 reseñas y no
+aparecer: no es que perdamos la carrera, es que no nos dejan salir.
 
-Y ahí encaja todo: ante dos fichas del mismo negocio Google **muestra solo una por búsqueda**,
-elegida por cercanía a quien busca. Si la ficha con las reseñas es la del Sector 20 y la vacía
-la del centro, en las búsquedas desde la ciudad Google escoge la del centro —sin reseñas, no
-compite— y descarta la del polígono por lejana.
+Segundo agujero, más pequeño pero caro: la ficha dice **«Cerrado»** a las 20:40 y abre el
+lunes a las 9:30. Nuestro propio rótulo anuncia 24 h, pero en Google no está declarado, así
+que desaparecemos de las búsquedas de urgencia nocturna, las de más valor del oficio.
 
-## Problema A: las fichas
+## Problema A: los cuatro arreglos de la ficha
 
-| # | Punto | Estado |
-|---|---|---|
-| A1 | Suspensión o desverificación | **Descartado** — la ficha sale con el nombre exacto |
-| A2 | Las dos fichas se estorban entre ellas | **Causa principal** |
-| A3 | Categoría principal de cada ficha | Por comprobar en las dos |
-| A4 | Competidores con la palabra clave en el nombre | Denunciable |
+Todos dentro del Perfil de Empresa, en una sola sesión.
 
-**A1 — Descartado.** La ficha está viva, verificada y sin sanción. Buena noticia: la suspensión
-en cerrajería es larga de revertir y no nos afecta. El problema es de configuración.
+**A1 — La dirección: dejar una sola, limpia.** *Esto es la causa.* Borrar el campo y escribir
+solo la del local que corresponde a esta ficha, con un único código postal: `Calle Estaño, 101
+· 04009 Almería` o `Calle San Leonardo, 34 · 04004 Almería`. Nunca las dos. Después **arrastrar
+el pin a mano** hasta la puerta del local. Al guardar, Google puede pedir reverificación: hay
+que pasarla, es lo que fija las coordenadas buenas. Plazo hasta notarlo: 2–4 semanas.
 
-**A2 — Causa principal.** Dos fichas para dos locales reales es legítimo. Lo que ocurre es que
-Google nunca enseña las dos en la misma búsqueda: elige una, casi siempre la más cercana. Con el
-reparto de reseñas desequilibrado, sale la débil y la fuerte se queda en el banquillo.
-*Primer paso (1 min):* abrir `https://g.page/r/CXgW_wAoTj0cEAE/review` y ver qué dirección
-muestra. Esa es la ficha que se ha quedado con todas las reseñas.
+**A2 — El horario: declarar las 24 h.** A las nueve de la noche, quien se ha quedado fuera de
+casa nos ve «Cerrado», y muchos filtran por «Abierto ahora». Los que nos ganan están todos
+marcados 24 h. En el editor de horarios, **«Abre las 24 horas»** en cada día. Alternativa más
+fiel pero de menos alcance: horario de oficina como principal y el de urgencias en «Horario
+completo» → «Añadir otro horario».
 
-**A3 — Categoría.** No describe: decide en qué búsquedas entra cada ficha a competir. Si alguna
-tiene «Empresa de sistemas de seguridad» o «Tienda de puertas» como principal, esa ficha no
-aparece en «cerrajero Almería» ni con mil reseñas. Comprobar en **las dos**. Debe poner
-**Cerrajero**; el resto, secundarias.
+**A3 — El teléfono no coincide con nuestro rótulo.** La ficha da el 950 08 80 86 y la foto de
+fachada que subimos anuncia el 950 22 78 89. Google contrasta el teléfono entre ficha, web,
+directorios y fotos, y la discrepancia resta confianza — lo que más caro se paga en cerrajería,
+el gremio con los filtros antifraude más duros. Decidir cuál es el bueno y unificarlo; el otro,
+como secundario.
 
-**A4 — Nombres con palabra clave.** Explica el resto de la diferencia. «Cerrajeros Almería 24h»
-da una ventaja enorme y es infracción de políticas: el nombre debe ser el real. Se denuncian con
-«Sugerir un cambio» y el formulario de reparación de perfiles.
+**A4 — Servicios y reseñas.** La categoría ya es correcta. Queda rellenar la pestaña
+**Servicios** (apertura de puertas, cambio de cerradura, bombines, puertas acorazadas,
+automatismos, copias de llaves, cerrajería forense): cada servicio declarado es una búsqueda
+más en la que la ficha puede entrar. Y poner el enlace de reseña de esta ficha en `RESENA_URL`
+(Railway) para que el goteo de Marta siga alimentándola.
 
-### Qué hacer, por orden
+### Por qué este orden
 
-1. Abrir el enlace de reseña y ver qué ficha se ha llevado todas.
-2. Comprobar la categoría principal de **las dos** fichas.
-3. Decidir la ficha principal para Almería capital —lo lógico es San Leonardo 34, donde buscan
-   los clientes— y dejar la del Sector 20 como exposición, con categoría propia para que no
-   compitan entre ellas.
-4. Cambiar el bot para que cada parte mande el enlace de la ficha que hizo el trabajo.
+A1 no es «una mejora más». Mientras la dirección no se pueda convertir en un punto del mapa,
+los otros tres no tienen dónde apoyarse: las reseñas, la categoría y los servicios deciden *en
+qué puesto* sale una ficha entre las candidatas, pero para ser candidata hace falta una
+ubicación que Google sepa medir.
 
-**Importante:** las reseñas no se pueden mover entre fichas. Google solo las fusiona al unir
-duplicados, y estas no son duplicados sino dos locales reales. Las que ya están se quedan donde
-están; lo que se corrige es el caudal de aquí en adelante. Por eso el punto 4 corre prisa.
+## Descartado por el camino
+
+| Hipótesis | Estado |
+|---|---|
+| Pocas reseñas | Descartado — 108, más que las fichas que sí aparecen |
+| Ficha suspendida o sin verificar | Descartado — se ve entera y operativa |
+| Categoría principal equivocada | Descartado — «Cerrajero en Almería», correcta |
+| Reseñas repartidas entre dos fichas | Descartado — están todas en esta |
+| **Dirección no geocodificable** | **Confirmado** |
+| **24 h sin declarar** | **Confirmado** |
 
 ## Problema B: la web
 
@@ -154,11 +157,13 @@ Una página por búsqueda; nunca dos páginas peleando por el mismo término.
 
 ## Plan
 
-### Semana 1 — enderezar las fichas y arreglos de coste cero
-1. **Abrir el enlace de reseña del bot** y anotar a qué exposición pertenece esa ficha.
-2. **Revisar la categoría principal de las dos fichas.** «Cerrajero» en la que deba competir en
-   la ciudad. Treinta segundos que pueden valer más que todo lo demás junto.
-3. **Cambiar el bot** para que cada parte mande el enlace de su ficha.
+### Semana 1 — arreglar la ficha y los básicos de la web
+1. **Arreglar la dirección de la ficha** y colocar el pin a mano sobre la puerta del local.
+2. **Marcar «Abre las 24 horas»** los siete días.
+3. **Unificar el teléfono** entre ficha, web, directorios y rótulo. **Rellenar la pestaña
+   Servicios** y pegar el enlace de reseña en `RESENA_URL` (Railway). **Publicar
+   `seo/schema-localbusiness.html`** en el `<head>` del sitio, con la dirección ya corregida y
+   copiada letra por letra desde Maps.
 4. Reescribir título y meta descripción de cada página. Fórmula `Servicio + en Almería + marca`, máx. 60 caracteres. Empezar por la portada.
 5. Elegir dominio y redirigir el otro con 301 hacia la página equivalente (no apagarlo sin más).
 6. Unificar NAP: escribir nombre, dirección y teléfono de cada exposición en un documento y copiarlos literalmente en Google, Bing Places, Apple Maps y todos los directorios.
@@ -186,10 +191,9 @@ sale de lo que Google muestra públicamente en sus resultados —que es lo que v
 más los datos de empresa del propio bot (`index.js:1289`). Los hallazgos 1, 2, 3, 4, 5 y 7
 son verificables repitiendo las búsquedas indicadas.
 
-Tampoco puedo ver las fichas de Google ni el panel del Perfil de Empresa. El Problema A se
-apoya en dos datos aportados —la ficha sale con el nombre exacto, y hay dos fichas— más una
-certeza del código: el enlace de reseña es único y está fijo en `index.js:429`. Queda por
-confirmar a cuál de las dos apunta y qué categoría principal tiene cada una.
+El Problema A ya no es una hipótesis: está leído directamente de la ficha (dirección, horario,
+teléfono, categoría y número de reseñas). Lo único que no puedo hacer yo son los cambios, porque
+viven dentro del Perfil de Empresa y requieren la cuenta.
 
 Pendiente de revisar, no visible desde aquí: velocidad y experiencia móvil, `robots.txt` y
 sitemap, enlazado interno, contenido duplicado dentro del dominio, y datos de Search Console.
