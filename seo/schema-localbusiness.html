@@ -1,0 +1,110 @@
+<!--
+  Datos estructurados de Ibérica Seguridad para ibericaseguridad.com
+  ==================================================================
+  Pegar este bloque dentro de <head> en TODAS las páginas del sitio.
+
+  Para qué sirve: es una de las señales con las que Google contrasta que la
+  empresa existe y que la dirección de la ficha de Maps es real. La ficha y la
+  web tienen que decir EXACTAMENTE lo mismo; si no coinciden, esta corroboración
+  no solo no suma, resta.
+
+  ANTES DE PUBLICARLO hay que rellenar los tres campos marcados con REVISAR:
+
+  1. streetAddress / postalCode — la dirección de ESTA ficha, una sola y limpia.
+     Ahora mismo la ficha tiene las dos fundidas en un campo
+     ("Calle Estaño, 101 C. San Leonardo, 34, 04004, 04009"), que es justo el
+     problema. Primero se arregla en la ficha; luego se copia aquí LETRA POR
+     LETRA como quede en Google Maps, incluidas abreviaturas.
+
+  2. latitude / longitude — se sacan abriendo la ficha en Google Maps, botón
+     derecho sobre el pin → las coordenadas aparecen arriba del menú.
+
+  3. hasMap — la URL corta de la ficha (botón Compartir en Maps).
+
+  NOTA IMPORTANTE, no añadir "aggregateRating" con la nota de Google. Marcar
+  reseñas propias que en realidad viven en Google incumple las directrices de
+  datos estructurados y puede acarrear una acción manual. Las estrellas de Maps
+  ya salen solas en la ficha; aquí no se declaran.
+-->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Locksmith",
+  "@id": "https://ibericaseguridad.com/#empresa",
+  "name": "Ibérica Servi & Security S.L.",
+  "alternateName": "Ibérica Seguridad",
+  "description": "Cerrajería urgente 24 horas, puertas acorazadas y blindadas, cerraduras de seguridad, automatismos y control de accesos en Almería y provincia. Más de 20 años de experiencia, fabricación e instalación propias.",
+  "url": "https://ibericaseguridad.com",
+  "telephone": "+34950088086",
+  "email": "pedidos@ibericaseguridad.com",
+  "image": "https://ibericaseguridad.com/logo.jpg",
+  "logo": "https://ibericaseguridad.com/logo.jpg",
+  "priceRange": "€€",
+  "currenciesAccepted": "EUR",
+  "paymentAccepted": "Efectivo, Tarjeta, Transferencia, Financiación",
+
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "Calle San Leonardo, 34",
+    "addressLocality": "Almería",
+    "addressRegion": "Almería",
+    "postalCode": "04004",
+    "addressCountry": "ES"
+  },
+
+  "geo": {
+    "@type": "GeoCoordinates",
+    "latitude": "REVISAR_LATITUD",
+    "longitude": "REVISAR_LONGITUD"
+  },
+  "hasMap": "REVISAR_URL_CORTA_DE_LA_FICHA_EN_MAPS",
+
+  "openingHoursSpecification": [
+    {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+      "opens": "09:00",
+      "closes": "19:00"
+    }
+  ],
+
+  "areaServed": [
+    { "@type": "City",           "name": "Almería" },
+    { "@type": "AdministrativeArea", "name": "Provincia de Almería" },
+    { "@type": "City",           "name": "El Ejido" },
+    { "@type": "City",           "name": "Roquetas de Mar" },
+    { "@type": "City",           "name": "Vícar" },
+    { "@type": "City",           "name": "Níjar" },
+    { "@type": "City",           "name": "Huércal de Almería" }
+  ],
+
+  "hasOfferCatalog": {
+    "@type": "OfferCatalog",
+    "name": "Servicios de Ibérica Seguridad",
+    "itemListElement": [
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Cerrajería urgente 24 horas", "description": "Aperturas de puerta, cambios de cerradura y reparaciones, todos los días del año." } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Apertura de puertas" } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Cambio de cerraduras y bombines de seguridad", "description": "Cilindros y bombines de alta seguridad Tesa, Ezcurra, Abus y Dierre." } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Instalación de puertas acorazadas y blindadas", "description": "Instaladores oficiales FICHET y KIUSO. Retirada de la puerta antigua incluida y 3 años de garantía por escrito." } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Puertas metálicas y automatismos", "description": "Automatismos para puertas, garajes y portones." } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Control de accesos y domótica", "description": "Apertura desde el móvil, sin cuotas." } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Cerrajería para empresas y comunidades" } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Copias de llaves y mandos de garaje" } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Cerrajería forense", "description": "Miembros de la Asociación Profesional de Cerrajeros Forenses (APFC)." } },
+      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Cajas fuertes" } }
+    ]
+  },
+
+  "knowsAbout": [
+    "Cerrajería de urgencia",
+    "Puertas acorazadas homologadas",
+    "Cerraduras de alta seguridad",
+    "Automatismos de garaje",
+    "Control de accesos"
+  ],
+
+  "sameAs": [
+    "https://www.instagram.com/ibericaseguridad"
+  ]
+}
+</script>
