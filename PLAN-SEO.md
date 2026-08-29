@@ -4,21 +4,82 @@
 
 > Versión con formato: https://claude.ai/code/artifact/77ad99d1-1f2f-4242-a880-4213d65c2d6b
 
-## Veredicto
+## Veredicto (corregido)
 
-Las reseñas de Google alimentan el **mapa** (las tres fichas con estrellas), no los
-resultados azules. Y dentro del mapa Google pondera mucho más la **cantidad** de
-reseñas, la cercanía del que busca y las categorías de la ficha que la nota media:
-un 4,8 con 60 reseñas pierde contra un 4,2 con 300.
+**Corrección sobre la primera versión:** la cifra de ~60 reseñas salía de un directorio
+externo y estaba desfasada. El volumen real supera al de las fichas que sí aparecen en el
+mapa. Eso descarta las reseñas como causa y cambia el diagnóstico de raíz.
 
-En los resultados azules la web parte con una desventaja ajena a la calidad del
-trabajo: la portada no compite por ninguna búsqueda, el vocabulario de las páginas
-no coincide con el que teclea la gente, y hay dos dominios propios peleándose.
+Si tenemos más reseñas que cualquiera de los que salen en Maps y aun así no aparecemos,
+**no es un problema de posicionamiento**. El posicionamiento es un gradiente: más reseñas
+suben puestos, no hacen invisible a nadie. La ausencia total es una señal binaria: Google
+no nos está ordenando peor, nos está **dejando fuera de la lista**.
 
-Seis de los ocho problemas se arreglan sin tocar código, y el hueco más rentable
-del mercado local —*puertas acorazadas en Almería*— está vacío.
+Contexto que explica por qué nos toca: **la cerrajería es el gremio más vigilado de Google
+en España**. Tras las denuncias de estafas, Google suspendió la publicidad de cerrajeros en
+España y endureció los algoritmos de confianza de todo el sector. Los negocios legítimos
+caen en esas redadas con una facilidad que no tiene ningún otro oficio.
 
-## Hallazgos (por impacto)
+Son dos problemas distintos:
+
+- **Problema A — la ficha de Maps está excluida.** Urgente. Se diagnostica en 10 minutos.
+- **Problema B — la web.** Explica la ausencia en los resultados azules. Los ocho hallazgos
+  de abajo siguen vigentes, pero son el problema lento.
+
+## Problema A: por qué se excluye una ficha
+
+Seis causas producen ausencia total, no mal puesto. Ordenadas por encaje con nuestro caso
+(gremio de cerrajería, dos exposiciones, datos descuadrados en directorios):
+
+| # | Causa | Encaje |
+|---|---|---|
+| A1 | Ficha suspendida o desverificada | Causa más probable |
+| A2 | Fichas duplicadas que se anulan entre sí | Encaja con las dos exposiciones |
+| A3 | Categoría principal equivocada | Produce ausencia total |
+| A4 | Google no puede triangular quiénes somos | Agravante |
+| A5 | Competidores con la palabra clave en el nombre | Denunciable |
+| A6 | Distancia desde donde busca el cliente | Explicación parcial |
+
+**A1 — Suspensión.** No siempre avisa y muchas veces es «blanda»: la ficha se sigue viendo
+desde nuestra cuenta y desde el enlace directo, pero desaparece de las búsquedas. Por eso se
+puede llevar meses suspendido sin enterarse. Google barre el gremio por lotes y arrastra a
+los legítimos. *Comprobar:* estado en el Perfil de Empresa.
+
+**A2 — Duplicados.** Dos exposiciones (capital y Sector 20). Si se creó una ficha sin
+comprobar que ya existía otra, o una verificación se quedó a medias, puede haber dos fichas
+del mismo negocio: es infracción directa y el desenlace habitual es que Google *deje de
+mostrar las dos*. Variante que encaja aún mejor: las reseñas acumuladas en una ficha
+suprimida mientras la viva está casi vacía. *Comprobar:* buscar «Ibérica» en Maps dentro de
+Almería, y repetir con cada dirección y con el 950 088 086.
+
+**A3 — Categoría principal.** No es una etiqueta descriptiva: es el interruptor que decide
+en qué búsquedas entra la ficha. Si es «Empresa de sistemas de seguridad» o «Tienda de
+puertas», no aparecemos en «cerrajero Almería» jamás, con mil reseñas o con ninguna. Encaja:
+somos una empresa de seguridad que además hace cerrajería. *Comprobar:* debe poner
+**Cerrajero**; el resto, secundarias.
+
+**A4 — Triangulación.** Google contrasta nuestros datos con los de terceros. Las dos
+direcciones fundidas en los directorios y los dos dominios vivos diciendo lo mismo restan
+justo donde más duele.
+
+**A5 — Nombres con palabra clave.** Explica que nos ganen fichas con menos reseñas.
+Llamarse «Cerrajeros Almería 24h» da una ventaja enorme y es infracción de políticas.
+Se denuncian con «Sugerir un cambio» y el formulario de reparación de perfiles.
+
+**A6 — Distancia.** Pesa mucho en el mapa: si la dirección verificada es la del Sector 20,
+en búsquedas desde el centro salimos lejos. Baja puestos, no borra: explica parte, nunca todo.
+
+### La prueba que lo decide (2 minutos)
+
+Buscar en Google el nombre exacto `Ibérica Servi & Security Almería`, desde el móvil, sin
+sesión y en incógnito.
+
+- **No sale ni con el nombre exacto** → suspendida, desverificada o conflicto por duplicado
+  (A1/A2). Problema de cuenta, se resuelve con apelación. No es SEO.
+- **Sale con el nombre exacto pero nunca con «cerrajero almería»** → ficha viva, problema de
+  relevancia: categoría principal (A3) o servicios sin declarar. Se arregla en una tarde.
+
+## Problema B: la web
 
 | # | Hallazgo | Impacto | Esfuerzo |
 |---|---|---|---|
@@ -69,12 +130,11 @@ Leonardo, 34, 04004, 04009 Almería». Tener dos exposiciones (capital y polígo
 está bien, pero la ficha de cada una debe ser idéntica —mismo nombre, dirección, teléfono y
 grafía— en Google, Bing, Páginas Amarillas y cada directorio.
 
-### 6. Volumen de reseñas
-60 reseñas con 4,9 es una reputación excelente y un gran activo de conversión, pero como
-señal de posicionamiento en el mapa se queda corta frente a competidores con cientos.
-El mecanismo ya existe: Marta pide nota 0–10 al cerrarse el parte y manda el enlace.
+### 6. Reseñas: ya están hechas
+Descartado como causa (ver corrección arriba). El volumen supera al de las fichas que sí
+aparecen, que es justamente lo que apunta al Problema A.
 
-Detalle a corregir: `index.js:429` usa un `RESENA_URL` único
+Detalle a revisar cuando la ficha esté desbloqueada: `index.js:429` usa un `RESENA_URL` único
 (`https://g.page/r/CXgW_wAoTj0cEAE/review`) para todos los partes. Si cada exposición tiene
 ficha propia, el enlace debería ser el de la que atendió el trabajo.
 
@@ -107,12 +167,20 @@ Una página por búsqueda; nunca dos páginas peleando por el mismo término.
 
 ## Plan
 
-### Semana 1 — arreglos de coste cero
-1. Reescribir título y meta descripción de cada página. Fórmula `Servicio + en Almería + marca`, máx. 60 caracteres. Empezar por la portada.
-2. Elegir dominio y redirigir el otro con 301 hacia la página equivalente (no apagarlo sin más).
-3. Unificar NAP: escribir nombre, dirección y teléfono de cada exposición en un documento y copiarlos literalmente en Google, Bing Places, Apple Maps y todos los directorios.
-4. Revisar categorías de Google Business: principal «Cerrajero»; secundarias «Tienda de puertas», «Servicio de instalación de puertas», «Empresa de sistemas de seguridad».
-5. Dar de alta Google Search Console y enviar el sitemap.
+### Semana 1 — desbloquear la ficha y arreglos de coste cero
+1. **Hacer la prueba del nombre exacto** y abrir el Perfil de Empresa para ver el estado.
+   Todo lo demás va detrás: con la ficha excluida, el trabajo sobre la web tarda meses en
+   notarse y el mapa sigue en cero. Si está suspendida, apelar el mismo día con CIF, fotos
+   del local con rótulo y factura reciente a nombre de la sociedad.
+2. **Comprobar duplicados** en Maps por las dos direcciones y por el teléfono. Si hay dos,
+   reclamar la fusión: nunca borrar la que tiene las reseñas.
+3. **Categoría principal «Cerrajero»**, el resto secundarias. Treinta segundos que pueden
+   valer más que todo lo demás junto.
+4. Reescribir título y meta descripción de cada página. Fórmula `Servicio + en Almería + marca`, máx. 60 caracteres. Empezar por la portada.
+5. Elegir dominio y redirigir el otro con 301 hacia la página equivalente (no apagarlo sin más).
+6. Unificar NAP: escribir nombre, dirección y teléfono de cada exposición en un documento y copiarlos literalmente en Google, Bing Places, Apple Maps y todos los directorios.
+7. Revisar el resto de categorías y servicios: principal «Cerrajero»; secundarias «Tienda de puertas», «Servicio de instalación de puertas», «Empresa de sistemas de seguridad».
+8. Dar de alta Google Search Console y enviar el sitemap.
 
 ### Mes 1 — contenido y presencia
 1. Página de puertas acorazadas: fotos de instalaciones propias (no de catálogo), sellos FICHET y KIUSO, garantía de 3 años, retirada de la puerta antigua, financiación Cetelem, horquilla de precios por gama.
@@ -134,6 +202,10 @@ no se ha podido rastrear la web por dentro. Lo afirmado sobre títulos, páginas
 sale de lo que Google muestra públicamente en sus resultados —que es lo que ve el cliente—
 más los datos de empresa del propio bot (`index.js:1289`). Los hallazgos 1, 2, 3, 4, 5 y 7
 son verificables repitiendo las búsquedas indicadas.
+
+Tampoco puedo ver la ficha de Google ni el panel del Perfil de Empresa: el Problema A son
+las seis causas conocidas de exclusión ordenadas por encaje con nuestro perfil, no una
+lectura de la ficha. Las dos comprobaciones del recuadro lo cierran en diez minutos.
 
 Pendiente de revisar, no visible desde aquí: velocidad y experiencia móvil, `robots.txt` y
 sitemap, enlazado interno, contenido duplicado dentro del dominio, y datos de Search Console.
