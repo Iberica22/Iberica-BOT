@@ -427,7 +427,11 @@ async function llamarAvisoParte(datos) {
 // Al cerrarse un parte (webhook desde el workflow del CRM), Marta pregunta
 // la nota del 0 al 10 en el chat que el cliente ya conoce. 9-10 → enlace
 // directo de reseña; 8 o menos → pregunta qué mejorar y avisa al equipo.
-const RESENA_URL = "https://g.page/r/CXgW_wAoTj0cEAE/review";
+// El enlace apunta a UNA ficha de Google concreta, y ahí van a parar todas las
+// reseñas que genera la encuesta. Con dos fichas dadas de alta (el servicio y
+// la exposición) eso decide cuál de las dos acumula reputación, así que se
+// configura desde Railway con RESENA_URL — sin tocar código ni desplegar.
+const RESENA_URL = (process.env.RESENA_URL || "https://g.page/r/CXgW_wAoTj0cEAE/review").trim();
 const resenasPedidas = {}; // { telefono: ts de la última petición }
 
 // Localiza la clave del cliente (formato Woztell "34XXXXXXXXX") a partir de
@@ -2883,6 +2887,8 @@ app.get("/admin/api/resenas-stats", authAdmin, (req, res) => {
   res.json({
     plantillaConfigurada: !!process.env.RESENA_TEMPLATE,
     nombrePlantilla: process.env.RESENA_TEMPLATE || null,
+    enlaceResena: RESENA_URL,
+    enlaceResenaPorDefecto: !process.env.RESENA_URL,
     encuestasPedidasTotal: pedidas.length,
     ultimas: pedidas.slice(0, 25),
     cierresProcesadosRegistrados: Object.keys(cierresProcesados).length,

@@ -51,6 +51,7 @@ npm run dev
 | `ZOHO_REDIRECT_URI` | URI de callback OAuth (debe coincidir en Zoho) |
 | `WOZTELL_TOKEN` | JWT de acceso a la API de Woztell |
 | `WOZTELL_CHANNEL_ID` | ID del canal de WhatsApp en Woztell |
+| `RESENA_URL` | Enlace de reseña de Google de la ficha que debe acumular las reseñas. Con varias fichas dadas de alta, decide cuál gana reputación. Por defecto, la ficha histórica |
 | `PORT` | Puerto del servidor (por defecto 3000) |
 
 ## Endpoints
