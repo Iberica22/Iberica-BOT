@@ -4,80 +4,69 @@
 
 > Versión con formato: https://claude.ai/code/artifact/77ad99d1-1f2f-4242-a880-4213d65c2d6b
 
-## Veredicto (corregido)
+## Veredicto
 
-**Corrección sobre la primera versión:** la cifra de ~60 reseñas salía de un directorio
-externo y estaba desfasada. El volumen real supera al de las fichas que sí aparecen en el
-mapa. Eso descarta las reseñas como causa y cambia el diagnóstico de raíz.
+**Dos correcciones sobre la primera versión.** La cifra de ~60 reseñas salía de un directorio
+externo y estaba desfasada: el volumen real supera al de las fichas que sí aparecen en el mapa.
+Y con los dos datos aportados —la ficha sale entera al buscar el nombre exacto, y hay dos fichas,
+una por exposición— el diagnóstico queda cerrado.
 
-Si tenemos más reseñas que cualquiera de los que salen en Maps y aun así no aparecemos,
-**no es un problema de posicionamiento**. El posicionamiento es un gradiente: más reseñas
-suben puestos, no hacen invisible a nadie. La ausencia total es una señal binaria: Google
-no nos está ordenando peor, nos está **dejando fuera de la lista**.
+Si tenemos más reseñas que cualquiera de los que salen y aun así no aparecemos, no es
+posicionamiento: el posicionamiento es un gradiente, más reseñas suben puestos, no hacen
+invisible a nadie. Y no es suspensión, porque la ficha aparece con el nombre exacto.
 
-Contexto que explica por qué nos toca: **la cerrajería es el gremio más vigilado de Google
-en España**. Tras las denuncias de estafas, Google suspendió la publicidad de cerrajeros en
-España y endureció los algoritmos de confianza de todo el sector. Los negocios legítimos
-caen en esas redadas con una facilidad que no tiene ningún otro oficio.
+**Lo que pasa: las reseñas están acumuladas en una sola de las dos fichas, y no es la que
+Google enseña donde buscan los clientes.**
 
-Son dos problemas distintos:
+La causa está en el código: `index.js:429` fija un `RESENA_URL` único
+(`https://g.page/r/CXgW_wAoTj0cEAE/review`) que el bot manda en todos los partes, venga de la
+exposición que venga. El 100 % de las reseñas que genera Marta caen en esa ficha; la otra lleva
+desde siempre casi a cero.
 
-- **Problema A — la ficha de Maps está excluida.** Urgente. Se diagnostica en 10 minutos.
-- **Problema B — la web.** Explica la ausencia en los resultados azules. Los ocho hallazgos
-  de abajo siguen vigentes, pero son el problema lento.
+Y ahí encaja todo: ante dos fichas del mismo negocio Google **muestra solo una por búsqueda**,
+elegida por cercanía a quien busca. Si la ficha con las reseñas es la del Sector 20 y la vacía
+la del centro, en las búsquedas desde la ciudad Google escoge la del centro —sin reseñas, no
+compite— y descarta la del polígono por lejana.
 
-## Problema A: por qué se excluye una ficha
+## Problema A: las fichas
 
-Seis causas producen ausencia total, no mal puesto. Ordenadas por encaje con nuestro caso
-(gremio de cerrajería, dos exposiciones, datos descuadrados en directorios):
-
-| # | Causa | Encaje |
+| # | Punto | Estado |
 |---|---|---|
-| A1 | Ficha suspendida o desverificada | Causa más probable |
-| A2 | Fichas duplicadas que se anulan entre sí | Encaja con las dos exposiciones |
-| A3 | Categoría principal equivocada | Produce ausencia total |
-| A4 | Google no puede triangular quiénes somos | Agravante |
-| A5 | Competidores con la palabra clave en el nombre | Denunciable |
-| A6 | Distancia desde donde busca el cliente | Explicación parcial |
+| A1 | Suspensión o desverificación | **Descartado** — la ficha sale con el nombre exacto |
+| A2 | Las dos fichas se estorban entre ellas | **Causa principal** |
+| A3 | Categoría principal de cada ficha | Por comprobar en las dos |
+| A4 | Competidores con la palabra clave en el nombre | Denunciable |
 
-**A1 — Suspensión.** No siempre avisa y muchas veces es «blanda»: la ficha se sigue viendo
-desde nuestra cuenta y desde el enlace directo, pero desaparece de las búsquedas. Por eso se
-puede llevar meses suspendido sin enterarse. Google barre el gremio por lotes y arrastra a
-los legítimos. *Comprobar:* estado en el Perfil de Empresa.
+**A1 — Descartado.** La ficha está viva, verificada y sin sanción. Buena noticia: la suspensión
+en cerrajería es larga de revertir y no nos afecta. El problema es de configuración.
 
-**A2 — Duplicados.** Dos exposiciones (capital y Sector 20). Si se creó una ficha sin
-comprobar que ya existía otra, o una verificación se quedó a medias, puede haber dos fichas
-del mismo negocio: es infracción directa y el desenlace habitual es que Google *deje de
-mostrar las dos*. Variante que encaja aún mejor: las reseñas acumuladas en una ficha
-suprimida mientras la viva está casi vacía. *Comprobar:* buscar «Ibérica» en Maps dentro de
-Almería, y repetir con cada dirección y con el 950 088 086.
+**A2 — Causa principal.** Dos fichas para dos locales reales es legítimo. Lo que ocurre es que
+Google nunca enseña las dos en la misma búsqueda: elige una, casi siempre la más cercana. Con el
+reparto de reseñas desequilibrado, sale la débil y la fuerte se queda en el banquillo.
+*Primer paso (1 min):* abrir `https://g.page/r/CXgW_wAoTj0cEAE/review` y ver qué dirección
+muestra. Esa es la ficha que se ha quedado con todas las reseñas.
 
-**A3 — Categoría principal.** No es una etiqueta descriptiva: es el interruptor que decide
-en qué búsquedas entra la ficha. Si es «Empresa de sistemas de seguridad» o «Tienda de
-puertas», no aparecemos en «cerrajero Almería» jamás, con mil reseñas o con ninguna. Encaja:
-somos una empresa de seguridad que además hace cerrajería. *Comprobar:* debe poner
+**A3 — Categoría.** No describe: decide en qué búsquedas entra cada ficha a competir. Si alguna
+tiene «Empresa de sistemas de seguridad» o «Tienda de puertas» como principal, esa ficha no
+aparece en «cerrajero Almería» ni con mil reseñas. Comprobar en **las dos**. Debe poner
 **Cerrajero**; el resto, secundarias.
 
-**A4 — Triangulación.** Google contrasta nuestros datos con los de terceros. Las dos
-direcciones fundidas en los directorios y los dos dominios vivos diciendo lo mismo restan
-justo donde más duele.
+**A4 — Nombres con palabra clave.** Explica el resto de la diferencia. «Cerrajeros Almería 24h»
+da una ventaja enorme y es infracción de políticas: el nombre debe ser el real. Se denuncian con
+«Sugerir un cambio» y el formulario de reparación de perfiles.
 
-**A5 — Nombres con palabra clave.** Explica que nos ganen fichas con menos reseñas.
-Llamarse «Cerrajeros Almería 24h» da una ventaja enorme y es infracción de políticas.
-Se denuncian con «Sugerir un cambio» y el formulario de reparación de perfiles.
+### Qué hacer, por orden
 
-**A6 — Distancia.** Pesa mucho en el mapa: si la dirección verificada es la del Sector 20,
-en búsquedas desde el centro salimos lejos. Baja puestos, no borra: explica parte, nunca todo.
+1. Abrir el enlace de reseña y ver qué ficha se ha llevado todas.
+2. Comprobar la categoría principal de **las dos** fichas.
+3. Decidir la ficha principal para Almería capital —lo lógico es San Leonardo 34, donde buscan
+   los clientes— y dejar la del Sector 20 como exposición, con categoría propia para que no
+   compitan entre ellas.
+4. Cambiar el bot para que cada parte mande el enlace de la ficha que hizo el trabajo.
 
-### La prueba que lo decide (2 minutos)
-
-Buscar en Google el nombre exacto `Ibérica Servi & Security Almería`, desde el móvil, sin
-sesión y en incógnito.
-
-- **No sale ni con el nombre exacto** → suspendida, desverificada o conflicto por duplicado
-  (A1/A2). Problema de cuenta, se resuelve con apelación. No es SEO.
-- **Sale con el nombre exacto pero nunca con «cerrajero almería»** → ficha viva, problema de
-  relevancia: categoría principal (A3) o servicios sin declarar. Se arregla en una tarde.
+**Importante:** las reseñas no se pueden mover entre fichas. Google solo las fusiona al unir
+duplicados, y estas no son duplicados sino dos locales reales. Las que ya están se quedan donde
+están; lo que se corrige es el caudal de aquí en adelante. Por eso el punto 4 corre prisa.
 
 ## Problema B: la web
 
@@ -130,11 +119,9 @@ Leonardo, 34, 04004, 04009 Almería». Tener dos exposiciones (capital y polígo
 está bien, pero la ficha de cada una debe ser idéntica —mismo nombre, dirección, teléfono y
 grafía— en Google, Bing, Páginas Amarillas y cada directorio.
 
-### 6. Reseñas: ya están hechas
-Descartado como causa (ver corrección arriba). El volumen supera al de las fichas que sí
-aparecen, que es justamente lo que apunta al Problema A.
-
-Detalle a revisar cuando la ficha esté desbloqueada: `index.js:429` usa un `RESENA_URL` único
+### 6. Reseñas: ya están hechas, pero mal repartidas
+Descartado como causa de ranking. El volumen supera al de las fichas que sí aparecen — y eso es
+justamente lo que destapó el Problema A. Ver arriba: `index.js:429` usa un `RESENA_URL` único
 (`https://g.page/r/CXgW_wAoTj0cEAE/review`) para todos los partes. Si cada exposición tiene
 ficha propia, el enlace debería ser el de la que atendió el trabajo.
 
@@ -167,15 +154,11 @@ Una página por búsqueda; nunca dos páginas peleando por el mismo término.
 
 ## Plan
 
-### Semana 1 — desbloquear la ficha y arreglos de coste cero
-1. **Hacer la prueba del nombre exacto** y abrir el Perfil de Empresa para ver el estado.
-   Todo lo demás va detrás: con la ficha excluida, el trabajo sobre la web tarda meses en
-   notarse y el mapa sigue en cero. Si está suspendida, apelar el mismo día con CIF, fotos
-   del local con rótulo y factura reciente a nombre de la sociedad.
-2. **Comprobar duplicados** en Maps por las dos direcciones y por el teléfono. Si hay dos,
-   reclamar la fusión: nunca borrar la que tiene las reseñas.
-3. **Categoría principal «Cerrajero»**, el resto secundarias. Treinta segundos que pueden
-   valer más que todo lo demás junto.
+### Semana 1 — enderezar las fichas y arreglos de coste cero
+1. **Abrir el enlace de reseña del bot** y anotar a qué exposición pertenece esa ficha.
+2. **Revisar la categoría principal de las dos fichas.** «Cerrajero» en la que deba competir en
+   la ciudad. Treinta segundos que pueden valer más que todo lo demás junto.
+3. **Cambiar el bot** para que cada parte mande el enlace de su ficha.
 4. Reescribir título y meta descripción de cada página. Fórmula `Servicio + en Almería + marca`, máx. 60 caracteres. Empezar por la portada.
 5. Elegir dominio y redirigir el otro con 301 hacia la página equivalente (no apagarlo sin más).
 6. Unificar NAP: escribir nombre, dirección y teléfono de cada exposición en un documento y copiarlos literalmente en Google, Bing Places, Apple Maps y todos los directorios.
@@ -203,9 +186,10 @@ sale de lo que Google muestra públicamente en sus resultados —que es lo que v
 más los datos de empresa del propio bot (`index.js:1289`). Los hallazgos 1, 2, 3, 4, 5 y 7
 son verificables repitiendo las búsquedas indicadas.
 
-Tampoco puedo ver la ficha de Google ni el panel del Perfil de Empresa: el Problema A son
-las seis causas conocidas de exclusión ordenadas por encaje con nuestro perfil, no una
-lectura de la ficha. Las dos comprobaciones del recuadro lo cierran en diez minutos.
+Tampoco puedo ver las fichas de Google ni el panel del Perfil de Empresa. El Problema A se
+apoya en dos datos aportados —la ficha sale con el nombre exacto, y hay dos fichas— más una
+certeza del código: el enlace de reseña es único y está fijo en `index.js:429`. Queda por
+confirmar a cuál de las dos apunta y qué categoría principal tiene cada una.
 
 Pendiente de revisar, no visible desde aquí: velocidad y experiencia móvil, `robots.txt` y
 sitemap, enlazado interno, contenido duplicado dentro del dominio, y datos de Search Console.
