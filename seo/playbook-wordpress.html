@@ -1,0 +1,257 @@
+<title>Playbook WordPress</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root{
+    --papel:#F2F4F1; --superficie:#FFFFFF; --superficie-2:#EAEEE8;
+    --tinta:#141A15; --tinta-2:#3A443B; --apagado:#6B7568;
+    --linea:#D9DFD6; --linea-fuerte:#BCC5B8;
+    --verde:#337C2C; --laton:#9C6F16; --oxido:#A8382A;
+    --sombra:0 1px 2px rgba(20,26,21,.05), 0 8px 24px -12px rgba(20,26,21,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --papel:#0E120F; --superficie:#161C17; --superficie-2:#1D251E;
+      --tinta:#E8EDE7; --tinta-2:#BFC8BE; --apagado:#8B9689;
+      --linea:#28322A; --linea-fuerte:#3A473C;
+      --verde:#79CE6D; --laton:#D6A544; --oxido:#E0765F;
+      --sombra:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"]{
+    --papel:#0E120F; --superficie:#161C17; --superficie-2:#1D251E;
+    --tinta:#E8EDE7; --tinta-2:#BFC8BE; --apagado:#8B9689;
+    --linea:#28322A; --linea-fuerte:#3A473C;
+    --verde:#79CE6D; --laton:#D6A544; --oxido:#E0765F;
+    --sombra:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--papel);color:var(--tinta);font-family:'Newsreader',Georgia,serif;font-size:17.5px;line-height:1.62;-webkit-font-smoothing:antialiased;}
+  .env{max-width:62rem;margin:0 auto;padding:0 clamp(1.1rem,4vw,2.5rem) 5rem;}
+  h1,h2,h3{font-family:'Bricolage Grotesque','Helvetica Neue',Arial,sans-serif;text-wrap:balance;line-height:1.1;margin:0;}
+  p{margin:0;}
+  a{color:var(--verde);}
+  a:focus-visible{outline:2px solid var(--verde);outline-offset:3px;}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace;}
+
+  header.tapa{border-bottom:1px solid var(--linea);padding:clamp(2.6rem,7vw,4.4rem) 0 clamp(1.6rem,3vw,2.4rem);display:flex;flex-direction:column;gap:1.1rem;}
+  .cinta{font-family:'IBM Plex Mono',monospace;font-size:.7rem;font-weight:600;letter-spacing:.17em;text-transform:uppercase;color:var(--apagado);display:flex;flex-wrap:wrap;gap:.55rem .9rem;}
+  .cinta b{color:var(--verde);font-weight:600;}
+  h1{font-size:clamp(2.1rem,5.6vw,3.4rem);font-weight:800;letter-spacing:-.028em;}
+  .entradilla{font-size:clamp(1.05rem,2vw,1.24rem);color:var(--tinta-2);max-width:44ch;line-height:1.5;}
+
+  section{padding-top:clamp(2.6rem,5.5vw,3.9rem);}
+  .rotulo{font-family:'IBM Plex Mono',monospace;font-size:.7rem;font-weight:600;letter-spacing:.17em;text-transform:uppercase;color:var(--apagado);display:block;margin-bottom:.7rem;}
+  h2.titulo{font-size:clamp(1.45rem,3.2vw,1.9rem);font-weight:700;letter-spacing:-.02em;}
+  .bajada{color:var(--tinta-2);max-width:64ch;margin-top:.7rem;}
+
+  .alerta{margin-top:1.4rem;background:var(--superficie);border:1px solid var(--linea);border-left:4px solid var(--oxido);border-radius:3px;padding:clamp(1.1rem,2.8vw,1.5rem);box-shadow:var(--sombra);display:flex;flex-direction:column;gap:.7rem;}
+  .alerta h3{font-size:1.12rem;font-weight:700;color:var(--oxido);}
+  .alerta p{max-width:66ch;color:var(--tinta-2);}
+
+  .paso{margin-top:1.5rem;border-top:2px solid var(--tinta);padding-top:1rem;display:flex;flex-direction:column;gap:.8rem;}
+  .paso-tapa{display:flex;flex-wrap:wrap;gap:.5rem .9rem;align-items:baseline;}
+  .paso h3{font-size:1.2rem;font-weight:700;letter-spacing:-.012em;}
+  .min{font-family:'IBM Plex Mono',monospace;font-size:.7rem;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--verde);}
+  .paso p{color:var(--tinta-2);max-width:64ch;}
+  ol.lista,ul.lista{margin:0;padding-left:1.15rem;display:flex;flex-direction:column;gap:.55rem;}
+  ol.lista li,ul.lista li{color:var(--tinta-2);max-width:64ch;}
+  ol.lista li::marker,ul.lista li::marker{color:var(--verde);font-family:'IBM Plex Mono',monospace;font-size:.85em;}
+  li strong{color:var(--tinta);font-weight:500;}
+  code{font-family:'IBM Plex Mono',monospace;font-size:.84em;background:var(--superficie-2);padding:.1em .38em;border-radius:2px;color:var(--tinta);word-break:break-word;}
+
+  .caja-tabla{overflow-x:auto;margin-top:1.3rem;border:1px solid var(--linea);border-radius:3px;background:var(--superficie);}
+  table{border-collapse:collapse;width:100%;min-width:44rem;font-size:.9rem;}
+  th,td{text-align:left;padding:.7rem .85rem;border-bottom:1px solid var(--linea);vertical-align:top;}
+  thead th{font-family:'IBM Plex Mono',monospace;font-size:.64rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--apagado);background:var(--superficie-2);border-bottom:1px solid var(--linea-fuerte);}
+  tbody tr:last-child td{border-bottom:none;}
+  td.url{font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--verde);white-space:nowrap;}
+  td.tit{font-weight:500;color:var(--tinta);}
+  td.desc{color:var(--apagado);font-size:.88rem;}
+  .cuenta{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--apagado);display:block;margin-top:.25rem;}
+  .cuenta.largo{color:var(--oxido);}
+
+  .nota{margin-top:1.2rem;border:1px dashed var(--linea-fuerte);border-radius:3px;padding:.95rem 1.1rem;}
+  .nota .cab{font-family:'IBM Plex Mono',monospace;font-size:.64rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--tinta-2);margin-bottom:.4rem;}
+  .nota p{font-size:.92rem;color:var(--apagado);max-width:66ch;}
+
+  .prohibido{margin-top:1.3rem;background:var(--superficie);border:1px solid var(--linea);border-radius:3px;padding:1.1rem 1.3rem;display:flex;flex-direction:column;gap:.55rem;}
+  .prohibido h3{font-size:1.05rem;font-weight:700;}
+  .prohibido ul{margin:0;padding-left:1.1rem;display:flex;flex-direction:column;gap:.45rem;}
+  .prohibido li{color:var(--tinta-2);max-width:64ch;font-size:.95rem;}
+  .prohibido li::marker{color:var(--oxido);}
+
+  footer{margin-top:clamp(2.8rem,5vw,4rem);padding-top:1.3rem;border-top:1px solid var(--linea);font-family:'IBM Plex Mono',monospace;font-size:.74rem;line-height:1.7;color:var(--apagado);}
+</style>
+
+<div class="env">
+
+  <header class="tapa">
+    <div class="cinta">
+      <span>Ibérica Seguridad</span><span>·</span><span>ibericaseguridad.com</span><span>·</span><b>Playbook de ejecución</b>
+    </div>
+    <h1>Lo que hay que tocar en WordPress</h1>
+    <p class="entradilla">Cuatro pasos, una hora larga, y ninguno de ellos toca código del tema. Los textos van escritos para copiar y pegar tal cual.</p>
+  </header>
+
+  <div class="alerta">
+    <h3>Antes de abrir WordPress: cambia la contraseña</h3>
+    <p>La contraseña de administrador se envió por chat. Una cuenta de admin de WordPress permite subir archivos PHP al servidor, así que es la llave del edificio entero, no solo del contenido. Cámbiala en <strong>Usuarios → Perfil → Nueva contraseña</strong> y activa el doble factor si el hosting lo ofrece.</p>
+    <p>No hace falta compartir la nueva: la web no es accesible desde el entorno donde trabajo, así que estos pasos los hacéis vosotros con el navegador de siempre.</p>
+  </div>
+
+  <section>
+    <span class="rotulo">Paso 0 · antes de nada</span>
+    <h2 class="titulo">Una copia de seguridad</h2>
+    <p class="bajada">Ninguno de los cambios de aquí puede romper la web, pero la copia cuesta dos minutos y convierte cualquier susto en un botón de deshacer.</p>
+    <ol class="lista" style="margin-top:1.1rem">
+      <li>Si el hosting tiene copias automáticas (cPanel, Plesk, SiteGround, Raiola…), basta con <strong>lanzar una manual ahora</strong> y anotar la hora.</li>
+      <li>Si no, instalad <strong>UpdraftPlus</strong> desde Plugins → Añadir nuevo, y pulsad «Copia de seguridad ahora».</li>
+    </ol>
+  </section>
+
+  <section>
+    <span class="rotulo">Paso 1 · el más importante</span>
+    <h2 class="titulo">Títulos y descripciones de cada página</h2>
+    <p class="bajada">El título es la señal más fuerte que tiene una página para decirle a Google de qué va. Hoy la portada se titula «Inicio», que es una palabra que nadie busca. Se cambia desde el plugin de SEO, no desde el título visible de la página.</p>
+
+    <div class="nota">
+      <div class="cab">Dónde se toca</div>
+      <p>Al editar cada página, bajad hasta el recuadro del plugin de SEO (<strong>Yoast</strong> o <strong>Rank Math</strong>, según cuál tengáis instalado) y buscad «Editar fragmento» o «Snippet Editor». Ahí hay dos campos: <em>Título SEO</em> y <em>Meta descripción</em>. Son esos, no el campo del título de la página, que es el que se ve en pantalla y conviene dejar como está.</p>
+    </div>
+
+    <div class="caja-tabla">
+      <table>
+        <thead>
+          <tr><th>Página</th><th>Título SEO</th><th>Meta descripción</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="url">/</td>
+            <td class="tit">Cerrajeros en Almería 24 Horas | Ibérica Seguridad<span class="cuenta">50 caracteres</span></td>
+            <td class="desc">Cerrajería urgente 24 h en Almería y provincia. Puertas acorazadas, cerraduras de seguridad y automatismos. Más de 20 años. Presupuesto sin compromiso: 950 088 086.</td>
+          </tr>
+          <tr>
+            <td class="url">/cerrajeria-horas/</td>
+            <td class="tit">Cerrajero 24 Horas en Almería | Urgencias | Ibérica<span class="cuenta">51 caracteres</span></td>
+            <td class="desc">¿Puerta bloqueada o cerradura rota? Cerrajero urgente en Almería las 24 horas, todos los días. Apertura sin daños y presupuesto cerrado antes de empezar. 950 088 086.</td>
+          </tr>
+          <tr>
+            <td class="url">/puertas-de-vivienda/</td>
+            <td class="tit">Puertas Acorazadas y Blindadas en Almería | Ibérica<span class="cuenta">51 caracteres</span></td>
+            <td class="desc">Instaladores oficiales FICHET y KIUSO en Almería. Retirada de la puerta antigua incluida, 3 años de garantía por escrito y financiación en 12 meses sin intereses.</td>
+          </tr>
+          <tr>
+            <td class="url">/cerrajeros-forenses/</td>
+            <td class="tit">Cerrajero Forense en Almería (APFC) | Ibérica<span class="cuenta">45 caracteres</span></td>
+            <td class="desc">Peritaje e informes de cerrajería forense en Almería. Miembros de la Asociación Profesional de Cerrajeros Forenses. Más de 20 años de experiencia: 950 088 086.</td>
+          </tr>
+          <tr>
+            <td class="url">/trabajo-para-comunidades/</td>
+            <td class="tit">Cerrajero para Comunidades en Almería | Ibérica<span class="cuenta">47 caracteres</span></td>
+            <td class="desc">Cerrajería para comunidades de vecinos y administradores de fincas en Almería: amaestramiento de llaves, portales, cierres y mantenimiento. Presupuesto sin compromiso.</td>
+          </tr>
+          <tr>
+            <td class="url">/copias-de-llaves-y-mandos/</td>
+            <td class="tit">Copias de Llaves y Mandos de Garaje en Almería<span class="cuenta">46 caracteres</span></td>
+            <td class="desc">Copia de llaves automatizada y grabado de mandos de garaje en Almería. Llaves de seguridad, codificadas y de vehículo. Al momento y en nuestra propia tienda.</td>
+          </tr>
+          <tr>
+            <td class="url">/servicios/</td>
+            <td class="tit">Servicios de Cerrajería y Seguridad en Almería<span class="cuenta">46 caracteres</span></td>
+            <td class="desc">Cerrajería 24 h, puertas acorazadas, cerraduras de alta seguridad, automatismos, control de accesos y cajas fuertes en Almería y provincia. Todo con equipo propio.</td>
+          </tr>
+          <tr>
+            <td class="url">/sobre-nosotros/</td>
+            <td class="tit">Ibérica Seguridad: Cerrajeros en Almería desde 1996<span class="cuenta">51 caracteres</span></td>
+            <td class="desc">Empresa almeriense de seguridad y cerrajería desde 1996. Fabricación, instalación y asesoramiento propios, sin intermediarios. Dos exposiciones en Almería.</td>
+          </tr>
+          <tr>
+            <td class="url">/asesoramiento-de-seguridad/</td>
+            <td class="tit">Asesoramiento de Seguridad en Almería | Ibérica<span class="cuenta">47 caracteres</span></td>
+            <td class="desc">Te asesoramos sin compromiso sobre cómo proteger tu vivienda, negocio o comunidad en Almería. 20 años de experiencia y recomendaciones honestas, sin venderte de más.</td>
+          </tr>
+          <tr>
+            <td class="url">/catalogos-iberica-seguridad/</td>
+            <td class="tit">Catálogos de Puertas y Cerraduras | Ibérica Almería<span class="cuenta">51 caracteres</span></td>
+            <td class="desc">Consulta los catálogos de puertas acorazadas, blindadas y paneles decorativos que instalamos en Almería: modelos, acabados y marcas homologadas.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="nota">
+      <div class="cab">Falta una</div>
+      <p>No he incluido <code>/protecdoor/</code> porque no sé si es un producto vuestro, una marca que distribuís o un servicio. Decidme qué es y os paso el título y la descripción en el mismo formato.</p>
+    </div>
+  </section>
+
+  <section>
+    <span class="rotulo">Paso 2</span>
+    <h2 class="titulo">El H1 de la portada</h2>
+    <p class="bajada">El H1 es el titular grande de la página, el que sí se ve. Google lo lee junto al título SEO y ahora mismo lo más probable es que sea el nombre de la empresa o un eslogan.</p>
+    <ol class="lista" style="margin-top:1.1rem">
+      <li>Editad la portada y buscad el titular más grande de la primera pantalla.</li>
+      <li>Debe decir lo que hacéis y dónde. Por ejemplo: <strong>«Cerrajeros en Almería, 24 horas»</strong>, con el eslogan de marca justo debajo como subtítulo.</li>
+      <li><strong>Solo puede haber un H1 por página.</strong> Si el constructor visual (Elementor, Divi, WPBakery) tiene varios bloques marcados como H1, dejad uno y pasad el resto a H2.</li>
+    </ol>
+  </section>
+
+  <section>
+    <span class="rotulo">Paso 3 · sin tocar el tema</span>
+    <h2 class="titulo">Los datos estructurados</h2>
+    <p class="bajada">Es el bloque que le confirma a Google la dirección, el teléfono, el horario y los servicios. Ayuda a que la ficha de Maps y la web se corroboren entre ellas — que es justo el problema de fondo.</p>
+
+    <div class="alerta" style="border-left-color:var(--laton)">
+      <h3 style="color:var(--laton)">No lo metáis en functions.php</h3>
+      <p>Es la forma clásica de romper una web: un error de sintaxis ahí deja el sitio en blanco y ya no se puede entrar ni al panel. Se hace con un plugin de inserción de cabeceras, que es reversible con un clic.</p>
+    </div>
+
+    <ol class="lista" style="margin-top:1.2rem">
+      <li>Plugins → Añadir nuevo → instalar y activar <strong>WPCode</strong> (antes «Insert Headers and Footers»).</li>
+      <li>Menú <strong>Code Snippets → Header &amp; Footer</strong>.</li>
+      <li>Pegar en el recuadro <strong>Header</strong> el contenido del archivo <code>seo/schema-localbusiness.html</code> del repositorio, y guardar.</li>
+      <li>Comprobarlo en <a href="https://search.google.com/test/rich-results">search.google.com/test/rich-results</a> pegando <code>https://ibericaseguridad.com</code>. Debe detectar una entidad <code>Locksmith</code> sin errores.</li>
+    </ol>
+
+    <div class="nota">
+      <div class="cab">Orden importante</div>
+      <p>Este paso va <strong>después</strong> de arreglar la dirección en la ficha de Google. El schema tiene que repetir exactamente lo que diga la ficha —misma calle, mismas abreviaturas, mismo código postal—; si dicen cosas distintas, en vez de corroborar, contradice. El archivo lleva marcados con <code>REVISAR</code> los tres campos que dependen de eso.</p>
+    </div>
+  </section>
+
+  <section>
+    <span class="rotulo">Paso 4</span>
+    <h2 class="titulo">Search Console</h2>
+    <p class="bajada">Sin esto vamos a ciegas: es lo que dice qué búsquedas ya os traen visitas, en qué puesto salís y qué páginas tiene Google indexadas de verdad.</p>
+    <ol class="lista" style="margin-top:1.1rem">
+      <li>Entrad en <a href="https://search.google.com/search-console">search.google.com/search-console</a> con la cuenta de Google de la empresa.</li>
+      <li>Añadid la propiedad por <strong>prefijo de URL</strong>: <code>https://ibericaseguridad.com</code>.</li>
+      <li>Para verificar, la vía más simple es la etiqueta HTML: se pega con el mismo WPCode del paso anterior.</li>
+      <li>Enviad el sitemap en Sitemaps → normalmente <code>sitemap_index.xml</code> con Yoast, o <code>sitemap.xml</code> con Rank Math.</li>
+    </ol>
+  </section>
+
+  <section>
+    <span class="rotulo">Límites</span>
+    <h2 class="titulo">Lo que no hay que tocar todavía</h2>
+    <div class="prohibido">
+      <h3>Nada de esto entra en esta tanda</h3>
+      <ul>
+        <li><strong>No cambiéis las URL de las páginas</strong> (los «enlaces permanentes»). Cambiar una URL sin poner una redirección borra de Google todo lo que esa página tenía ganado. Las URL actuales, aunque no sean perfectas, valen.</li>
+        <li><strong>No toquéis todavía el dominio <code>.online</code>.</strong> La redirección 301 hay que hacerla bien y desde el hosting; apagarlo sin más pierde lo poco que tenía. Lo vemos aparte.</li>
+        <li><strong>No instaléis un segundo plugin de SEO.</strong> Yoast y Rank Math juntos se pisan y generan etiquetas duplicadas. El que ya esté puesto, ese se queda.</li>
+        <li><strong>No editéis archivos del tema</strong> desde Apariencia → Editor. Ahí es donde se rompen las webs.</li>
+        <li><strong>No borréis páginas</strong> aunque parezcan vacías o antiguas, sin avisar antes.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    Playbook para Ibérica Servi &amp; Security S.L. · Los textos de la tabla están escritos para pegarse literalmente.<br>
+    El diagnóstico completo y el archivo de datos estructurados están en el repositorio, en <span class="mono">PLAN-SEO.md</span> y <span class="mono">seo/</span>.
+  </footer>
+
+</div>
