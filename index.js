@@ -42,6 +42,32 @@ function pausarBot(clave, horas, motivo) {
   redisSet("iberica:botActivo", botActivo);
   redisSet("iberica:pausaExpira", pausaExpira);
   console.log(`[Pausa] Bot pausado ${horas}h para ${clave} — ${motivo}`);
+  // Si el contacto estaba en plena captación (guion de puertas), el lead pasa
+  // a la persona que ha intervenido: se cierra para que Marta no retome el
+  // guion cuando caduque la pausa.
+  const tel = clave.slice(clave.indexOf("_") + 1);
+  if (captacionLeads[tel]) {
+    delete captacionLeads[tel];
+    guardarCaptacionLeads();
+    console.log(`[Captación] Lead ${tel} cerrado — lo atiende una persona`);
+  }
+}
+
+// ¿Está el bot pausado para esta clave canal_teléfono? Reactiva si la pausa
+// temporal ya caducó. TODAS las rutas que envían mensajes automáticos
+// (flujo normal, captación, fotos) deben pasar por aquí: una intervención
+// humana tiene que silenciar a Marta en todas partes.
+function botPausado(clave) {
+  if (botActivo[clave] !== false) return false;
+  if (pausaExpira[clave] && Date.now() > pausaExpira[clave]) {
+    botActivo[clave] = true;
+    delete pausaExpira[clave];
+    redisSet("iberica:botActivo", botActivo);
+    redisSet("iberica:pausaExpira", pausaExpira);
+    console.log(`[Pausa] Caducada para ${clave} — bot reactivado`);
+    return false;
+  }
+  return true;
 }
 
 // Últimos mensajes enviados por el propio bot, para distinguir su eco
@@ -112,8 +138,15 @@ function detectarIntervencionHumana(body) {
   ]
     .filter(Boolean)
     .map((t) => String(t));
-  const clavesConv = Object.keys(conversaciones);
-  let telefono = candidatos.find((t) => conversaciones[t]);
+  // Un cliente "conocido" puede estar en conversación (memoria volátil), en
+  // captación o solo en actividad (persistente en Redis): la intervención
+  // debe detectarse y pausar en los tres casos, también tras un redeploy.
+  const clavesConv = [...new Set([
+    ...Object.keys(conversaciones),
+    ...Object.keys(captacionLeads),
+    ...Object.keys(actividad),
+  ])];
+  let telefono = candidatos.find((t) => conversaciones[t] || captacionLeads[t] || actividad[t]);
   if (!telefono) {
     const digitos = (s) => String(s).replace(/\D/g, "");
     for (const cand of candidatos) {
@@ -784,13 +817,14 @@ async function redisSet(key, value) {
 }
 
 async function cargarEstadoDesdeRedis() {
-  const [botActivoGuardado, actividadGuardada, pausasGuardadas, resenasGuardadas, cierresGuardados, reglasGuardadas] = await Promise.all([
+  const [botActivoGuardado, actividadGuardada, pausasGuardadas, resenasGuardadas, cierresGuardados, reglasGuardadas, leadsGuardados] = await Promise.all([
     redisGet("iberica:botActivo"),
     redisGet("iberica:actividad"),
     redisGet("iberica:pausaExpira"),
     redisGet("iberica:resenasPedidas"),
     redisGet("iberica:cierresProcesados"),
     redisGet("iberica:reglasComentarios"),
+    redisGet("iberica:captacionLeads"),
   ]);
   if (botActivoGuardado) Object.assign(botActivo, botActivoGuardado);
   if (actividadGuardada) Object.assign(actividad, actividadGuardada);
@@ -798,6 +832,7 @@ async function cargarEstadoDesdeRedis() {
   if (resenasGuardadas) Object.assign(resenasPedidas, resenasGuardadas);
   if (cierresGuardados) Object.assign(cierresProcesados, cierresGuardados);
   if (Array.isArray(reglasGuardadas)) reglasComentarios = reglasGuardadas;
+  if (leadsGuardados) Object.assign(captacionLeads, leadsGuardados);
   console.log(`[Redis] Estado cargado — ${Object.keys(actividad).length} contactos, ${Object.keys(botActivo).length} estados de bot`);
 }
 
@@ -2075,6 +2110,11 @@ async function procesarMensaje(telefono, texto) {
 
 // Estado de leads de captación en memoria: { [telefono]: {...} }
 const captacionLeads = {};
+// Persistir en Redis: sin esto, cada redeploy vaciaba los leads en curso y el
+// siguiente mensaje del cliente reiniciaba el guion (guía repetida, etc.).
+function guardarCaptacionLeads() {
+  redisSet("iberica:captacionLeads", captacionLeads);
+}
 
 // La captación SOLO se activa en el canal del número de la campaña (el de los
 // anuncios). En cualquier otro número/canal del bot NUNCA se dispara.
@@ -2099,7 +2139,10 @@ function tieneReferralAnuncio(body) {
 }
 function mencionaAnuncio(texto) {
   const n = normalizaTxt(texto);
-  return /(vi (tu|el|vuestro|su) anuncio|del anuncio|por el anuncio|en instagram|en facebook|me interesa la puerta)/.test(n);
+  // Solo menciones EXPLÍCITAS del anuncio. "en instagram" / "en facebook" a
+  // secas metían en el embudo de puertas a cualquiera que dijera "os vi en
+  // Instagram" preguntando por otra cosa.
+  return /(vi (tu|el|vuestro|su) anuncio|del anuncio|por el anuncio|me interesa la puerta)/.test(n);
 }
 function esTemaPuertas(texto) {
   const n = normalizaTxt(texto);
@@ -2115,6 +2158,7 @@ function captacionActiva(telefono) {
   if (!lead) return false;
   if (Date.now() - (lead.updatedAt || 0) > 24 * 60 * 60 * 1000) {
     delete captacionLeads[telefono];
+    guardarCaptacionLeads();
     return false;
   }
   return true;
@@ -2201,6 +2245,7 @@ async function barrerLeadsAbandonados() {
     if (lead.avisado) continue;
     if (ahora - (lead.updatedAt || 0) < 45 * 60 * 1000) continue;
     lead.avisado = true;
+    guardarCaptacionLeads();
     console.log(`[Captación] Lead sin terminar → aviso al equipo: ${telefono} (${lead.origen || "origen desconocido"})`);
     await notificarLeadPuertas({
       telefono,
@@ -2230,6 +2275,7 @@ async function handoffCaptacion(telefono, channelId) {
 
   await notificarLeadPuertas(datos);
   delete captacionLeads[telefono];
+  guardarCaptacionLeads();
 }
 
 // ── Comentarios de Instagram (posts y reels) ─────────────────
@@ -2262,6 +2308,8 @@ async function manejarComentarioIG(body) {
   if (captacionActiva(usuario)) return;
   const conv = conversaciones[usuario];
   if (conv && conv.step && conv.step !== "menu_principal") return;
+  // Ni si una persona de la oficina está atendiendo ese DM (bot en pausa)
+  if (botPausado(`${canal}_${usuario}`)) return;
 
   // ¿Alguna regla por palabra clave encaja con el texto del comentario?
   const regla = reglasComentarios.find(
@@ -2275,6 +2323,7 @@ async function manejarComentarioIG(body) {
             (regla ? ` [${regla.palabra}]` : ""),
     memberId, channelId: canal, updatedAt: Date.now(),
   };
+  guardarCaptacionLeads();
   const mensajeDM = regla
     ? `${regla.mensaje}${regla.enlace ? " 👉 " + regla.enlace : ""}`
     : CAP.bienvenida;
@@ -2316,6 +2365,7 @@ async function manejarCaptacion({ telefono, memberId, channelId, texto, esImagen
       zona: null, mejora: null, plazo: null, fotos: !!esImagen,
       origen, memberId, channelId, updatedAt: Date.now(),
     };
+    guardarCaptacionLeads();
     await enviarCap(lead, CAP.bienvenida);
     return;
   }
@@ -2323,6 +2373,7 @@ async function manejarCaptacion({ telefono, memberId, channelId, texto, esImagen
   lead.memberId = memberId;
   lead.channelId = channelId;
   lead.updatedAt = Date.now();
+  guardarCaptacionLeads();
 
   const msg = (texto || "").trim();
   const low = normalizaTxt(msg);
@@ -2866,6 +2917,7 @@ app.get("/admin/api/test-leads-abandonados", authAdmin, async (req, res) => {
   await barrerLeadsAbandonados();
   res.json({
     ok: true,
+    campanaChannelId: CAMPANA_CHANNEL_ID,
     leadsActivos: Object.entries(captacionLeads).map(([t, l]) => ({
       telefono: t, step: l.step, origen: l.origen, avisado: !!l.avisado,
       minutosSinActividad: Math.round((Date.now() - (l.updatedAt || 0)) / 60000),
@@ -3122,9 +3174,16 @@ app.post("/webhook", async (req, res) => {
     // En el canal de la campaña, TODO contacto nuevo viene del anuncio →
     // se asume puertas directamente (aunque solo diga "hola").
     // ══════════════════════════════════════════════════════════════════
+    // La captación responde 24/7 (se salta el horario comercial), pero NUNCA
+    // se salta la pausa: si una persona de la oficina ha intervenido en el
+    // chat, Marta se calla también aquí.
     if (CAMPANA_CHANNEL_ID && channelId === CAMPANA_CHANNEL_ID &&
         (esInicioCampana(texto) || captacionActiva(telefono) || esContactoNuevo(telefono) ||
          tieneReferralAnuncio(req.body) || mencionaAnuncio(texto) || esTemaPuertas(texto))) {
+      if (botPausado(`${channelId}_${telefono}`)) {
+        console.log(`[Captación] Bot pausado para ${telefono} — mensaje ignorado (lo atiende una persona)`);
+        return res.sendStatus(200);
+      }
       await manejarCaptacion({ telefono, memberId, channelId, texto, esImagen, req });
       return res.sendStatus(200);
     }
@@ -3132,7 +3191,7 @@ app.post("/webhook", async (req, res) => {
     // A partir de aquí, el flujo normal solo continúa con mensajes de TEXTO.
     if (tipo !== "TEXT") {
       // Un lead en cualificación puede mandar su foto por un canal normal
-      if (esImagen && captacionActiva(telefono) && botActivo[`${channelId}_${telefono}`] !== false) {
+      if (esImagen && captacionActiva(telefono) && !botPausado(`${channelId}_${telefono}`)) {
         await manejarCaptacion({ telefono, memberId, channelId, texto: "", esImagen, req });
         return res.sendStatus(200);
       }
@@ -3141,7 +3200,7 @@ app.post("/webhook", async (req, res) => {
       if (
         esImagen && IA_MODO === "on" &&
         conversaciones[telefono]?.memberId &&
-        botActivo[`${channelId}_${telefono}`] !== false
+        !botPausado(`${channelId}_${telefono}`)
       ) {
         await enviarNatural(telefono, "¡Gracias por la foto! 📸 Se la paso al equipo para que lo valore mejor. Seguimos por aquí 😊");
       }
@@ -3154,17 +3213,9 @@ app.post("/webhook", async (req, res) => {
 
     // ── Comprobar si el bot está pausado para este cliente en este canal ──
     const claveBot = `${channelId}_${telefono}`;
-    if (botActivo[claveBot] === false && !enFlujoResena) {
-      if (pausaExpira[claveBot] && Date.now() > pausaExpira[claveBot]) {
-        botActivo[claveBot] = true;
-        delete pausaExpira[claveBot];
-        redisSet("iberica:botActivo", botActivo);
-        redisSet("iberica:pausaExpira", pausaExpira);
-        console.log(`[Pausa] Caducada para ${claveBot} — bot reactivado`);
-      } else {
-        console.log(`[Webhook] Bot pausado para ${telefono} en canal ${channelId} — mensaje ignorado`);
-        return res.sendStatus(200);
-      }
+    if (!enFlujoResena && botPausado(claveBot)) {
+      console.log(`[Webhook] Bot pausado para ${telefono} en canal ${channelId} — mensaje ignorado`);
+      return res.sendStatus(200);
     }
 
     // ── Canal Soporte (encuestas/reseñas) — derivar siempre a agente humano ──
