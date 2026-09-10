@@ -2125,6 +2125,14 @@ const CAMPANA_CHANNEL_ID = process.env.CAMPANA_CHANNEL_ID || null;
 // Un cliente de urgencias NUNCA la escribe → así separamos leads de clientes.
 const FRASE_CAMPANA = "campana de puertas";
 
+// Interruptor del embudo del anuncio de puertas. Con la publicidad de Meta
+// parada queda APAGADO: ningún contacto nuevo entra al guion de puertas
+// (ni por canal de campaña, ni por referral, ni por mención del anuncio) y
+// los comentarios de Instagram solo responden si encaja una regla de
+// /admin/comentarios. Quien ya esté a mitad del guion lo termina igual.
+// Para reactivarlo al relanzar la campaña: CAPTACION_ANUNCIO=on en Railway.
+const CAPTACION_ANUNCIO = (process.env.CAPTACION_ANUNCIO || "off").toLowerCase() === "on";
+
 function normalizaTxt(t) {
   return (t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
@@ -2315,6 +2323,14 @@ async function manejarComentarioIG(body) {
   const regla = reglasComentarios.find(
     (r) => r?.palabra && normalizaTxt(texto).includes(normalizaTxt(r.palabra))
   );
+
+  // Con el embudo del anuncio apagado, solo responden los comentarios que
+  // encajan con una regla de /admin/comentarios (la guía por defecto era
+  // parte de la campaña de puertas).
+  if (!regla && !CAPTACION_ANUNCIO) {
+    delete comentariosRespondidos[commentId]; // por si mañana se añade la regla
+    return;
+  }
 
   captacionLeads[usuario] = {
     telefono: usuario, step: "cap_guia",
@@ -3178,8 +3194,10 @@ app.post("/webhook", async (req, res) => {
     // se salta la pausa: si una persona de la oficina ha intervenido en el
     // chat, Marta se calla también aquí.
     if (CAMPANA_CHANNEL_ID && channelId === CAMPANA_CHANNEL_ID &&
-        (esInicioCampana(texto) || captacionActiva(telefono) || esContactoNuevo(telefono) ||
-         tieneReferralAnuncio(req.body) || mencionaAnuncio(texto) || esTemaPuertas(texto))) {
+        (captacionActiva(telefono) ||
+         (CAPTACION_ANUNCIO &&
+          (esInicioCampana(texto) || esContactoNuevo(telefono) ||
+           tieneReferralAnuncio(req.body) || mencionaAnuncio(texto) || esTemaPuertas(texto))))) {
       if (botPausado(`${channelId}_${telefono}`)) {
         console.log(`[Captación] Bot pausado para ${telefono} — mensaje ignorado (lo atiende una persona)`);
         return res.sendStatus(200);
@@ -3275,7 +3293,7 @@ app.post("/webhook", async (req, res) => {
     // flujo normal de Marta (presupuesto, urgencia...), que recoge sus
     // datos y avisa a la oficina como corresponde.
     if (captacionActiva(telefono) ||
-        (!conversaciones[telefono] && esContactoNuevo(telefono) &&
+        (CAPTACION_ANUNCIO && !conversaciones[telefono] && esContactoNuevo(telefono) &&
          (tieneReferralAnuncio(req.body) || mencionaAnuncio(texto)))) {
       await manejarCaptacion({ telefono, memberId, channelId, texto, esImagen, req });
       return res.sendStatus(200);
