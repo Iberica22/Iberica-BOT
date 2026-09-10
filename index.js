@@ -508,6 +508,56 @@ async function enviarPlantillaResena(telefono, nombre) {
   }
 }
 
+// ── Envío "en frío": clientes que nunca han escrito al WhatsApp ──────
+// Woztell solo envía a members existentes. Para encuestar TODOS los partes
+// terminados (avisos de compañía incluidos, que casi nunca escriben), se
+// busca el member por teléfono en la Open API GraphQL y, si no existe, se
+// crea — y después se le manda la plantilla aprobada como a cualquiera.
+// Token: WOZTELL_API_TOKEN (con permisos de Open API / member:create);
+// si no está definido se intenta con WOZTELL_TOKEN.
+const WOZTELL_OPEN_API = "https://open.api.woztell.com/v3/";
+async function graphqlWoztell(query, variables) {
+  const token = process.env.WOZTELL_API_TOKEN || process.env.WOZTELL_TOKEN;
+  const res = await axios.post(WOZTELL_OPEN_API, { query, variables }, {
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    timeout: 15000,
+  });
+  if (res.data?.errors?.length) {
+    throw new Error(res.data.errors.map((e) => e?.message || "?").join("; ").slice(0, 160));
+  }
+  return res.data?.data;
+}
+
+// createMember está limitado a 5 llamadas/min por Woztell: no crear más de
+// 4 contactos por minuto; el resto queda reintentable para el siguiente sondeo.
+let creacionesMiembro = [];
+async function buscarOCrearMiembroWoztell(channelId, telefono, nombre) {
+  const q = await graphqlWoztell(
+    `query getMemberId($channelId: ID, $externalId: ID) {
+       apiViewer { member(channelId: $channelId, externalId: $externalId) { _id } }
+     }`,
+    { channelId, externalId: telefono }
+  );
+  const existente = q?.apiViewer?.member?._id;
+  if (existente) return { memberId: existente, creado: false };
+
+  creacionesMiembro = creacionesMiembro.filter((ts) => Date.now() - ts < 60 * 1000);
+  if (creacionesMiembro.length >= 4) throw new Error("limite_de_creacion_por_minuto");
+  creacionesMiembro.push(Date.now());
+
+  const input = { channelId, externalId: telefono };
+  if (nombre) input.firstName = String(nombre).trim().split(/\s+/)[0];
+  const m = await graphqlWoztell(
+    `mutation createMember($input: CreateMemberInput!) {
+       createMember(input: $input) { member { _id } }
+     }`,
+    { input }
+  );
+  const nuevo = m?.createMember?.member?._id;
+  if (!nuevo) throw new Error("createMember_sin_member_en_respuesta");
+  return { memberId: nuevo, creado: true };
+}
+
 // Deja constancia de la respuesta de la encuesta en el propio parte del CRM
 // (Notas del módulo Partes), para no perder la información que daba PERE.
 async function crearNotaParte(caseId, contenido) {
@@ -526,12 +576,19 @@ async function crearNotaParte(caseId, contenido) {
 }
 
 async function pedirResena({ telefono, nombre, refParte, caseId }) {
-  const clave = claveClientePorTelefono(telefono);
-  if (!clave) return { ok: false, motivo: "cliente_sin_whatsapp_conocido" };
-  const act       = actividad[clave] || {};
-  const memberId  = conversaciones[clave]?.memberId  || act.memberId;
-  const channelId = conversaciones[clave]?.channelId || act.canalId;
-  if (!memberId || !channelId) return { ok: false, motivo: "sin_datos_de_envio" };
+  let clave = claveClientePorTelefono(telefono);
+  const act     = clave ? (actividad[clave] || {}) : {};
+  let memberId  = clave ? (conversaciones[clave]?.memberId  || act.memberId) : null;
+  let channelId = clave ? (conversaciones[clave]?.channelId || act.canalId)  : null;
+  let enFrio    = false;
+
+  // Cliente que nunca ha escrito: clave normalizada a partir del teléfono
+  // de Zoho (9 dígitos = número español sin prefijo)
+  if (!clave) {
+    const d = String(telefono || "").replace(/\D/g, "");
+    if (d.length < 9) return { ok: false, motivo: "telefono_invalido_en_zoho" };
+    clave = d.length === 9 ? `34${d}` : d;
+  }
   // No interrumpir si una persona de la oficina está atendiendo el chat AHORA.
   // Ojo: con el auto-takeover casi todos los clientes activos acaban con una
   // pausa de 6h (la oficina remata el trabajo por WhatsApp justo antes de
@@ -552,8 +609,27 @@ async function pedirResena({ telefono, nombre, refParte, caseId }) {
   if (Date.now() - (resenasPedidas[clave] || 0) < 7 * 24 * 3600 * 1000) {
     return { ok: false, motivo: "ya_pedida_recientemente" };
   }
+
+  // Sin chat conocido → envío en frío: buscar/crear el member en el canal
+  // principal y mandar la plantilla. TODOS los partes terminados llevan
+  // encuesta, también los de clientes que nunca han escrito al WhatsApp.
+  if (!memberId || !channelId) {
+    if (!process.env.RESENA_TEMPLATE) return { ok: false, motivo: "sin_whatsapp_y_sin_plantilla_configurada" };
+    const canalPrincipal = process.env.WOZTELL_CHANNEL_ID;
+    if (!canalPrincipal) return { ok: false, motivo: "WOZTELL_CHANNEL_ID_no_configurado" };
+    try {
+      const r = await buscarOCrearMiembroWoztell(canalPrincipal, clave, nombre);
+      memberId  = r.memberId;
+      channelId = canalPrincipal;
+      enFrio    = true;
+      console.log(`[Reseñas] Member ${r.creado ? "CREADO" : "encontrado"} en Woztell para ${clave} (envío en frío, parte ${refParte || "—"})`);
+    } catch (e) {
+      return { ok: false, motivo: "no_se_pudo_crear_contacto", detalle: String(e.message).slice(0, 160), reintentable: true };
+    }
+  }
+
   // Texto libre solo dentro de la ventana de 24h; fuera, plantilla aprobada
-  const fueraDeVentana = !act.ultimaActividad || Date.now() - act.ultimaActividad > 23 * 3600 * 1000;
+  const fueraDeVentana = enFrio || !act.ultimaActividad || Date.now() - act.ultimaActividad > 23 * 3600 * 1000;
   if (fueraDeVentana && !process.env.RESENA_TEMPLATE) {
     return { ok: false, motivo: "fuera_de_ventana_24h_y_sin_plantilla_configurada" };
   }
@@ -581,8 +657,9 @@ async function pedirResena({ telefono, nombre, refParte, caseId }) {
   }
   resenasPedidas[clave] = Date.now();
   redisSet("iberica:resenasPedidas", resenasPedidas);
-  console.log(`[Reseñas] Encuesta postventa enviada a ${clave} (parte ${refParte || "—"}, ${fueraDeVentana ? "plantilla" : "chat abierto"})`);
-  return { ok: true, telefono: clave, via: fueraDeVentana ? "plantilla" : "chat" };
+  const via = enFrio ? "plantilla_en_frio" : (fueraDeVentana ? "plantilla" : "chat");
+  console.log(`[Reseñas] Encuesta postventa enviada a ${clave} (parte ${refParte || "—"}, ${via})`);
+  return { ok: true, telefono: clave, via };
 }
 
 // ¿El parte viene de una compañía de seguros? El nombre técnico del campo
