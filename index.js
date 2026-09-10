@@ -499,10 +499,12 @@ async function enviarPlantillaResena(telefono, nombre) {
     registrarWamidsEnvio(res.data);
     const ok = res.data?.ok === 1 && res.data?.sendResult?.result?.[0]?.ok !== 0;
     if (!ok) console.error("[Reseñas] ❌ Plantilla rechazada:", JSON.stringify(res.data).slice(0, 300));
-    return ok;
+    // detalle: el motivo del rechazo, para que quede en el historial de
+    // /admin/api/resenas-stats y no haya que ir a buscar el log del momento
+    return { ok, detalle: ok ? null : JSON.stringify(res.data?.sendResult?.result?.[0] || res.data).slice(0, 180) };
   } catch (e) {
     console.error("[Reseñas] ❌ Error enviando plantilla:", e.response?.data || e.message);
-    return false;
+    return { ok: false, detalle: JSON.stringify(e.response?.data || e.message).slice(0, 180) };
   }
 }
 
@@ -565,10 +567,10 @@ async function pedirResena({ telefono, nombre, refParte, caseId }) {
 
   const nombreCorto = nombre ? String(nombre).trim().split(/\s+/)[0] : null;
   if (fueraDeVentana) {
-    const okTpl = await enviarPlantillaResena(clave, nombreCorto);
-    if (!okTpl) {
+    const tpl = await enviarPlantillaResena(clave, nombreCorto);
+    if (!tpl.ok) {
       estado.step = "menu_principal";
-      return { ok: false, motivo: "plantilla_fallida" };
+      return { ok: false, motivo: "plantilla_fallida", detalle: tpl.detalle, reintentable: true };
     }
   } else {
     const saludo = nombreCorto ? `¡Hola, ${nombreCorto}!` : "¡Hola!";
@@ -687,8 +689,9 @@ async function sondearPartesCerrados() {
         continue;
       }
       const r = await pedirResena({ telefono: telefonoCli, nombre: nombreCli, refParte: caso.ref_Parte, caseId: caso.id });
-      resumen.encuestas.push({ parte: caso.ref_Parte || caso.id, resultado: r.ok ? `enviada_por_${r.via}` : r.motivo });
-      registrarResultadoResena(caso.ref_Parte || caso.id, r.ok ? `enviada_por_${r.via}` : r.motivo);
+      const resultado = r.ok ? `enviada_por_${r.via}` : (r.detalle ? `${r.motivo}: ${r.detalle}` : r.motivo);
+      resumen.encuestas.push({ parte: caso.ref_Parte || caso.id, resultado });
+      registrarResultadoResena(caso.ref_Parte || caso.id, resultado);
       // Descartes temporales (p. ej. la oficina acaba de escribir en el chat):
       // desmarcar el cierre para que el siguiente sondeo lo reintente mientras
       // siga dentro de la ventana de 3h.
@@ -1863,12 +1866,14 @@ async function procesarMensaje(telefono, texto) {
         RESENA_URL + "\n\n¡Mil gracias de parte de todo el equipo!"
       );
       crearNotaParte(estado.resena?.caseId, `Nota del cliente: ${n !== null ? n + "/10" : `positiva ("${msg.slice(0, 80)}")`}. Se le envió el enlace de reseña de Google.`);
+      registrarResultadoResena(estado.resena?.refParte || telefono, `respondio_${n !== null ? n : "positivo"}_enlace_enviado`);
       return;
     }
     if (n !== null || negativo) {
       estado.step = "resena_feedback";
       estado.resena = estado.resena || {};
       estado.resena.nota = n !== null ? `${n}/10` : `negativa ("${msg.slice(0, 80)}")`;
+      registrarResultadoResena(estado.resena?.refParte || telefono, `respondio_${n !== null ? n : "negativo"}_pidiendo_mejora`);
       await enviarMensaje(telefono, "Muchas gracias por la sinceridad 🙏 ¿Qué podríamos haber hecho mejor? Se lo paso tal cual al equipo.");
       return;
     }
@@ -2993,7 +2998,12 @@ app.get("/admin/api/resenas-stats", authAdmin, (req, res) => {
     cierresProcesadosRegistrados: Object.keys(cierresProcesados).length,
     // Qué pasó con cada parte cerrado que vio el sondeo (más reciente primero)
     historial: resenasHistorial.slice(0, 30),
-    motivos: resenasHistorial.reduce((acc, h) => { acc[h.resultado] = (acc[h.resultado] || 0) + 1; return acc; }, {}),
+    // Conteo por motivo (sin el detalle tras ":", para agrupar bien)
+    motivos: resenasHistorial.reduce((acc, h) => {
+      const clave = String(h.resultado).split(":")[0].trim();
+      acc[clave] = (acc[clave] || 0) + 1;
+      return acc;
+    }, {}),
   });
 });
 
