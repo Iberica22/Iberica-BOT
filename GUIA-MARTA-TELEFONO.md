@@ -11,13 +11,29 @@ agente usa durante la llamada para crear y consultar partes en Zoho.
 ## 1. El agente en ElevenLabs
 
 **Agents Platform → New agent** · Idioma: **Español** · Voz: femenina
-natural (escuchar varias y elegir la que suene más a persona de oficina).
+natural (escuchar varias y elegir la que suene más a persona de oficina;
+en producción: Cristina).
+
+### LLM
+
+- **Principal: Claude Haiku 4.5** — el de menor latencia estable (~0,7 s)
+  y fiable llamando a las herramientas. La latencia es lo primero al
+  teléfono: un modelo con picos de varios segundos hace que el cliente
+  pregunte "¿hola?" o cuelgue.
+- **Respaldo** (Configuración de LLM de respaldo → Personalizado):
+  **Gemini 3.6 Flash**, para que Marta siga contestando si el principal
+  cae o queda obsoleto.
+- **Temperatura**: al mínimo (más determinista). **Esfuerzo de
+  razonamiento**: Baja. **Resumen del razonamiento**: desactivado.
 
 ### First message (primer mensaje)
 
 ```
-Ibérica Seguridad, buenas. Soy Marta, la asistente. ¿En qué puedo ayudarle?
+Ibérica Seguridad, ¿dígame? Soy Marta, la asistente. ¿En qué puedo ayudarle?
 ```
+
+(El saludo es texto fijo que la voz lee tal cual: si suena raro, se
+reescribe aquí — la fórmula con "¿dígame?" entona mejor que "buenas".)
 
 ### System prompt (pegar tal cual)
 
