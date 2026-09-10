@@ -530,9 +530,21 @@ async function pedirResena({ telefono, nombre, refParte, caseId }) {
   const memberId  = conversaciones[clave]?.memberId  || act.memberId;
   const channelId = conversaciones[clave]?.channelId || act.canalId;
   if (!memberId || !channelId) return { ok: false, motivo: "sin_datos_de_envio" };
-  // No interrumpir si una persona de la oficina está atendiendo el chat
-  if (botActivo[`${channelId}_${clave}`] === false) {
-    return { ok: false, motivo: "conversacion_atendida_por_persona" };
+  // No interrumpir si una persona de la oficina está atendiendo el chat AHORA.
+  // Ojo: con el auto-takeover casi todos los clientes activos acaban con una
+  // pausa de 6h (la oficina remata el trabajo por WhatsApp justo antes de
+  // cerrar el parte). Esa pausa NO debe tragarse la encuesta: si la última
+  // intervención humana ya está "fría" (>2h), se envía igualmente — el flujo
+  // de reseña funciona aunque el chat siga en pausa. Solo bloquean la pausa
+  // manual indefinida (panel/handoff) y una intervención reciente, y esas se
+  // reintentan en los siguientes sondeos (reintentable).
+  const claveBot = `${channelId}_${clave}`;
+  if (botActivo[claveBot] === false) {
+    const expira = pausaExpira[claveBot];
+    const intervinoHace = expira ? Date.now() - (expira - PAUSA_TAKEOVER_H * 3600 * 1000) : 0;
+    if (!expira || intervinoHace < 2 * 3600 * 1000) {
+      return { ok: false, motivo: "conversacion_atendida_por_persona", reintentable: true };
+    }
   }
   // No insistir si ya se le pidió hace poco
   if (Date.now() - (resenasPedidas[clave] || 0) < 7 * 24 * 3600 * 1000) {
@@ -593,6 +605,22 @@ function parteDeAseguradora(caso) {
 const cierresProcesados = {}; // { caseId: ts en que se registró }
 let sondeoEnCurso = false;
 
+// Historial persistente de intentos de encuesta (diagnóstico): qué pasó con
+// cada parte cerrado — enviada, sin teléfono, chat atendido por persona...
+// Visible en /admin/api/resenas-stats. Sin esto, los motivos de descarte
+// solo vivían en el log del momento y no había forma de auditarlos.
+let resenasHistorial = []; // [{ ts, parte, resultado }]
+function registrarResultadoResena(parte, resultado) {
+  const ultimo = resenasHistorial[0];
+  if (ultimo && ultimo.parte === parte && ultimo.resultado === resultado) {
+    ultimo.ts = new Date().toISOString(); // reintento con el mismo desenlace: no duplicar
+  } else {
+    resenasHistorial.unshift({ ts: new Date().toISOString(), parte, resultado });
+    if (resenasHistorial.length > 100) resenasHistorial.pop();
+  }
+  redisSet("iberica:resenasHistorial", resenasHistorial);
+}
+
 async function sondearPartesCerrados() {
   if ((process.env.RESENAS_AUTO || "on").toLowerCase() === "off") return { ok: false, motivo: "desactivado_por_RESENAS_AUTO" };
   if (sondeoEnCurso) return { ok: false, motivo: "sondeo_ya_en_curso" };
@@ -636,6 +664,7 @@ async function sondearPartesCerrados() {
       if ((process.env.RESENAS_EXCLUIR_ASEGURADORAS || "off").toLowerCase() === "on" && parteDeAseguradora(caso)) {
         console.log(`[Reseñas] Parte ${caso.ref_Parte || caso.id} omitido: viene de compañía de seguros`);
         resumen.encuestas.push({ parte: caso.ref_Parte || caso.id, resultado: "omitido_aseguradora" });
+        registrarResultadoResena(caso.ref_Parte || caso.id, "omitido_aseguradora");
         continue;
       }
       resumen.cerradosNuevos++;
@@ -654,10 +683,16 @@ async function sondearPartesCerrados() {
       } catch (e) { resumen.errores.push(`contacto de ${caso.ref_Parte || caso.id}: ${e.message}`); }
       if (!telefonoCli) {
         resumen.encuestas.push({ parte: caso.ref_Parte || caso.id, resultado: "sin_telefono_en_zoho" });
+        registrarResultadoResena(caso.ref_Parte || caso.id, "sin_telefono_en_zoho");
         continue;
       }
       const r = await pedirResena({ telefono: telefonoCli, nombre: nombreCli, refParte: caso.ref_Parte, caseId: caso.id });
       resumen.encuestas.push({ parte: caso.ref_Parte || caso.id, resultado: r.ok ? `enviada_por_${r.via}` : r.motivo });
+      registrarResultadoResena(caso.ref_Parte || caso.id, r.ok ? `enviada_por_${r.via}` : r.motivo);
+      // Descartes temporales (p. ej. la oficina acaba de escribir en el chat):
+      // desmarcar el cierre para que el siguiente sondeo lo reintente mientras
+      // siga dentro de la ventana de 3h.
+      if (!r.ok && r.reintentable) delete cierresProcesados[caso.id];
     }
     // Olvidar registros de más de 30 días y persistir
     const caduca = Date.now() - 30 * 24 * 3600 * 1000;
@@ -826,6 +861,8 @@ async function cargarEstadoDesdeRedis() {
     redisGet("iberica:reglasComentarios"),
     redisGet("iberica:captacionLeads"),
   ]);
+  const historialGuardado = await redisGet("iberica:resenasHistorial");
+  if (Array.isArray(historialGuardado)) resenasHistorial = historialGuardado;
   if (botActivoGuardado) Object.assign(botActivo, botActivoGuardado);
   if (actividadGuardada) Object.assign(actividad, actividadGuardada);
   if (pausasGuardadas) Object.assign(pausaExpira, pausasGuardadas);
@@ -2954,6 +2991,9 @@ app.get("/admin/api/resenas-stats", authAdmin, (req, res) => {
     encuestasPedidasTotal: pedidas.length,
     ultimas: pedidas.slice(0, 25),
     cierresProcesadosRegistrados: Object.keys(cierresProcesados).length,
+    // Qué pasó con cada parte cerrado que vio el sondeo (más reciente primero)
+    historial: resenasHistorial.slice(0, 30),
+    motivos: resenasHistorial.reduce((acc, h) => { acc[h.resultado] = (acc[h.resultado] || 0) + 1; return acc; }, {}),
   });
 });
 
