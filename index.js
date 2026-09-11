@@ -3074,6 +3074,27 @@ cargar();
 </script></body></html>`);
 });
 
+// ── Canales visibles en Woztell (diagnóstico) ────────────────
+// Lista los canales reales con sus IDs exactos, para configurar
+// WOZTELL_CHANNEL_ID sin teclear a mano (un ID mal copiado rompe la
+// creación de contactos con "Cannot read properties of null").
+app.get("/admin/api/woztell-canales", authAdmin, async (req, res) => {
+  try {
+    const d = await graphqlWoztell(
+      `query canales($first: IntMax100) {
+         apiViewer { channels(first: $first) { edges { node { _id name connected } } } }
+       }`,
+      { first: 30 }
+    );
+    const canales = (d?.apiViewer?.channels?.edges || []).map((e) => ({
+      id: e?.node?._id, nombre: e?.node?.name, conectado: !!e?.node?.connected,
+    }));
+    res.json({ ok: true, configurado: process.env.WOZTELL_CHANNEL_ID || null, canales });
+  } catch (e) {
+    res.json({ ok: false, error: String(e.message).slice(0, 300) });
+  }
+});
+
 // ── Relanzar a mano una encuesta postventa ───────────────────
 // Para partes cuyo envío falló y cuya ventana de reintento ya caducó:
 // GET /admin/api/pedir-resena?tel=6XXXXXXXX&nombre=Juan&ref=2026-11622
