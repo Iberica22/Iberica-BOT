@@ -46,7 +46,9 @@ cualquier duda o quieres ajustar algo, respóndeme por aquí y lo vemos,
 sin ningún compromiso 🙂
 ```
 
-**`seguimiento_presupuesto_2`** (toque 2, variable {{1}} = nombre):
+**`seguimiento_presupuesto_3`** (toque 2, variable {{1}} = nombre — se
+llama "_3" porque en la cuenta ya existía una plantilla con el nombre
+"_2"; el nombre real se configura en `PRESU_TEMPLATE2`):
 
 ```
 Hola {{1}}, soy Marta de Ibérica Seguridad 🙂 No quiero resultar pesada,
@@ -65,7 +67,7 @@ y protege la marca. Nunca precios, nunca urgencia artificial.)
 |---|---|---|
 | `PRESU_AUTO` | `on` | Interruptor general. **Off por defecto**: no activar hasta que Meta apruebe las plantillas. |
 | `PRESU_TEMPLATE` | `seguimiento_presupuesto` | Toque 1 |
-| `PRESU_TEMPLATE2` | `seguimiento_presupuesto_2` | Toque 2 (si falta, reutiliza la 1) |
+| `PRESU_TEMPLATE2` | `seguimiento_presupuesto_3` | Toque 2 (si falta, reutiliza la 1) |
 | `PRESU_DIAS_TOQUE1/2/CIERRE` | 3 / 8 / 11 | Opcional, para ajustar la cadencia |
 
 ## Panel
