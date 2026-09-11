@@ -463,6 +463,19 @@ async function llamarAvisoParte(datos) {
 const RESENA_URL = "https://g.page/r/CXgW_wAoTj0cEAE/review";
 const resenasPedidas = {}; // { telefono: ts de la última petición }
 
+// Encuestas con respuesta pendiente: { telefono: { refParte, caseId, ts } }.
+// Persistido en Redis: la respuesta del cliente puede llegar horas después
+// y un redeploy borra `conversaciones` — con esto el paso resena_nps se
+// reconstruye y la nota no se pierde (clave en el canal BOT, donde todo lo
+// demás se deriva a un agente humano).
+const resenasEnCurso = {};
+function cerrarResenaEnCurso(telefono) {
+  if (resenasEnCurso[telefono]) {
+    delete resenasEnCurso[telefono];
+    redisSet("iberica:resenasEnCurso", resenasEnCurso);
+  }
+}
+
 // Localiza la clave del cliente (formato Woztell "34XXXXXXXXX") a partir de
 // un teléfono en cualquier formato de Zoho (+34 600..., 600 11 12 22...)
 function claveClientePorTelefono(t) {
@@ -678,6 +691,8 @@ async function pedirResena({ telefono, nombre, refParte, caseId }) {
   }
   resenasPedidas[clave] = Date.now();
   redisSet("iberica:resenasPedidas", resenasPedidas);
+  resenasEnCurso[clave] = { refParte: refParte || null, caseId: caseId || null, ts: Date.now() };
+  redisSet("iberica:resenasEnCurso", resenasEnCurso);
   const via = enFrio ? "plantilla_en_frio" : (fueraDeVentana ? "plantilla" : "chat");
   console.log(`[Reseñas] Encuesta postventa enviada a ${clave} (parte ${refParte || "—"}, ${via})`);
   return { ok: true, telefono: clave, via };
@@ -970,6 +985,8 @@ async function cargarEstadoDesdeRedis() {
   ]);
   const historialGuardado = await redisGet("iberica:resenasHistorial");
   if (Array.isArray(historialGuardado)) resenasHistorial = historialGuardado;
+  const enCursoGuardadas = await redisGet("iberica:resenasEnCurso");
+  if (enCursoGuardadas) Object.assign(resenasEnCurso, enCursoGuardadas);
   if (botActivoGuardado) Object.assign(botActivo, botActivoGuardado);
   if (actividadGuardada) Object.assign(actividad, actividadGuardada);
   if (pausasGuardadas) Object.assign(pausaExpira, pausasGuardadas);
@@ -1971,6 +1988,7 @@ async function procesarMensaje(telefono, texto) {
       );
       crearNotaParte(estado.resena?.caseId, `Nota del cliente: ${n !== null ? n + "/10" : `positiva ("${msg.slice(0, 80)}")`}. Se le envió el enlace de reseña de Google.`);
       registrarResultadoResena(estado.resena?.refParte || telefono, `respondio_${n !== null ? n : "positivo"}_enlace_enviado`);
+      cerrarResenaEnCurso(telefono);
       return;
     }
     if (n !== null || negativo) {
@@ -1984,6 +2002,7 @@ async function procesarMensaje(telefono, texto) {
     if ((estado.resena?.intentos || 0) >= 1) {
       estado.step = "menu_principal";
       await enviarMensaje(telefono, "¡Gracias por tu tiempo! 😊 Si necesitas cualquier cosa, aquí estamos.");
+      cerrarResenaEnCurso(telefono);
       return;
     }
     estado.resena = estado.resena || {};
@@ -1993,6 +2012,7 @@ async function procesarMensaje(telefono, texto) {
   }
   if (estado.step === "resena_feedback") {
     estado.step = "menu_principal";
+    cerrarResenaEnCurso(telefono);
     await enviarMensaje(telefono, "Gracias de verdad — ahora mismo se lo traslado al equipo. 🙏");
     crearNotaParte(estado.resena?.caseId, `Nota del cliente: ${estado.resena?.nota || "baja"}. Qué podríamos mejorar: "${msg.slice(0, 300)}"`);
     try {
@@ -3421,6 +3441,25 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    // ── Canal BOT/Soporte: reconstruir encuestas tras un redeploy ─────
+    // Las encuestas en frío salen por este canal y la respuesta puede
+    // llegar horas después, cuando `conversaciones` (memoria) ya se vació.
+    // Si el cliente tiene una encuesta en curso (Redis), se reconstruye el
+    // paso resena_nps antes de cualquier otra comprobación.
+    const CANAL_SOPORTE = "69fda40ba6876fcf26d5407f";
+    if (channelId === CANAL_SOPORTE &&
+        !(conversaciones[telefono]?.step || "").startsWith("resena_") &&
+        resenasEnCurso[telefono] &&
+        Date.now() - (resenasEnCurso[telefono].ts || 0) < 7 * 24 * 3600 * 1000) {
+      if (!conversaciones[telefono]) resetearConversacion(telefono);
+      const est = conversaciones[telefono];
+      est.memberId  = memberId;
+      est.channelId = channelId;
+      est.step      = "resena_nps";
+      est.resena    = { refParte: resenasEnCurso[telefono].refParte || null, caseId: resenasEnCurso[telefono].caseId || null, intentos: 0 };
+      console.log(`[Reseñas] Encuesta en curso reconstruida para ${telefono} (parte ${est.resena.refParte || "—"})`);
+    }
+
     // Una respuesta a la encuesta postventa se procesa siempre, aunque el
     // canal esté en pausa o fuera de horario (es un intercambio puntual).
     const enFlujoResena = (conversaciones[telefono]?.step || "").startsWith("resena_");
@@ -3432,11 +3471,12 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ── Canal Soporte (encuestas/reseñas) — derivar siempre a agente humano ──
+    // ── Canal Soporte (encuestas/reseñas) — derivar a agente humano ──
     // Este canal se usa para envíos automáticos. Si un cliente responde,
-    // pausamos el bot, avisamos al agente de turno y le decimos que le llamamos.
-    const CANAL_SOPORTE = "69fda40ba6876fcf26d5407f";
-    if (channelId === CANAL_SOPORTE) {
+    // pausamos el bot, avisamos al agente de turno y le decimos que le
+    // llamamos — SALVO que esté contestando una encuesta postventa: esa
+    // respuesta la gestiona Marta (nota 0-10, enlace de Google...).
+    if (channelId === CANAL_SOPORTE && !enFlujoResena) {
       console.log(`[Webhook] Mensaje en canal Soporte de ${telefono} — derivando a agente`);
 
       // Inicializar conversación si no existe (para poder enviar mensajes)
