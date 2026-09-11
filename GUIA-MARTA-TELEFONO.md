@@ -127,8 +127,10 @@ Twilio no tiene números españoles en autoservicio; se usa un operador
 virtual español conectado por SIP:
 
 1. Cuenta en **Zadarma** (zadarma.com) o **Netelip** (netelip.com).
-2. Comprar un **número geográfico de Almería (950)** — 1-3 €/mes, alta
-   inmediata (piden identificación, como todo número español).
+2. Comprar un **número geográfico de Almería (950)** — 1-3 €/mes (los hay
+   con conexión 0 €). Piden identificación en vivo (DNI), como todo
+   número español, y la verificación tarda hasta 2 días laborables.
+   **Número contratado: +34 950 79 49 80** (Zadarma, 11/09/2026).
 3. En ElevenLabs: **Agents Platform → Phone Numbers → Import → SIP
    trunk** → ElevenLabs muestra los datos SIP (URI/credenciales).
 4. En el panel del operador (Zadarma/Netelip): configurar el número para
