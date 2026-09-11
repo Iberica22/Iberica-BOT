@@ -165,6 +165,10 @@ virtual español conectado por SIP:
    con conexión 0 €). Piden identificación en vivo (DNI), como todo
    número español, y la verificación tarda hasta 2 días laborables.
    **Número contratado: +34 950 79 49 80** (Zadarma, 11/09/2026).
+   ✅ **EN PRODUCCIÓN desde el 11/09/2026**: Zadarma entrega las llamadas
+   al SIP de ElevenLabs (`+34950794980@sip.rtc.elevenlabs.io:5060`,
+   troncal de entrada sin credenciales) con la agente MARTA Iberica
+   asignada — llamada de prueba real contestada por Marta.
 3. En ElevenLabs: **Agents Platform → Phone Numbers → Import → SIP
    trunk** → ElevenLabs muestra los datos SIP (URI/credenciales).
 4. En el panel del operador (Zadarma/Netelip): configurar el número para
