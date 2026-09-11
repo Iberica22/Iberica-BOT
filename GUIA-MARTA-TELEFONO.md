@@ -126,6 +126,9 @@ expediente y pide pulsar una tecla para aceptarlo.
 - SOLO si es una urgencia real y la persona insiste en hablar con alguien
   YA (después de ofrecerle dos veces tomar los datos), usa la herramienta
   de transferencia al técnico de guardia. Nunca para consultas normales.
+- Si acabas de transferir y la llamada vuelve a ti (nadie la ha cogido),
+  NO vuelvas a transferir: discúlpate, toma los datos y asegúrale que el
+  aviso ya está sonando en el teléfono del equipo.
 
 # Fin de la llamada
 - Cuando hayas terminado (datos tomados, parte creado, duda resuelta) y
@@ -154,11 +157,15 @@ Despídete confirmando el siguiente paso ("un técnico le llama en breve"
 - **Terminar conversación**: imprescindible — sin ella Marta no cuelga
   nunca y la llamada queda abierta gastando minutos. Con el bloque "Fin
   de la llamada" del prompt, cuelga tras despedirse.
-- **Transferir a un número**: configurada con el móvil del técnico de
-  guardia (674 891 529 — sin desvío a Marta, no hay bucle). Solo para
-  urgencias reales con insistencia, según el bloque "Pasar con una
-  persona" del prompt. En Configuración → Avanzado: duración máxima de
-  llamada ~10 min y colgar tras ~20-30 s de silencio, como doble red.
+- **Transferir a un número**: configurada con el fijo de guardia
+  **950 088 086** (ese número sigue la rotación de guardias, así la
+  transferencia siempre acaba en quien toque). Solo para urgencias
+  reales con insistencia, según el bloque "Pasar con una persona".
+  OJO: si el fijo tiene desvío condicional hacia Marta, ponerle espera
+  larga (25-30 s) para que la guardia pueda coger la transferencia antes
+  de que rebote; el prompt cubre el rebote (no re-transferir).
+  En Configuración → Avanzado: duración máxima de llamada ~10 min y
+  colgar tras ~20-30 s de silencio, como doble red.
 
 ### Tools (Agents Platform → el agente → Tools → Add tool → Webhook)
 
