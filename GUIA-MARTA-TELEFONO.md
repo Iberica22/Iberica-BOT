@@ -14,6 +14,14 @@ agente usa durante la llamada para crear y consultar partes en Zoho.
 natural (escuchar varias y elegir la que suene más a persona de oficina;
 en producción: Cristina).
 
+Familia TTS en producción: **V3 Conversacional + Modo expresivo**, con
+etiquetas de audio (Con empatía, Con calidez, Con paciencia). En V3 los
+deslizadores (estabilidad/velocidad) no son ajustables. Plan B si la voz
+suena rígida en la línea real: cambiar la familia a v2 (Multilingüe/
+Turbo), donde sí hay deslizadores (velocidad ~1,05, estabilidad 0,40) —
+PERO quitando antes del prompt la instrucción de acotaciones entre
+corchetes, porque la familia v2 no las interpreta y las leería en alto.
+
 ### LLM
 
 - **Principal: Claude Haiku 4.5** — el de menor latencia estable (~0,7 s)
