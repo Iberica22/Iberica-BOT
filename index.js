@@ -924,6 +924,13 @@ function dentroVentanaComercial() {
 
 // Sondeo: detectar partes recién pasados a Presupuesto/enviado y registrar
 // el seguimiento. También cancela los que cambiaron de estado en el CRM.
+//
+// "A PARTIR DE HOY": en su primera ejecución el circuito graba su fecha de
+// arranque (Redis) y solo sigue presupuestos modificados DESPUÉS de ese
+// momento. El histórico anterior no se toca — nada de escribir de golpe a
+// clientes con presupuestos del mes pasado. En ese primer arranque también
+// se cancela cualquier seguimiento pendiente registrado antes de la regla.
+let presuArranque = null;
 let sondeoPresuEnCurso = false;
 async function sondearPresupuestosEnviados() {
   if (!presuActivo()) return { ok: false, motivo: "desactivado_por_PRESU_AUTO" };
@@ -931,6 +938,19 @@ async function sondearPresupuestosEnviados() {
   sondeoPresuEnCurso = true;
   const resumen = { vistos: 0, nuevos: 0, cancelados: 0, muestra: [] };
   try {
+    if (!presuArranque) {
+      presuArranque = await redisGet("iberica:presuArranque");
+      if (!presuArranque) {
+        presuArranque = Date.now();
+        redisSet("iberica:presuArranque", presuArranque);
+        let limpiados = 0;
+        for (const seg of Object.values(seguimientosPresu)) {
+          if (seg.estado === "pendiente") { seg.estado = "cancelado"; limpiados++; }
+        }
+        if (limpiados) guardarSeguimientosPresu();
+        console.log(`[Presupuestos] Arranque del circuito registrado — solo se siguen presupuestos desde ahora (${limpiados} antiguos cancelados)`);
+      }
+    }
     const token = await obtenerTokenZoho();
     const res = await axios.get("https://www.zohoapis.eu/crm/v2/Cases", {
       params: { sort_by: "Modified_Time", sort_order: "desc", per_page: 30 },
@@ -956,6 +976,7 @@ async function sondearPresupuestosEnviados() {
       }
       if (seg) continue; // ya registrado
       const enviadoTs = new Date(caso.Modified_Time || 0).getTime() || Date.now();
+      if (enviadoTs < presuArranque) continue;                      // anterior al arranque: no se toca
       if (Date.now() - enviadoTs > 14 * 24 * 3600 * 1000) continue; // demasiado antiguo
       // Teléfono y nombre del contacto vinculado
       let telefonoCli = null;
