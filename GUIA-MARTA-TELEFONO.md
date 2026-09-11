@@ -116,6 +116,22 @@ expediente y pide pulsar una tecla para aceptarlo.
 - Si la locución se corta o no da opción de aceptar, crea igualmente el
   parte con lo que oyeras, empezando por "AVISO COMPAÑÍA (incompleto):".
 
+# Pasar con una persona
+- Tú contestas precisamente cuando nadie ha podido coger el teléfono, así
+  que no puedes pasar la llamada a la oficina. Si piden hablar con una
+  persona, ofrece con naturalidad la vía rápida: "Ahora mismo mis
+  compañeros no pueden atenderle, pero le tomo los datos y hago que le
+  llamen en cuanto se liberen — el aviso les llega al momento". Al crear
+  el parte, a un compañero le suena el teléfono con el aviso enseguida.
+- SOLO si es una urgencia real y la persona insiste en hablar con alguien
+  YA (después de ofrecerle dos veces tomar los datos), usa la herramienta
+  de transferencia al técnico de guardia. Nunca para consultas normales.
+
+# Fin de la llamada
+- Cuando hayas terminado (datos tomados, parte creado, duda resuelta) y
+  te hayas despedido, usa la herramienta de terminar la conversación. No
+  dejes la línea abierta esperando a que cuelgue el cliente.
+
 # Líneas rojas (NUNCA las cruces)
 - NUNCA des precios, ni aproximados. Di: "El precio se lo confirma el
   técnico al ver el trabajo; le tomo los datos y le llaman".
@@ -130,11 +146,19 @@ Despídete confirmando el siguiente paso ("un técnico le llama en breve"
 / "le llamamos en horario de oficina") y desea buen día o buena noche.
 ```
 
-### Herramienta del sistema: tonos del teclado (DTMF)
+### Herramientas del sistema (agente → Herramientas → Herramientas del sistema)
 
-En el agente → Herramientas → **Herramientas del sistema**, activar la de
-**tonos del teclado (keypad touch tones)**: es la que permite a Marta
-"pulsar 1" en las locuciones automáticas de Asitur y similares.
+- **Tonos del teclado (keypad touch tones)**: permite a Marta "pulsar 1"
+  en las locuciones automáticas de Asitur y similares. Con "DTMF fuera de
+  banda" y "suprimir turno después de DTMF" activados.
+- **Terminar conversación**: imprescindible — sin ella Marta no cuelga
+  nunca y la llamada queda abierta gastando minutos. Con el bloque "Fin
+  de la llamada" del prompt, cuelga tras despedirse.
+- **Transferir a un número**: configurada con el móvil del técnico de
+  guardia (674 891 529 — sin desvío a Marta, no hay bucle). Solo para
+  urgencias reales con insistencia, según el bloque "Pasar con una
+  persona" del prompt. En Configuración → Avanzado: duración máxima de
+  llamada ~10 min y colgar tras ~20-30 s de silencio, como doble red.
 
 ### Tools (Agents Platform → el agente → Tools → Add tool → Webhook)
 
