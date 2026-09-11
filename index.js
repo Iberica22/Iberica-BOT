@@ -473,6 +473,13 @@ async function llamarAvisoParte(datos) {
 const RESENA_URL = "https://g.page/r/CXgW_wAoTj0cEAE/review";
 const resenasPedidas = {}; // { telefono: ts de la última petición }
 
+// ¿El receptor de la encuesta dice que no nos conoce / no contrató nada?
+// Pasa con partes de seguro: el contacto de Zoho es el titular de la
+// póliza y el trabajo se hizo al inquilino o a un familiar.
+function noIdentificaServicio(low) {
+  return /(no (hemos|he) contratado|no (nos|me) (habeis|hab[eé]is|han) hecho (nada|ningun)|no (os|los|les|te) conozco|se (esta[n]? )?equivocan|(numero|n[uú]mero) equivocado|no s[eé] (quien|qui[eé]n) (sois|eres|son)|no me suena|yo no (he )?(llamado|pedido|solicitado))/.test(low);
+}
+
 // Encuestas con respuesta pendiente: { telefono: { refParte, caseId, ts } }.
 // Persistido en Redis: la respuesta del cliente puede llegar horas después
 // y un redeploy borra `conversaciones` — con esto el paso resena_nps se
@@ -2292,6 +2299,35 @@ async function procesarMensaje(telefono, texto) {
     const m = msg.match(/\b(10|[0-9])\b/);
     const n = m ? parseInt(m[1]) : null;
     const low = normalizaTxt(msg);
+    // Caso frecuente en partes de seguro: la encuesta llega al TITULAR de
+    // la póliza pero el trabajo se hizo a otra persona (inquilino,
+    // familiar) → "no he contratado nada con vosotros". No es una
+    // valoración mala: se aclara con amabilidad, se anota y se avisa al
+    // equipo para que verifique el teléfono del parte.
+    if (noIdentificaServicio(low)) {
+      estado.step = "menu_principal";
+      cerrarResenaEnCurso(telefono);
+      await enviarMensaje(
+        telefono,
+        `¡Disculpe la confusión! 🙏 Le escribíamos por una reparación gestionada a través de su compañía de seguros${estado.resena?.refParte ? ` (aviso ${estado.resena.refParte})` : ""} — es posible que en la vivienda atendiéramos a otra persona (un inquilino o familiar). No necesita hacer nada más. ¡Gracias y disculpe las molestias!`
+      );
+      crearNotaParte(estado.resena?.caseId, `Encuesta postventa (Marta): el receptor del WhatsApp NO identifica el servicio ("${msg.slice(0, 200)}"). Posible titular de póliza distinto de la persona atendida (inquilino/familiar). Verificar teléfono del contacto.`);
+      registrarResultadoResena(estado.resena?.refParte || telefono, "respondio_no_identifica_el_servicio");
+      try {
+        const destinatario = determinarDestinatarioNotificacion();
+        const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+        await enviarNotificacionAgente(destinatario, {
+          nombre:      estado.nombre || `Cliente ${telefono.slice(-9)}`,
+          telefono:    telefono.slice(-9),
+          direccion:   "—",
+          descripcion: `⚠️ Encuesta: el receptor NO identifica el servicio (parte ${estado.resena?.refParte || "—"}): "${msg.slice(0, 150)}". Posible titular del seguro ≠ persona atendida. Verificar teléfono del parte.`,
+          apertura:    ahoraStr,
+          refParte:    estado.resena?.refParte || "—",
+          agente:      "Postventa",
+        });
+      } catch (e) { console.error("[Reseñas] No se pudo avisar al equipo:", e.message); }
+      return;
+    }
     const positivo = /(genial|perfecto|muy bien|fenomenal|estupendo|excelente|encantad|de lujo|maravilla|todo bien|muy content)/.test(low);
     const negativo = /(mal|fatal|regular|desastre|queja|no .{0,20}(bien|content)|pesimo)/.test(low);
     if ((n !== null && n >= 9) || (n === null && positivo && !negativo)) {
@@ -2328,6 +2364,16 @@ async function procesarMensaje(telefono, texto) {
   if (estado.step === "resena_feedback") {
     estado.step = "menu_principal";
     cerrarResenaEnCurso(telefono);
+    // "No os conozco / no contraté nada" tampoco es una valoración baja aquí
+    if (noIdentificaServicio(normalizaTxt(msg))) {
+      await enviarMensaje(
+        telefono,
+        `¡Disculpe la confusión! 🙏 Le escribíamos por una reparación gestionada a través de su compañía de seguros${estado.resena?.refParte ? ` (aviso ${estado.resena.refParte})` : ""} — es posible que en la vivienda atendiéramos a otra persona. No necesita hacer nada más. ¡Gracias!`
+      );
+      crearNotaParte(estado.resena?.caseId, `Encuesta postventa (Marta): el receptor NO identifica el servicio ("${msg.slice(0, 200)}"). Posible titular de póliza distinto de la persona atendida. Verificar teléfono del contacto.`);
+      registrarResultadoResena(estado.resena?.refParte || telefono, "respondio_no_identifica_el_servicio");
+      return;
+    }
     await enviarMensaje(telefono, "Gracias de verdad — ahora mismo se lo traslado al equipo. 🙏");
     crearNotaParte(estado.resena?.caseId, `Nota del cliente: ${estado.resena?.nota || "baja"}. Qué podríamos mejorar: "${msg.slice(0, 300)}"`);
     try {
