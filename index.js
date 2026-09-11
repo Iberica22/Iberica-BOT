@@ -523,7 +523,7 @@ async function graphqlWoztell(query, variables) {
     timeout: 15000,
   });
   if (res.data?.errors?.length) {
-    throw new Error(res.data.errors.map((e) => e?.message || "?").join("; ").slice(0, 160));
+    throw new Error(res.data.errors.map((e) => e?.message || "?").join("; ").slice(0, 300));
   }
   return res.data?.data;
 }
@@ -545,7 +545,9 @@ async function buscarOCrearMiembroWoztell(channelId, telefono, nombre) {
   if (creacionesMiembro.length >= 4) throw new Error("limite_de_creacion_por_minuto");
   creacionesMiembro.push(Date.now());
 
-  const input = { channelId, externalId: telefono };
+  // OJO: CreateMemberInput llama al canal "channel" (no "channelId") —
+  // el 10/09 se enviaba channelId y la API rechazaba todas las creaciones.
+  const input = { channel: channelId, externalId: telefono };
   if (nombre) input.firstName = String(nombre).trim().split(/\s+/)[0];
   const m = await graphqlWoztell(
     `mutation createMember($input: CreateMemberInput!) {
@@ -624,7 +626,7 @@ async function pedirResena({ telefono, nombre, refParte, caseId }) {
       enFrio    = true;
       console.log(`[Reseñas] Member ${r.creado ? "CREADO" : "encontrado"} en Woztell para ${clave} (envío en frío, parte ${refParte || "—"})`);
     } catch (e) {
-      return { ok: false, motivo: "no_se_pudo_crear_contacto", detalle: String(e.message).slice(0, 160), reintentable: true };
+      return { ok: false, motivo: "no_se_pudo_crear_contacto", detalle: String(e.message).slice(0, 300), reintentable: true };
     }
   }
 
@@ -690,9 +692,15 @@ let sondeoEnCurso = false;
 // solo vivían en el log del momento y no había forma de auditarlos.
 let resenasHistorial = []; // [{ ts, parte, resultado }]
 function registrarResultadoResena(parte, resultado) {
-  const ultimo = resenasHistorial[0];
-  if (ultimo && ultimo.parte === parte && ultimo.resultado === resultado) {
-    ultimo.ts = new Date().toISOString(); // reintento con el mismo desenlace: no duplicar
+  // Un reintento con el mismo desenlace actualiza la entrada existente (con
+  // contador) en vez de duplicarla: si dos partes se reintentan alternados
+  // cada 5 min, el historial no debe inundarse.
+  const idx = resenasHistorial.findIndex((h) => h.parte === parte && h.resultado === resultado);
+  if (idx !== -1) {
+    const entrada = resenasHistorial.splice(idx, 1)[0];
+    entrada.ts = new Date().toISOString();
+    entrada.veces = (entrada.veces || 1) + 1;
+    resenasHistorial.unshift(entrada);
   } else {
     resenasHistorial.unshift({ ts: new Date().toISOString(), parte, resultado });
     if (resenasHistorial.length > 100) resenasHistorial.pop();
@@ -3045,6 +3053,27 @@ async function guardar() {
 }
 cargar();
 </script></body></html>`);
+});
+
+// ── Relanzar a mano una encuesta postventa ───────────────────
+// Para partes cuyo envío falló y cuya ventana de reintento ya caducó:
+// GET /admin/api/pedir-resena?tel=6XXXXXXXX&nombre=Juan&ref=2026-11622
+// Busca el parte en Zoho por la referencia (para poder anotar la respuesta
+// en él) y lanza pedirResena con las mismas reglas de siempre (dedupe 7
+// días incluido).
+app.get("/admin/api/pedir-resena", authAdmin, async (req, res) => {
+  const tel    = String(req.query.tel || "").trim();
+  const nombre = String(req.query.nombre || "").trim() || null;
+  const ref    = String(req.query.ref || "").trim() || null;
+  if (!tel) return res.json({ ok: false, motivo: "falta_el_parametro_tel" });
+  let caseId = null;
+  if (ref) {
+    try { caseId = (await consultarParteZoho(ref))?.id || null; }
+    catch (e) { console.error("[Reseñas] No se pudo buscar el parte:", e.message); }
+  }
+  const r = await pedirResena({ telefono: tel, nombre, refParte: ref, caseId });
+  registrarResultadoResena(ref || tel, r.ok ? `enviada_por_${r.via}` : (r.detalle ? `${r.motivo}: ${r.detalle}` : r.motivo));
+  res.json(r);
 });
 
 // ── Barrido manual de leads abandonados (diagnóstico) ────────
