@@ -51,6 +51,16 @@ function pausarBot(clave, horas, motivo) {
     guardarCaptacionLeads();
     console.log(`[Captación] Lead ${tel} cerrado — lo atiende una persona`);
   }
+  // Y si tenía un seguimiento de presupuesto en marcha, también pasa a la
+  // persona: se cancela la cadencia para no pisar su conversación.
+  for (const seg of Object.values(seguimientosPresu)) {
+    if (seg.clave === tel && ["pendiente", "toque1", "toque2"].includes(seg.estado)) {
+      seg.estado = "cancelado";
+      guardarSeguimientosPresu();
+      registrarResultadoPresu(seg.ref, "cancelado_intervencion_humana");
+      console.log(`[Presupuestos] Seguimiento ${seg.ref} cancelado — lo atiende una persona`);
+    }
+  }
 }
 
 // ¿Está el bot pausado para esta clave canal_teléfono? Reactiva si la pausa
@@ -592,6 +602,34 @@ async function buscarOCrearMiembroWoztell(channelId, telefono, nombre) {
   return { memberId: nuevo, creado: true };
 }
 
+// Envío genérico de una plantilla aprobada de Meta al chat de un cliente
+// (requiere conversaciones[telefono] con memberId/channelId ya puestos).
+async function enviarPlantillaWoztell(telefono, elementName, parametros) {
+  const estado = conversaciones[telefono];
+  try {
+    const res = await axios.post(
+      `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
+      {
+        channelId: estado.channelId,
+        memberId:  estado.memberId,
+        response: [{
+          type: "TEMPLATE",
+          elementName,
+          languageCode: "es",
+          components: [{ type: "body", parameters: (parametros || []).map((t) => ({ type: "text", text: String(t) })) }],
+        }],
+      }
+    );
+    registrarWamidsEnvio(res.data);
+    const ok = res.data?.ok === 1 && res.data?.sendResult?.result?.[0]?.ok !== 0;
+    if (!ok) console.error(`[Plantilla] ❌ ${elementName} rechazada:`, JSON.stringify(res.data).slice(0, 300));
+    return { ok, detalle: ok ? null : JSON.stringify(res.data?.sendResult?.result?.[0] || res.data).slice(0, 300) };
+  } catch (e) {
+    console.error(`[Plantilla] ❌ Error enviando ${elementName}:`, e.response?.data || e.message);
+    return { ok: false, detalle: JSON.stringify(e.response?.data || e.message).slice(0, 300) };
+  }
+}
+
 // Deja constancia de la respuesta de la encuesta en el propio parte del CRM
 // (Notas del módulo Partes), para no perder la información que daba PERE.
 async function crearNotaParte(caseId, contenido) {
@@ -830,6 +868,258 @@ async function sondearPartesCerrados() {
   }
 }
 
+// ============================================================
+// SEGUIMIENTO DE PRESUPUESTOS (Marta comercial)
+// ============================================================
+// Trazabilidad en Zoho: Estado "Presupuesto" + Subestado "enviado" (se
+// comparan por contenido normalizado, como en reseñas: los literales
+// reales del CRM pueden variar). Protocolo comercial 3-8-11 con máximo
+// dos toques, siempre por plantilla aprobada y en horario comercial:
+//   día 3  → toque 1 ("¿pudiste verlo? ¿dudas?")
+//   día 8  → toque 2 (recordatorio suave con salida fácil)
+//   día 11 → sin respuesta: aviso al equipo para llamada comercial y fin
+// Cualquier respuesta del cliente detiene la cadencia: Marta la clasifica
+// (acepta / precio / se lo piensa / rechaza / duda), contesta según el
+// manual de objeciones (sin presionar, líneas rojas de marca), lo anota
+// en el parte y avisa al equipo cuando toca. Si una persona de la
+// oficina interviene en el chat, el seguimiento se cancela.
+// Interruptor: PRESU_AUTO=on + plantillas PRESU_TEMPLATE / PRESU_TEMPLATE2.
+
+const seguimientosPresu = {}; // { caseId: { telefono, clave, nombre, ref, caseId, enviadoTs, toque1Ts, toque2Ts, estado } }
+function guardarSeguimientosPresu() { redisSet("iberica:seguimientosPresu", seguimientosPresu); }
+
+let presuHistorial = []; // [{ ts, ref, resultado, veces? }] — diagnóstico persistente
+function registrarResultadoPresu(ref, resultado) {
+  const idx = presuHistorial.findIndex((h) => h.ref === ref && h.resultado === resultado);
+  if (idx !== -1) {
+    const e = presuHistorial.splice(idx, 1)[0];
+    e.ts = new Date().toISOString();
+    e.veces = (e.veces || 1) + 1;
+    presuHistorial.unshift(e);
+  } else {
+    presuHistorial.unshift({ ts: new Date().toISOString(), ref, resultado });
+    if (presuHistorial.length > 100) presuHistorial.pop();
+  }
+  redisSet("iberica:presuHistorial", presuHistorial);
+}
+
+const PRESU_DIAS_TOQUE1 = parseInt(process.env.PRESU_DIAS_TOQUE1 || "3");
+const PRESU_DIAS_TOQUE2 = parseInt(process.env.PRESU_DIAS_TOQUE2 || "8");
+const PRESU_DIAS_CIERRE = parseInt(process.env.PRESU_DIAS_CIERRE || "11");
+const presuActivo = () => (process.env.PRESU_AUTO || "off").toLowerCase() === "on";
+
+function esCasoPresupuestoEnviado(caso) {
+  return normalizaTxt(caso?.Status || "").includes("presupuesto") &&
+         normalizaTxt(caso?.Subestado || "").includes("enviado");
+}
+
+// Los toques comerciales solo salen L-V de 10:00 a 19:00 (hora de Madrid)
+function dentroVentanaComercial() {
+  const ahora = new Date();
+  const dia = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Madrid", weekday: "short" }).format(ahora);
+  if (dia === "Sat" || dia === "Sun") return false;
+  const m = minutosActualesMadrid();
+  return m >= 10 * 60 && m <= 19 * 60;
+}
+
+// Sondeo: detectar partes recién pasados a Presupuesto/enviado y registrar
+// el seguimiento. También cancela los que cambiaron de estado en el CRM.
+let sondeoPresuEnCurso = false;
+async function sondearPresupuestosEnviados() {
+  if (!presuActivo()) return { ok: false, motivo: "desactivado_por_PRESU_AUTO" };
+  if (sondeoPresuEnCurso) return { ok: false, motivo: "sondeo_ya_en_curso" };
+  sondeoPresuEnCurso = true;
+  const resumen = { vistos: 0, nuevos: 0, cancelados: 0, muestra: [] };
+  try {
+    const token = await obtenerTokenZoho();
+    const res = await axios.get("https://www.zohoapis.eu/crm/v2/Cases", {
+      params: { sort_by: "Modified_Time", sort_order: "desc", per_page: 30 },
+      headers: { Authorization: `Zoho-oauthtoken ${token}` },
+    });
+    const casos = res.data?.data || [];
+    resumen.vistos = casos.length;
+    resumen.muestra = casos.slice(0, 10).map((c) => ({
+      ref: c.ref_Parte || c.id, estado: c.Status || null, subestado: c.Subestado || null,
+    }));
+    for (const caso of casos) {
+      const seg = seguimientosPresu[caso.id];
+      if (!esCasoPresupuestoEnviado(caso)) {
+        // Si estaba en seguimiento y el CRM ya cambió de estado (aceptado,
+        // cerrado, rechazado...), la cadencia se cancela en silencio.
+        if (seg && !["respondido", "cancelado", "cerrado_sin_respuesta"].includes(seg.estado)) {
+          seg.estado = "cancelado";
+          resumen.cancelados++;
+          registrarResultadoPresu(seg.ref, "cancelado_cambio_de_estado_en_crm");
+          guardarSeguimientosPresu();
+        }
+        continue;
+      }
+      if (seg) continue; // ya registrado
+      const enviadoTs = new Date(caso.Modified_Time || 0).getTime() || Date.now();
+      if (Date.now() - enviadoTs > 14 * 24 * 3600 * 1000) continue; // demasiado antiguo
+      // Teléfono y nombre del contacto vinculado
+      let telefonoCli = null;
+      let nombreCli   = caso.Related_To?.name || null;
+      try {
+        if (caso.Related_To?.id) {
+          const c = await axios.get(`https://www.zohoapis.eu/crm/v2/Contacts/${caso.Related_To.id}`, {
+            headers: { Authorization: `Zoho-oauthtoken ${token}` },
+          });
+          const contacto = c.data?.data?.[0] || {};
+          telefonoCli = contacto.Mobile || contacto.Phone || null;
+          nombreCli   = contacto.First_Name || contacto.Full_Name || nombreCli;
+        }
+      } catch (e) { console.error("[Presupuestos] Contacto:", e.message); }
+      if (!telefonoCli) {
+        seguimientosPresu[caso.id] = { caseId: caso.id, ref: caso.ref_Parte || caso.id, estado: "cancelado", enviadoTs };
+        registrarResultadoPresu(caso.ref_Parte || caso.id, "sin_telefono_en_zoho");
+        guardarSeguimientosPresu();
+        continue;
+      }
+      const d = String(telefonoCli).replace(/\D/g, "");
+      const clave = claveClientePorTelefono(telefonoCli) || (d.length === 9 ? `34${d}` : d);
+      seguimientosPresu[caso.id] = {
+        caseId: caso.id, ref: caso.ref_Parte || caso.id,
+        telefono: telefonoCli, clave, nombre: nombreCli,
+        enviadoTs, toque1Ts: null, toque2Ts: null, estado: "pendiente",
+      };
+      resumen.nuevos++;
+      registrarResultadoPresu(caso.ref_Parte || caso.id, "seguimiento_programado");
+      guardarSeguimientosPresu();
+      console.log(`[Presupuestos] Seguimiento programado: ${caso.ref_Parte || caso.id} (${clave})`);
+    }
+    return { ok: true, ...resumen };
+  } catch (e) {
+    console.error("[Presupuestos] Sondeo falló:", e.message);
+    return { ok: false, motivo: `error: ${e.message}` };
+  } finally {
+    sondeoPresuEnCurso = false;
+  }
+}
+
+// Envía un toque (1 o 2) por plantilla aprobada. Reutiliza el envío en
+// frío de reseñas: si el cliente no tiene chat conocido, se crea su
+// contacto en Woztell en el canal principal (WOZTELL_CHANNEL_ID).
+async function enviarToquePresu(seg, numToque) {
+  const plantilla = numToque === 1
+    ? process.env.PRESU_TEMPLATE
+    : (process.env.PRESU_TEMPLATE2 || process.env.PRESU_TEMPLATE);
+  if (!plantilla) return { ok: false, motivo: "sin_plantilla_configurada" };
+
+  const clave = seg.clave;
+  let memberId  = conversaciones[clave]?.memberId  || actividad[clave]?.memberId;
+  let channelId = conversaciones[clave]?.channelId || actividad[clave]?.canalId;
+  // Si una persona está atendiendo el chat, no molestar: se reintenta luego
+  if (channelId && botPausado(`${channelId}_${clave}`)) {
+    return { ok: false, motivo: "chat_atendido_por_persona", reintentar: true };
+  }
+  if (!memberId || !channelId) {
+    const canalPrincipal = process.env.WOZTELL_CHANNEL_ID;
+    if (!canalPrincipal) return { ok: false, motivo: "WOZTELL_CHANNEL_ID_no_configurado" };
+    try {
+      const r = await buscarOCrearMiembroWoztell(canalPrincipal, clave, seg.nombre);
+      memberId = r.memberId;
+      channelId = canalPrincipal;
+    } catch (e) {
+      return { ok: false, motivo: "no_se_pudo_crear_contacto", detalle: String(e.message).slice(0, 300), reintentar: true };
+    }
+  }
+  if (!conversaciones[clave]) resetearConversacion(clave);
+  const estado = conversaciones[clave];
+  estado.memberId  = memberId;
+  estado.channelId = channelId;
+  estado.step  = "presu_respuesta";
+  estado.presu = { ref: seg.ref, caseId: seg.caseId };
+
+  const nombreCorto = seg.nombre ? String(seg.nombre).trim().split(/\s+/)[0] : "de nuevo";
+  const r = await enviarPlantillaWoztell(clave, plantilla, [nombreCorto]);
+  if (!r.ok) {
+    estado.step = "menu_principal";
+    return { ok: false, motivo: "plantilla_fallida", detalle: r.detalle, reintentar: true };
+  }
+  return { ok: true };
+}
+
+// Barrido de cadencia: cada 30 min mira qué toques tocan (solo en ventana
+// comercial). Antes de cada toque re-verifica en Zoho que el parte sigue
+// en Presupuesto/enviado (si ya se aceptó o cerró, cancela).
+let barridoPresuEnCurso = false;
+async function barridoToquesPresupuesto(forzarVentana) {
+  if (!presuActivo()) return { ok: false, motivo: "desactivado_por_PRESU_AUTO" };
+  if (barridoPresuEnCurso) return { ok: false, motivo: "barrido_ya_en_curso" };
+  if (!forzarVentana && !dentroVentanaComercial()) return { ok: false, motivo: "fuera_de_ventana_comercial" };
+  barridoPresuEnCurso = true;
+  const resumen = { toques: [], cierres: 0 };
+  try {
+    const ahora = Date.now();
+    const dia = 24 * 3600 * 1000;
+    for (const seg of Object.values(seguimientosPresu)) {
+      if (!["pendiente", "toque1", "toque2"].includes(seg.estado)) continue;
+
+      // ¿Cierre sin respuesta? (tras el toque 2)
+      if (seg.estado === "toque2" && ahora - (seg.toque2Ts || 0) > (PRESU_DIAS_CIERRE - PRESU_DIAS_TOQUE2) * dia) {
+        seg.estado = "cerrado_sin_respuesta";
+        guardarSeguimientosPresu();
+        resumen.cierres++;
+        registrarResultadoPresu(seg.ref, "sin_respuesta_aviso_al_equipo");
+        try {
+          const dest = determinarDestinatarioNotificacion();
+          const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+          await enviarNotificacionAgente(dest, {
+            nombre: seg.nombre || `Cliente ${String(seg.clave).slice(-9)}`,
+            telefono: String(seg.clave).slice(-9),
+            direccion: "—",
+            descripcion: `Presupuesto ${seg.ref} SIN RESPUESTA tras 2 seguimientos de Marta — conviene llamada comercial`,
+            apertura: ahoraStr, refParte: seg.ref, agente: "Seguimiento presupuestos",
+          });
+        } catch (e) { console.error("[Presupuestos] Aviso de cierre falló:", e.message); }
+        crearNotaParte(seg.caseId, "Seguimiento presupuesto (Marta): sin respuesta tras 2 toques por WhatsApp. Avisado el equipo para llamada comercial.");
+        continue;
+      }
+
+      const numToque = seg.estado === "pendiente" ? 1 : (seg.estado === "toque1" ? 2 : null);
+      if (!numToque) continue;
+      const desde = numToque === 1 ? seg.enviadoTs : seg.toque1Ts;
+      const dias  = numToque === 1 ? PRESU_DIAS_TOQUE1 : (PRESU_DIAS_TOQUE2 - PRESU_DIAS_TOQUE1);
+      if (ahora - (desde || 0) < dias * dia) continue;
+
+      // Re-verificar en el CRM que sigue esperando respuesta
+      try {
+        const token = await obtenerTokenZoho();
+        const c = await axios.get(`https://www.zohoapis.eu/crm/v2/Cases/${seg.caseId}`, {
+          headers: { Authorization: `Zoho-oauthtoken ${token}` },
+        });
+        const caso = c.data?.data?.[0];
+        if (caso && !esCasoPresupuestoEnviado(caso)) {
+          seg.estado = "cancelado";
+          guardarSeguimientosPresu();
+          registrarResultadoPresu(seg.ref, "cancelado_cambio_de_estado_en_crm");
+          continue;
+        }
+      } catch (e) { console.error("[Presupuestos] Re-verificación falló:", e.message); }
+
+      const r = await enviarToquePresu(seg, numToque);
+      if (r.ok) {
+        if (numToque === 1) { seg.estado = "toque1"; seg.toque1Ts = ahora; }
+        else { seg.estado = "toque2"; seg.toque2Ts = ahora; }
+        guardarSeguimientosPresu();
+        registrarResultadoPresu(seg.ref, `toque${numToque}_enviado`);
+        console.log(`[Presupuestos] Toque ${numToque} enviado — ${seg.ref} (${seg.clave})`);
+      } else {
+        registrarResultadoPresu(seg.ref, r.detalle ? `${r.motivo}: ${r.detalle}` : r.motivo);
+        if (!r.reintentar) { seg.estado = "cancelado"; guardarSeguimientosPresu(); }
+      }
+      resumen.toques.push({ ref: seg.ref, toque: numToque, resultado: r.ok ? "enviado" : r.motivo });
+    }
+    return { ok: true, ...resumen };
+  } catch (e) {
+    console.error("[Presupuestos] Barrido falló:", e.message);
+    return { ok: false, motivo: `error: ${e.message}` };
+  } finally {
+    barridoPresuEnCurso = false;
+  }
+}
+
 /**
  * Devuelve el destinatario correcto de la notificación según el día y la hora.
  * - Lunes-Viernes 07:30-15:00 → Mari
@@ -987,6 +1277,10 @@ async function cargarEstadoDesdeRedis() {
   if (Array.isArray(historialGuardado)) resenasHistorial = historialGuardado;
   const enCursoGuardadas = await redisGet("iberica:resenasEnCurso");
   if (enCursoGuardadas) Object.assign(resenasEnCurso, enCursoGuardadas);
+  const seguimientosGuardados = await redisGet("iberica:seguimientosPresu");
+  if (seguimientosGuardados) Object.assign(seguimientosPresu, seguimientosGuardados);
+  const presuHistGuardado = await redisGet("iberica:presuHistorial");
+  if (Array.isArray(presuHistGuardado)) presuHistorial = presuHistGuardado;
   if (botActivoGuardado) Object.assign(botActivo, botActivoGuardado);
   if (actividadGuardada) Object.assign(actividad, actividadGuardada);
   if (pausasGuardadas) Object.assign(pausaExpira, pausasGuardadas);
@@ -2028,6 +2322,74 @@ async function procesarMensaje(telefono, texto) {
         agente:      "Postventa",
       });
     } catch (e) { console.error("[Reseñas] No se pudo avisar al equipo:", e.message); }
+    return;
+  }
+
+  // ── Respuesta a un seguimiento de presupuesto ───────────
+  // Manual de objeciones: una respuesta amable por tipo, sin presionar y
+  // sin precios (líneas rojas de marca). Todo queda anotado en el parte y
+  // el equipo recibe aviso cuando hay señal de venta o de pérdida.
+  if (estado.step === "presu_respuesta") {
+    const ref    = estado.presu?.ref || "—";
+    const caseId = estado.presu?.caseId || null;
+    const low    = normalizaTxt(msg);
+    const seg    = caseId ? seguimientosPresu[caseId] : null;
+    if (seg) { seg.estado = "respondido"; guardarSeguimientosPresu(); }
+    estado.step = "menu_principal";
+
+    const avisar = async (titulo) => {
+      try {
+        const dest = determinarDestinatarioNotificacion();
+        const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+        await enviarNotificacionAgente(dest, {
+          nombre: estado.nombre || seg?.nombre || `Cliente ${telefono.slice(-9)}`,
+          telefono: telefono.slice(-9), direccion: "—",
+          descripcion: `${titulo} (presupuesto ${ref}): "${msg.slice(0, 150)}"`,
+          apertura: ahoraStr, refParte: ref, agente: "Seguimiento presupuestos",
+        });
+      } catch (e) { console.error("[Presupuestos] Aviso falló:", e.message); }
+    };
+
+    // 1) Señal de venta: quiere seguir adelante
+    if (/(adelante|acepto|acepta(mos)?|de acuerdo|me interesa|confirmo|hacedlo|cuando (pueden|podeis|puedan)|vale,? (si|sí)|queremos hacerlo|si,? me lo quedo)/.test(low)) {
+      await enviarMensaje(telefono, "¡Genial! 🙌 Le paso ahora mismo tu confirmación al equipo y te llaman para cuadrar fechas. ¡Gracias por confiar en Ibérica!");
+      crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente ACEPTA. Respuesta: "${msg.slice(0, 300)}"`);
+      registrarResultadoPresu(ref, "respondio_ACEPTA");
+      await avisar("🎯 PRESUPUESTO ACEPTADO");
+      return;
+    }
+    // 2) Objeción de precio
+    if (/(caro|carisimo|precio|coste|cuesta|barato|rebaja|descuento|mas barato|competencia|otro presupuesto)/.test(low)) {
+      await enviarMensaje(
+        telefono,
+        "Te entiendo, es una inversión importante. Ten en cuenta que incluye la instalación por nuestro equipo propio y 3 años de garantía, y tenemos financiación para pagarlo con comodidad. Si quieres, un compañero te llama y ve contigo cómo ajustarlo — sin ningún compromiso 🙂"
+      );
+      crearNotaParte(caseId, `Seguimiento presupuesto (Marta): objeción de PRECIO. Respuesta: "${msg.slice(0, 300)}"`);
+      registrarResultadoPresu(ref, "respondio_objecion_precio");
+      await avisar("💶 Objeción de precio");
+      return;
+    }
+    // 3) Se lo está pensando / más adelante
+    if (/(pensar|pensando|mas adelante|todavia no|aun no|ya (te|os) (dire|digo)|consultar|decidir|dudando|no lo (tengo|tenemos) claro)/.test(low)) {
+      await enviarMensaje(telefono, "¡Claro, sin ninguna prisa! 🙂 Te mantenemos el presupuesto, y cualquier duda que te surja mientras lo decides me la escribes por aquí y te la resuelvo.");
+      crearNotaParte(caseId, `Seguimiento presupuesto (Marta): se lo está pensando. Respuesta: "${msg.slice(0, 300)}"`);
+      registrarResultadoPresu(ref, "respondio_se_lo_piensa");
+      return;
+    }
+    // 4) Lo rechaza / lo hizo con otro
+    if (/(no (lo )?(quiero|queremos|vamos|va a ser)|no me interesa|descartado|ya lo (hice|hicimos|contrate|contratamos)|otra empresa|dejalo|no,? gracias)/.test(low)) {
+      await enviarMensaje(telefono, "Entendido, ¡y gracias por decírnoslo! 🙏 Te guardamos el presupuesto por si más adelante lo retomas. Aquí nos tienes para lo que necesites 🔐");
+      crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente DECLINA. Motivo/respuesta: "${msg.slice(0, 300)}"`);
+      registrarResultadoPresu(ref, "respondio_declina");
+      await avisar("❌ Presupuesto declinado");
+      return;
+    }
+    // 5) Cualquier otra cosa (dudas técnicas, cambios...) → persona
+    await enviarMensaje(telefono, "¡Buena pregunta! Se la paso ahora mismo a un compañero del equipo para que te conteste por aquí en breve 🙂");
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): duda/consulta del cliente: "${msg.slice(0, 300)}"`);
+    registrarResultadoPresu(ref, "respondio_duda_derivada");
+    await avisar("❓ Duda sobre presupuesto");
+    pausarBot(`${estado.channelId}_${telefono}`, PAUSA_AGENTE_H, "duda de presupuesto derivada al equipo");
     return;
   }
 
@@ -3094,6 +3456,34 @@ cargar();
 </script></body></html>`);
 });
 
+// ── Seguimiento de presupuestos: estado y pruebas ────────────
+app.get("/admin/api/presupuestos-stats", authAdmin, (req, res) => {
+  const ahora = Date.now();
+  res.json({
+    activo: presuActivo(),
+    plantillas: { toque1: process.env.PRESU_TEMPLATE || null, toque2: process.env.PRESU_TEMPLATE2 || process.env.PRESU_TEMPLATE || null },
+    cadenciaDias: { toque1: PRESU_DIAS_TOQUE1, toque2: PRESU_DIAS_TOQUE2, cierre: PRESU_DIAS_CIERRE },
+    seguimientos: Object.values(seguimientosPresu).map((s) => ({
+      ref: s.ref, telefono: s.clave, nombre: s.nombre, estado: s.estado,
+      diasDesdeEnvio: s.enviadoTs ? Math.round((ahora - s.enviadoTs) / 86400000) : null,
+    })),
+    historial: presuHistorial.slice(0, 30),
+    motivos: presuHistorial.reduce((acc, h) => {
+      const clave = String(h.resultado).split(":")[0].trim();
+      acc[clave] = (acc[clave] || 0) + 1;
+      return acc;
+    }, {}),
+  });
+});
+
+// Lanza a mano el sondeo + barrido (con ?forzar=1 se salta la ventana
+// comercial — útil para probar; PRESU_AUTO debe estar en on igualmente)
+app.get("/admin/api/test-presupuestos", authAdmin, async (req, res) => {
+  const sondeo  = await sondearPresupuestosEnviados();
+  const barrido = await barridoToquesPresupuesto(req.query.forzar === "1");
+  res.json({ sondeo, barrido });
+});
+
 // ── Canales visibles en Woztell (diagnóstico) ────────────────
 // Lista los canales reales con sus IDs exactos, para configurar
 // WOZTELL_CHANNEL_ID sin teclear a mano (un ID mal copiado rompe la
@@ -3460,9 +3850,28 @@ app.post("/webhook", async (req, res) => {
       console.log(`[Reseñas] Encuesta en curso reconstruida para ${telefono} (parte ${est.resena.refParte || "—"})`);
     }
 
-    // Una respuesta a la encuesta postventa se procesa siempre, aunque el
-    // canal esté en pausa o fuera de horario (es un intercambio puntual).
-    const enFlujoResena = (conversaciones[telefono]?.step || "").startsWith("resena_");
+    // Lo mismo para seguimientos de presupuesto con toque pendiente de
+    // respuesta: se reconstruye el paso presu_respuesta tras un redeploy.
+    if (channelId === CANAL_SOPORTE && !(conversaciones[telefono]?.step || "").match(/^(resena_|presu_)/)) {
+      const segAbierto = Object.values(seguimientosPresu).find(
+        (s) => s.clave === telefono && ["toque1", "toque2"].includes(s.estado) &&
+               Date.now() - (s.toque2Ts || s.toque1Ts || 0) < 7 * 24 * 3600 * 1000
+      );
+      if (segAbierto) {
+        if (!conversaciones[telefono]) resetearConversacion(telefono);
+        const est = conversaciones[telefono];
+        est.memberId  = memberId;
+        est.channelId = channelId;
+        est.step      = "presu_respuesta";
+        est.presu     = { ref: segAbierto.ref, caseId: segAbierto.caseId };
+        console.log(`[Presupuestos] Seguimiento reconstruido para ${telefono} (${segAbierto.ref})`);
+      }
+    }
+
+    // Una respuesta a la encuesta postventa o a un seguimiento de
+    // presupuesto se procesa siempre, aunque el canal esté en pausa o
+    // fuera de horario (son intercambios puntuales).
+    const enFlujoResena = /^(resena_|presu_)/.test(conversaciones[telefono]?.step || "");
 
     // ── Comprobar si el bot está pausado para este cliente en este canal ──
     const claveBot = `${channelId}_${telefono}`;
@@ -3779,6 +4188,13 @@ app.listen(PORT, async () => {
   // Sondeo de partes cerrados → encuesta postventa/reseñas (cada 5 min)
   setTimeout(sondearPartesCerrados, 90 * 1000);
   setInterval(sondearPartesCerrados, 5 * 60 * 1000);
+  // Seguimiento de presupuestos: sondeo cada 5 min (desfasado del de
+  // cierres) y barrido de toques cada 30 min (solo actúa en ventana
+  // comercial y con PRESU_AUTO=on)
+  setTimeout(sondearPresupuestosEnviados, 3 * 60 * 1000);
+  setInterval(sondearPresupuestosEnviados, 5 * 60 * 1000);
+  setTimeout(barridoToquesPresupuesto, 5 * 60 * 1000);
+  setInterval(barridoToquesPresupuesto, 30 * 60 * 1000);
 
   // Pre-cargar el token de Zoho al arrancar para detectar errores de configuración
   try {
