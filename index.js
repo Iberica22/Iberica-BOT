@@ -528,6 +528,25 @@ async function graphqlWoztell(query, variables) {
   return res.data?.data;
 }
 
+// CreateMemberInput exige también "platform" (String!). En vez de adivinar
+// el literal, se lee el platform de cualquier member existente del canal
+// (una vez, cacheado); si el canal no tuviera members, "whatsapp-cloud".
+const plataformaCanal = {};
+async function obtenerPlataformaCanal(channelId) {
+  if (plataformaCanal[channelId]) return plataformaCanal[channelId];
+  try {
+    const d = await graphqlWoztell(
+      `query plataforma($channelId: String) {
+         apiViewer { members(first: 1, channelId: $channelId) { edges { node { platform } } } }
+       }`,
+      { channelId }
+    );
+    const p = d?.apiViewer?.members?.edges?.[0]?.node?.platform;
+    if (p) { plataformaCanal[channelId] = p; return p; }
+  } catch (e) { console.error("[Reseñas] No se pudo leer el platform del canal:", e.message); }
+  return process.env.WOZTELL_PLATFORM || "whatsapp-cloud";
+}
+
 // createMember está limitado a 5 llamadas/min por Woztell: no crear más de
 // 4 contactos por minuto; el resto queda reintentable para el siguiente sondeo.
 let creacionesMiembro = [];
@@ -547,7 +566,7 @@ async function buscarOCrearMiembroWoztell(channelId, telefono, nombre) {
 
   // OJO: CreateMemberInput llama al canal "channel" (no "channelId") —
   // el 10/09 se enviaba channelId y la API rechazaba todas las creaciones.
-  const input = { channel: channelId, externalId: telefono };
+  const input = { channel: channelId, externalId: telefono, platform: await obtenerPlataformaCanal(channelId) };
   if (nombre) input.firstName = String(nombre).trim().split(/\s+/)[0];
   const m = await graphqlWoztell(
     `mutation createMember($input: CreateMemberInput!) {
