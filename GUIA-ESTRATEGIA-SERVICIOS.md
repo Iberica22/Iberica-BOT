@@ -1,17 +1,49 @@
-# Estrategia: de servicio suelto a programa
+# Estrategia: plan de 90 días para entrar en 2027 con mejores márgenes
 
-Esta guía se basa en el reel de @kimfermisson sobre centros de estética. La idea
-es la misma para cerrajería y seguridad: **antes de subir precios o buscar más
-clientes, mira qué haces ya y qué hace tu cliente**. Después, convierte los
-servicios sueltos en *programas* o *packs* que resuelvan el problema completo.
+Basada en el reel de @kimfermisson (Kimbe, centro de estética, 2 min 57 s),
+transcrito completo. Aquí está adaptado a una empresa de cerrajería y
+seguridad.
 
-> No se pudo ver el vídeo desde el entorno de trabajo (Instagram está bloqueado
-> por la red). La guía se apoya en los dos comentarios fijados de la autora y en
-> los subtítulos: *"…cuáles transforman y cuáles dejan de ser simples
-> tratamientos para convertirse en rituales, experiencias o programas
-> completos"*.
+## 0. Lo que dice el vídeo, en 8 ideas
 
----
+1. **En 2027 los costes van a subir**: nóminas, y en unos 3 meses llegan las
+   tarifas nuevas de los proveedores. *"Si sigo cobrando lo mismo, ofreciendo
+   y trabajando exactamente igual, lo único que va a bajar es mi beneficio."*
+2. **Los próximos 90 días (octubre–diciembre) son el trimestre más
+   importante del año.** No por Halloween, Black Friday o Navidad, sino por lo
+   que hay que hacer dentro del negocio.
+3. **"Destripar" el año** con el programa de gestión (para Ibérica, FACTUSOL),
+   usando las dos listas de los comentarios fijados.
+4. **Tomar 4 decisiones sobre cada servicio:** cuáles **desaparecen**, cuáles
+   **suben de precio**, cuáles **se transforman** y cuáles dejan de ser un
+   servicio suelto para **convertirse en programa**.
+5. **No siempre hacen falta más clientes.** El cliente que hoy paga una sesión
+   de 70 € puede comprar un programa de 350 € que le resuelva el problema de
+   verdad.
+6. **No hacen falta más horas: cada hora tiene que producir más** (margen
+   por hora de técnico).
+7. **Las campañas de Halloween, Black Friday y Navidad no deben ser "tres
+   promociones desesperadas para llenar la agenda".** Tienen que servir
+   para **captar** clientes nuevos, **reactivar** antiguos, **vender
+   programas**, **generar recurrencia** y empezar ya a construir la
+   facturación de 2027.
+8. **Subir precios lo mismo que suben los costes (5, 8, 10 %) solo es
+   sobrevivir.** El objetivo es entrar en enero con una **lista de precios
+   nueva**, **programas nuevos**, **márgenes nuevos**, una **estrategia de
+   venta**, el **equipo preparado** y un **cliente que entienda** todo lo que
+   podemos hacer por él. *"No está decorando el negocio, está rediseñando su
+   rentabilidad."*
+
+### Traducción a Ibérica
+
+| Kimbe (estética) | Ibérica Seguridad |
+|---|---|
+| Sesión de 70 € | Apertura o cambio de bombín suelto |
+| Programa de 350 € | Pack que resuelve la seguridad de la puerta, o mantenimiento anual |
+| Ritual / experiencia | Instalación "llave en mano", con revisión incluida |
+| Recepción | Oficina, teléfono y Marta (WhatsApp/voz) |
+| Cabina | La visita del técnico en casa del cliente |
+| La clienta antes de salir por la puerta | **Antes de que el técnico se vaya** |
 
 ## 1. Las dos listas del reel, traducidas a Ibérica
 
@@ -55,6 +87,7 @@ https://factusol-iberica.<tu-subdominio>.workers.dev/analisis?k=TU_DIAG_KEY
 |---|---|
 | `ejercicios=2025,2026` | Analiza varios años. Recomendado para medir cada cuánto vuelve el cliente. |
 | `coste_hora=25` | Coste real por hora de técnico. Sin él, la mano de obra sale con un 100 % de margen y la pregunta 3 queda incompleta. También vale la variable `COSTE_HORA_TECNICO` del Worker. |
+| `subida_costes=8` | Simula cuánto margen se pierde si los costes suben ese % y los precios no cambian. Por defecto, 8. |
 | `formato=json` | Datos en bruto, por ejemplo para pasárselos a Claude. |
 
 Usa la misma clave que `/diag` (`DIAG_KEY`). Sin ella, la ruta devuelve 403.
@@ -74,6 +107,9 @@ Para activarlo, vuelve a pegar `worker.js` en Cloudflare (Paso 2 de
 | Qué combina | Familias que aparecen juntas en la misma factura |
 | Cuánto material | % de la facturación que es material y % de facturas sin ningún material |
 | Qué ofrece la oficina | Presupuestos por serie (5 Carpintería, 7 Particular) y su estado |
+| Si los costes suben… | Margen bruto actual, margen con los costes nuevos, beneficio perdido y subida media de precios necesaria solo para quedarse igual |
+| Decisión por servicio | Para los 30 que más facturan, una propuesta: **eliminar**, **subir precio**, **transformar**, **convertir en programa** o **mantener**, con el motivo. Es una propuesta: la decisión es vuestra |
+| A quién reactivar | Clientes que llevan más de 6 meses sin volver, con su teléfono, ordenados por lo que han facturado. Es la base de las campañas |
 | Antes de que el técnico se vaya | En cada servicio frecuente, el producto que mejor encaja, cuántas veces el cliente se quedó sin él y cuánto supondría que lo aceptara 1 de cada 5 |
 
 **Límites que conviene conocer**
@@ -140,14 +176,19 @@ opciones: el servicio suelto y el pack completo.
 
 ---
 
-## 5. Rutina mensual (30 minutos)
+## 5. Calendario de 90 días (octubre–diciembre 2026)
 
-1. Abrir `/analisis?k=…&ejercicios=<año anterior>,<año actual>&coste_hora=<coste real>`.
-2. Mirar tres números: **% de clientes que solo vinieron una vez**, **% de
-   facturas sin material** y la tabla **"antes de que el técnico se vaya"**.
-3. Elegir **un solo** servicio para convertirlo en pack ese mes, el primero de
-   "Potencial de programa", y preparar su presupuesto tipo en FACTUSOL.
-4. Revisar "mucha facturación, poco beneficio": ¿hay que subir el precio,
-   cambiar de proveedor o dejar de empujar ese servicio?
-5. Comparar con el mes anterior: si el % de "se fue sin producto" baja, el
-   protocolo del técnico está funcionando.
+| Semanas | Qué hacer | Con qué |
+|---|---|---|
+| **Oct, sem. 1–2: destripar 2026** | Sacar el informe con `ejercicios=2025,2026`, `coste_hora` real y `subida_costes` según lo que anuncien los proveedores. Pedir ya a los proveedores principales (FICHET, KIUSO, Tesa, Ezcurra…) sus tarifas de 2027 | `/analisis` |
+| **Oct, sem. 3–4: decidir** | Repasar la tabla "Decisión por servicio" y cerrar, uno a uno, qué se elimina, qué sube, qué se transforma y qué se convierte en programa. Elegir **2 o 3 packs** del punto 3 | Reunión de oficina y técnicos |
+| **Halloween (31 oct)** | Campaña de **reactivación**: WhatsApp a los clientes de "A quién reactivar", ofreciendo una revisión de seguridad de la puerta antes del invierno (días más cortos). Captar, no regalar | Lista de reactivar y Marta |
+| **Nov, sem. 1–3: preparar** | Montar en FACTUSOL los presupuestos tipo de cada pack. Formar a los técnicos en el protocolo del punto 4. Preparar la explicación para el cliente: por qué un pack y no una pieza suelta | FACTUSOL y técnicos |
+| **Black Friday (27 nov)** | **Vender programas**, no descontar servicios sueltos: por ejemplo, el pack "Puerta protegida" o la puerta acorazada con financiación Cetelem, con un extra incluido (escudo, revisión) en vez de rebajar el precio | Packs del punto 3 |
+| **Navidad (dic)** | **Recurrencia y 2027**: mantenimientos anuales de automatismos y planes para comunidades y administradores de fincas, firmados en diciembre y con arranque en enero. También tarjetas regalo o "regala seguridad" | Plan comunidad y mantenimiento |
+| **Dic, última semana** | Lista de precios 2027 cerrada y cargada en FACTUSOL y en la web de tarifas. Equipo informado | `docs/tarifas.html` y FACTUSOL |
+| **1 de enero** | Entrar con precios, packs, márgenes y estrategia de venta nuevos. **No empezar a construirlo ese día** | — |
+
+**Regla del vídeo:** no basta con subir un 8 % si los costes suben un 8 %. Hay
+que comparar en el informe el **margen bruto** y el **margen por hora** de enero
+con los de octubre.
