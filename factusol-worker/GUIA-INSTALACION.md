@@ -96,3 +96,17 @@ muestra — las páginas siguen funcionando como siempre.
   base de datos rechaza alguna columna, reintentan con juegos reducidos
   (el resultado indica el "nivel" usado). Con `/diag` se puede verificar el
   esquema real y afinar las columnas si hiciera falta.
+
+## Informe de servicios y clientes (`/analisis`)
+
+Con `DIAG_KEY` configurada, el Worker genera un informe con las preguntas de
+la estrategia "de servicio suelto a programa": qué se vende más, qué deja poco
+margen, qué ocupa agenda, cada cuánto vuelve el cliente, qué combina y qué
+podría venderse antes de que el técnico se vaya.
+
+```
+https://factusol-iberica.<tu-subdominio>.workers.dev/analisis?k=TU_CLAVE&ejercicios=2025,2026&coste_hora=25
+```
+
+Solo lee datos (SELECT): no modifica nada en FACTUSOL. Cómo interpretarlo:
+[`GUIA-ESTRATEGIA-SERVICIOS.md`](../GUIA-ESTRATEGIA-SERVICIOS.md).

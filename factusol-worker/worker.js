@@ -88,13 +88,32 @@ export default {
         return json({ ok: true, ...sondas }, 200, cors);
       }
 
+      // Análisis de servicios y clientas/clientes (estrategia "de tratamiento
+      // a programa"). Protegido con la misma clave que /diag.
+      //   /analisis?k=CLAVE                        → informe HTML del año en curso
+      //   /analisis?k=CLAVE&ejercicios=2025,2026   → varios años (mejor para frecuencia)
+      //   /analisis?k=CLAVE&formato=json           → datos en bruto
+      if (url.pathname === '/analisis') {
+        if (!env.DIAG_KEY || url.searchParams.get('k') !== env.DIAG_KEY) {
+          return json({ ok: false, error: 'Análisis deshabilitado o clave incorrecta' }, 403, cors);
+        }
+        const ejercicios = (url.searchParams.get('ejercicios') || ejercicioActual())
+          .split(',').map((e) => e.trim()).filter((e) => /^\d{4}$/.test(e));
+        if (!ejercicios.length) return json({ ok: false, error: 'Parámetro ejercicios no válido (ej. 2025,2026)' }, 400, cors);
+        const token = await autenticar(env);
+        const costeHora = Number(url.searchParams.get('coste_hora') || env.COSTE_HORA_TECNICO) || 0;
+        const informe = await analizarNegocio(env, token, ejercicios, costeHora);
+        if (url.searchParams.get('formato') === 'json') return json({ ok: true, ...informe }, 200, cors);
+        return new Response(informeHtml(informe), { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      }
+
       if (url.pathname === '/presupuesto' && request.method === 'POST') {
         const datos = await request.json();
         const resultado = await grabarPresupuesto(env, datos);
         return json({ ok: true, ...resultado }, 200, cors);
       }
 
-      return json({ ok: false, error: 'Ruta no válida. Usa POST /presupuesto o GET /ping' }, 404, cors);
+      return json({ ok: false, error: 'Ruta no válida. Usa POST /presupuesto, GET /ping o GET /analisis' }, 404, cors);
     } catch (err) {
       return json({ ok: false, error: String(err.message || err) }, 500, cors);
     }
@@ -163,8 +182,8 @@ async function llamadaApi(env, token, endpoint, payload) {
 }
 
 /** SELECT vía LanzarConsulta. Devuelve array de filas como objetos {COLUMNA: dato}. */
-async function consulta(env, token, sql) {
-  const j = await llamadaApi(env, token, EP.consulta, { ejercicio: ejercicioActual(), consulta: sql });
+async function consulta(env, token, sql, ejercicio = ejercicioActual()) {
+  const j = await llamadaApi(env, token, EP.consulta, { ejercicio, consulta: sql });
   return filas(j);
 }
 
@@ -345,3 +364,349 @@ async function crearPresupuesto(env, token, { serie, numero, cliente, datos }) {
 function redondear(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
+
+/* ─────────────── Análisis: "de tratamiento suelto a programa" ───────────────
+ *
+ * Responde, con los datos de facturación de FACTUSOL, a las dos listas de la
+ * estrategia:
+ *
+ *  SERVICIOS                                CLIENTES
+ *  · qué hemos vendido más                  · cuánto compra cada cliente
+ *  · qué casi nadie compra                  · cada cuánto vuelve
+ *  · qué factura mucho y deja poco          · qué servicios combina
+ *  · qué ocupa demasiada agenda             · cuánto producto (material) vendemos
+ *  · qué tiene potencial de ser un "pack"   · qué se ofrece en oficina (presupuestos)
+ *                                           · qué podría venderse antes de que el
+ *                                             técnico se vaya (oportunidades)
+ *
+ * Tablas (esquema estándar FACTUSOL): F_FAC (cabecera factura), F_LFA (líneas),
+ * F_ART (artículos, PCOART = precio de coste), F_FAM (familias), F_PRE.
+ * Todo se lee con SELECT * y se interpreta en JS, para no romper si alguna
+ * columna no existe en esta base.
+ *
+ * Mano de obra: las líneas cuya descripción habla de "hora"/"mano de obra"
+ * cuentan como horas de técnico (CANLFA = horas). Si se indica ?coste_hora=N
+ * (o la variable COSTE_HORA_TECNICO), esas horas se imputan como coste.
+ */
+
+const RE_HORAS = /\b(mano de obra|m\.?\s?o\.?|horas?|h\.)\b/i;
+const RE_SERVICIO = /(mano de obra|\bhoras?\b|desplazamiento|apertura|urgen|nocturn|festivo|instalaci|montaje|reparaci|revisi|ajuste|servicio|visita|retirada|mantenimiento)/i;
+
+async function analizarNegocio(env, token, ejercicios, costeHora = 0) {
+  const q = async (sql, ej) => {
+    try { return await consulta(env, token, sql, ej); } catch (e) { return { error: String(e.message || e) }; }
+  };
+  const avisos = [];
+  const ultimo = ejercicios[ejercicios.length - 1];
+
+  // Catálogo (del último ejercicio pedido)
+  const arts = await q('SELECT * FROM F_ART', ultimo);
+  const fams = await q('SELECT * FROM F_FAM', ultimo);
+  const articulos = new Map();
+  if (Array.isArray(arts)) for (const a of arts) articulos.set(String(a.CODART || '').trim(), a);
+  else avisos.push('No se pudo leer F_ART: ' + arts.error);
+  const familias = new Map();
+  if (Array.isArray(fams)) for (const f of fams) familias.set(String(f.CODFAM || '').trim(), f.DESFAM || f.CODFAM);
+
+  const facturas = new Map(); // "ej|tip|cod" → { cliente, nombre, fecha, lineas: [] }
+  const presupuestos = [];
+  for (const ej of ejercicios) {
+    const cab = await q('SELECT * FROM F_FAC', ej);
+    if (!Array.isArray(cab)) { avisos.push(`Ejercicio ${ej}: no se pudo leer F_FAC (${cab.error})`); continue; }
+    for (const f of cab) {
+      facturas.set(`${ej}|${f.TIPFAC}|${f.CODFAC}`, {
+        id: `${f.TIPFAC}/${f.CODFAC}`,
+        cliente: String(f.CLIFAC ?? '').trim(),
+        nombre: f.CNOFAC || '',
+        fecha: String(f.FECFAC || '').slice(0, 10),
+        lineas: [],
+      });
+    }
+    const lin = await q('SELECT * FROM F_LFA', ej);
+    if (!Array.isArray(lin)) { avisos.push(`Ejercicio ${ej}: no se pudo leer F_LFA (${lin.error})`); continue; }
+    for (const l of lin) {
+      const fac = facturas.get(`${ej}|${l.TIPLFA}|${l.CODLFA}`);
+      if (fac) fac.lineas.push(l);
+    }
+    const pre = await q('SELECT * FROM F_PRE', ej);
+    if (Array.isArray(pre)) presupuestos.push(...pre.map((p) => ({ ...p, _ej: ej })));
+  }
+
+  return calcularInforme({ ejercicios, facturas: [...facturas.values()], articulos, familias, presupuestos, costeHora, avisos });
+}
+
+/** Cálculo puro (sin red) — separado para poder probarlo con datos de ejemplo. */
+function calcularInforme({ ejercicios, facturas, articulos, familias, presupuestos, costeHora = 0, avisos = [] }) {
+  const num = (v) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+  const r2 = redondear;
+  const pct = (a, b) => (b ? Math.round((a / b) * 1000) / 10 : 0);
+
+  const items = new Map();   // clave → stats del servicio/artículo
+  const clientes = new Map();
+  const pares = new Map();   // "famA || famB" → nº facturas
+  let totalFact = 0, totalProd = 0, totalServ = 0, costeConocido = 0, facturasSoloServicio = 0, horasTot = 0;
+  const facturasValidas = [];
+
+  for (const fac of facturas) {
+    if (!fac.lineas.length) continue;
+    let base = 0, horas = 0, coste = 0, prod = 0;
+    const claves = new Set();
+    const fams = new Set();
+    for (const l of fac.lineas) {
+      const codArt = String(l.ARTLFA || '').trim();
+      const art = codArt ? articulos.get(codArt) : null;
+      const desc = String(l.DESLFA || art?.DESART || '').trim();
+      if (!desc && !codArt) continue;
+      const cant = num(l.CANLFA) || 0;
+      const importe = l.TOTLFA !== undefined && l.TOTLFA !== null && l.TOTLFA !== '' ? num(l.TOTLFA) : num(l.PRELFA) * cant;
+      const esHoras = RE_HORAS.test(desc);
+      const esServicio = esHoras || RE_SERVICIO.test(desc);
+      let costeLinea = null;
+      if (art && num(art.PCOART) > 0) costeLinea = num(art.PCOART) * cant;
+      else if (num(l.COSLFA) > 0) costeLinea = num(l.COSLFA) * cant;
+      else if (esHoras && costeHora) costeLinea = costeHora * cant;
+      else if (esServicio && !esHoras) costeLinea = 0; // desplazamientos/recargos: sin coste de material
+      if (esHoras) horas += cant;
+
+      const clave = codArt || 'TXT:' + desc.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 4).join(' ');
+      const fam = (art && familias.get(String(art.FAMART || '').trim())) || (esServicio ? 'Servicios / mano de obra' : 'Sin familia');
+      let it = items.get(clave);
+      if (!it) {
+        it = { clave, nombre: (art?.DESART || desc).slice(0, 80), familia: fam, tipo: esServicio ? 'servicio' : 'producto', facturas: 0, unidades: 0, facturacion: 0, coste: 0, conCoste: 0, clientes: new Set(), horasFacturas: 0, margenFacturas: 0, acomp: new Map(), _vistoEn: null };
+        items.set(clave, it);
+      }
+      if (it._vistoEn !== fac) { it.facturas++; it._vistoEn = fac; }
+      it.unidades += cant;
+      it.facturacion += importe;
+      if (costeLinea !== null) { it.coste += costeLinea; it.conCoste += importe; costeConocido += importe; coste += costeLinea; }
+      it.clientes.add(fac.cliente);
+      claves.add(clave);
+      fams.add(fam);
+      base += importe;
+      if (esServicio) totalServ += importe; else { totalProd += importe; prod += importe; }
+    }
+    if (!claves.size) continue;
+    totalFact += base;
+    horasTot += horas;
+    if (prod <= 0) facturasSoloServicio++;
+    const margenFac = base - coste;
+    for (const c of claves) {
+      const it = items.get(c);
+      it.horasFacturas += horas;
+      it.margenFacturas += margenFac;
+      for (const o of claves) if (o !== c) it.acomp.set(o, (it.acomp.get(o) || 0) + 1);
+    }
+    const fl = [...fams].sort();
+    for (let i = 0; i < fl.length; i++) for (let j = i + 1; j < fl.length; j++) {
+      const k = fl[i] + ' + ' + fl[j];
+      pares.set(k, (pares.get(k) || 0) + 1);
+    }
+    facturasValidas.push({ ...fac, base, prod, claves });
+
+    let cl = clientes.get(fac.cliente);
+    if (!cl) { cl = { codigo: fac.cliente, nombre: fac.nombre, fechas: [], total: 0, producto: 0, servicios: new Set() }; clientes.set(fac.cliente, cl); }
+    cl.fechas.push(fac.fecha);
+    cl.total += base;
+    cl.producto += prod;
+    for (const c of claves) cl.servicios.add(c);
+  }
+
+  // ── Servicios ──
+  const lista = [...items.values()].map((it) => {
+    const margen = it.conCoste ? it.conCoste - it.coste : null;
+    const acomp = [...it.acomp.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([k, n]) => ({ nombre: items.get(k).nombre, tipo: items.get(k).tipo, facturas: n, pct: pct(n, it.facturas) }));
+    return {
+      clave: it.clave, nombre: it.nombre, familia: it.familia, tipo: it.tipo,
+      facturas: it.facturas, unidades: r2(it.unidades), facturacion: r2(it.facturacion),
+      margen: margen === null ? null : r2(margen),
+      margenPct: margen === null || !it.conCoste ? null : pct(margen, it.conCoste),
+      coberturaCoste: pct(it.conCoste, it.facturacion),
+      clientes: it.clientes.size,
+      horasMediasPorFactura: r2(it.horasFacturas / it.facturas),
+      margenPorHora: it.horasFacturas > 0 ? r2(it.margenFacturas / it.horasFacturas) : null,
+      acompanantes: acomp,
+    };
+  });
+  const porFacturas = [...lista].sort((a, b) => b.facturas - a.facturas || b.facturacion - a.facturacion);
+  const conMargen = lista.filter((x) => x.margenPct !== null && x.coberturaCoste >= 80 && x.facturacion > 0);
+  const mediana = (arr) => { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+  const medMargen = mediana(conMargen.map((x) => x.margenPct));
+  const p70Fact = (() => { const s = lista.map((x) => x.facturacion).sort((a, b) => a - b); return s[Math.floor(s.length * 0.7)] || 0; })();
+  const conHoras = lista.filter((x) => x.margenPorHora !== null && x.facturas >= 3);
+  const medMargenHora = mediana(conHoras.map((x) => x.margenPorHora));
+
+  const servicios = {
+    masVendidos: porFacturas.slice(0, 15),
+    casiNadie: lista.filter((x) => x.facturas <= 2 && x.facturacion > 0).sort((a, b) => b.facturacion - a.facturacion).slice(0, 20),
+    articulosCatalogoSinVentas: [...articulos.keys()].filter((k) => k && !items.has(k)).length,
+    muchoFacturacionPocoBeneficio: conMargen.filter((x) => x.facturacion >= p70Fact && x.margenPct <= Math.min(medMargen, 30))
+      .sort((a, b) => b.facturacion - a.facturacion).slice(0, 15),
+    medianaMargenPct: medMargen,
+    ocupanAgenda: conHoras.filter((x) => x.horasMediasPorFactura >= 1 && x.margenPorHora <= medMargenHora)
+      .sort((a, b) => a.margenPorHora - b.margenPorHora).slice(0, 15),
+    medianaMargenPorHora: medMargenHora,
+    potencialPrograma: lista.filter((x) => x.facturas >= 3 && x.acompanantes.length >= 2 && (x.margenPct === null || x.margenPct >= medMargen))
+      .map((x) => ({ ...x, puntuacion: r2(x.facturas * (1 + (x.acompanantes[0]?.pct || 0) / 100) * (x.margenPct === null ? 1 : x.margenPct / Math.max(medMargen, 1))) }))
+      .sort((a, b) => b.puntuacion - a.puntuacion).slice(0, 10),
+  };
+
+  // ── Clientes ──
+  const dias = (a, b) => (Date.parse(b) - Date.parse(a)) / 86400000;
+  const listaCli = [...clientes.values()].map((c) => {
+    const f = c.fechas.filter(Boolean).sort();
+    const gaps = []; for (let i = 1; i < f.length; i++) gaps.push(dias(f[i - 1], f[i]));
+    return {
+      codigo: c.codigo, nombre: c.nombre, facturas: f.length, total: r2(c.total), ticketMedio: r2(c.total / Math.max(f.length, 1)),
+      primera: f[0] || '', ultima: f[f.length - 1] || '',
+      diasEntreVisitas: gaps.length ? Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length) : null,
+      pctProducto: pct(c.producto, c.total), serviciosDistintos: c.servicios.size,
+    };
+  }).sort((a, b) => b.total - a.total);
+  const nCli = listaCli.length;
+  const unaVez = listaCli.filter((c) => c.facturas === 1).length;
+  const dosVeces = listaCli.filter((c) => c.facturas === 2).length;
+  const top10 = listaCli.slice(0, 10).reduce((a, c) => a + c.total, 0);
+  const gapsTodos = listaCli.map((c) => c.diasEntreVisitas).filter((x) => x !== null);
+
+  // Oportunidades "antes de que el técnico se vaya": para cada servicio
+  // frecuente, el producto que más le acompaña y cuántas veces NO se vendió.
+  const oportunidades = porFacturas.filter((x) => x.tipo === 'servicio' && !RE_HORAS.test(x.nombre) && x.facturas >= 5).slice(0, 12).map((x) => {
+    const it = items.get(x.clave);
+    const prodAcomp = [...it.acomp.entries()].filter(([k]) => items.get(k).tipo === 'producto').sort((a, b) => b[1] - a[1])[0];
+    if (!prodAcomp) return { servicio: x.nombre, facturas: x.facturas, producto: null };
+    const p = items.get(prodAcomp[0]);
+    const precioMedio = p.facturacion / Math.max(p.facturas, 1);
+    const sin = x.facturas - prodAcomp[1];
+    return { servicio: x.nombre, facturas: x.facturas, producto: p.nombre, conProducto: prodAcomp[1], pctConProducto: pct(prodAcomp[1], x.facturas), sinProducto: sin, importeMedioProducto: r2(precioMedio), potencialSi20pct: r2(sin * 0.2 * precioMedio) };
+  }).filter((o) => o.producto && o.sinProducto > 0);
+
+  // Presupuestos (lo que se ofrece desde oficina/recepción)
+  const porSerie = {};
+  for (const p of presupuestos) {
+    const s = String(p.TIPPRE ?? '?');
+    const e = String(p.ESTPRE ?? '?');
+    porSerie[s] ??= { serie: s, presupuestos: 0, importe: 0, porEstado: {} };
+    porSerie[s].presupuestos++;
+    porSerie[s].importe = r2(porSerie[s].importe + num(p.TOTPRE));
+    porSerie[s].porEstado[e] = (porSerie[s].porEstado[e] || 0) + 1;
+  }
+
+  const nFac = facturasValidas.length;
+  return {
+    generado: new Date().toISOString(),
+    ejercicios,
+    avisos,
+    costeHora,
+    resumen: {
+      facturas: nFac, facturacion: r2(totalFact), ticketMedio: r2(totalFact / Math.max(nFac, 1)),
+      clientes: nCli, horasManoObra: r2(horasTot),
+      pctFacturacionProducto: pct(totalProd, totalFact), pctFacturacionServicio: pct(totalServ, totalFact),
+      pctFacturasSinMaterial: pct(facturasSoloServicio, nFac),
+      coberturaCoste: pct(costeConocido, totalFact),
+    },
+    servicios,
+    clientes: {
+      top: listaCli.slice(0, 20),
+      recurrentes: listaCli.filter((c) => c.facturas >= 3).sort((a, b) => b.facturas - a.facturas).slice(0, 20),
+      distribucion: { unaVez, dosVeces, tresOMas: nCli - unaVez - dosVeces, pctUnaVez: pct(unaVez, nCli) },
+      pctFacturacionTop10: pct(top10, totalFact),
+      diasMediosEntreVisitas: gapsTodos.length ? Math.round(gapsTodos.reduce((a, b) => a + b, 0) / gapsTodos.length) : null,
+      combinaciones: [...pares.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([par, n]) => ({ par, facturas: n, pct: pct(n, nFac) })),
+    },
+    oportunidades,
+    presupuestos: Object.values(porSerie),
+  };
+}
+
+/* ───────────────────────── Informe HTML ───────────────────────── */
+
+function informeHtml(inf) {
+  const e = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const eur = (n) => (n === null || n === undefined ? '—' : Number(n).toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }));
+  const p = (n) => (n === null || n === undefined ? '—' : `${String(n).replace('.', ',')} %`);
+  const tabla = (cols, filas, vacio = 'Sin datos suficientes en el periodo.') => !filas.length ? `<p class="vacio">${vacio}</p>` :
+    `<div class="tw"><table><thead><tr>${cols.map((c) => `<th>${e(c[0])}</th>`).join('')}</tr></thead><tbody>${
+      filas.map((f) => `<tr>${cols.map((c) => `<td>${c[1](f)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const acomp = (x) => x.acompanantes.map((a) => `${e(a.nombre)} <small>(${p(a.pct)})</small>`).join('<br>');
+  const r = inf.resumen, s = inf.servicios, c = inf.clientes;
+
+  const colsServ = [
+    ['Servicio / artículo', (x) => `${e(x.nombre)}<br><small>${e(x.familia)}</small>`],
+    ['Facturas', (x) => x.facturas], ['Facturación', (x) => eur(x.facturacion)],
+    ['Margen', (x) => `${eur(x.margen)}<br><small>${p(x.margenPct)}</small>`],
+  ];
+
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Análisis de servicios y clientes</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1d2330;--mu:#5f6b7a;--ac:#b4232a;--bd:#e3e6ea}
+@media (prefers-color-scheme:dark){:root{--bg:#14171c;--card:#1d2128;--tx:#e8eaed;--mu:#9aa4b1;--ac:#ff6b6b;--bd:#2c323b}}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:1.5rem;margin:.2em 0}h2{font-size:1.15rem;margin:0 0 .3em;color:var(--ac)}
+.sub{color:var(--mu);margin:0 0 1em}
+section{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin:0 0 16px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--bg);border-radius:10px;padding:10px}.kpi b{display:block;font-size:1.3rem}.kpi span{color:var(--mu);font-size:.85rem}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);vertical-align:top}th{color:var(--mu);font-weight:600}
+small,.nota,.vacio{color:var(--mu)}.aviso{background:#fff3cd;color:#664d03;padding:8px 12px;border-radius:8px}
+.q{font-weight:600;margin:1.2em 0 .4em}
+</style></head><body><main>
+<h1>De servicio suelto a programa</h1>
+<p class="sub">Ejercicio(s) ${e(inf.ejercicios.join(', '))} · generado ${e(inf.generado.slice(0, 16).replace('T', ' '))} UTC · datos de FACTUSOL (facturas, sin IVA)</p>
+${inf.avisos.map((a) => `<p class="aviso">⚠️ ${e(a)}</p>`).join('')}
+
+<section><h2>Resumen</h2><div class="kpis">
+<div class="kpi"><b>${eur(r.facturacion)}</b><span>facturación</span></div>
+<div class="kpi"><b>${r.facturas}</b><span>facturas</span></div>
+<div class="kpi"><b>${eur(r.ticketMedio)}</b><span>ticket medio</span></div>
+<div class="kpi"><b>${r.clientes}</b><span>clientes</span></div>
+<div class="kpi"><b>${p(r.pctFacturacionProducto)}</b><span>de la facturación es material</span></div>
+<div class="kpi"><b>${p(r.pctFacturasSinMaterial)}</b><span>facturas sin ningún material</span></div>
+</div>
+<p class="nota">Coste conocido para el ${p(r.coberturaCoste)} de la facturación (precio de coste del artículo${inf.costeHora ? `; horas a ${eur(inf.costeHora)}/h` : '; las horas de mano de obra no llevan coste — añade &amp;coste_hora=N a la URL para imputarlo'}).</p>
+</section>
+
+<section><h2>1 · Qué hacen nuestros servicios</h2>
+<p class="q">¿Qué servicios hemos vendido más?</p>
+${tabla([...colsServ, ['Clientes', (x) => x.clientes], ['Suele ir con…', acomp]], s.masVendidos)}
+
+<p class="q">¿Cuáles casi nadie ha comprado? <small>(1–2 facturas en el periodo; ${s.articulosCatalogoSinVentas} artículos del catálogo sin ninguna venta)</small></p>
+${tabla(colsServ, s.casiNadie)}
+
+<p class="q">¿Cuáles facturan mucho pero dejan poco beneficio? <small>(30 % que más factura y margen ≤ ${p(Math.min(s.medianaMargenPct, 30))})</small></p>
+${tabla(colsServ, s.muchoFacturacionPocoBeneficio, 'Ninguno destaca, o falta precio de coste en los artículos (revisa PCOART en FACTUSOL).')}
+
+<p class="q">¿Cuáles ocupan demasiado tiempo de agenda? <small>(≥ 1 h de media y margen por hora ≤ mediana ${eur(s.medianaMargenPorHora)}/h)</small></p>
+${tabla([['Servicio', (x) => e(x.nombre)], ['Facturas', (x) => x.facturas], ['Horas medias', (x) => String(x.horasMediasPorFactura).replace('.', ',')], ['Margen por hora', (x) => eur(x.margenPorHora)]], s.ocupanAgenda,
+  'Sin datos: las horas solo se detectan en líneas de "mano de obra"/"hora". Si no se facturan así, apúntalo en el parte de Zoho.')}
+
+<p class="q">¿Cuáles tienen potencial para convertirse en algo más grande? <small>(se venden a menudo, con buen margen y casi siempre acompañados)</small></p>
+${tabla([['Servicio base', (x) => e(x.nombre)], ['Facturas', (x) => x.facturas], ['Margen', (x) => p(x.margenPct)], ['Pack natural: ya lo compran con…', acomp]], s.potencialPrograma)}
+</section>
+
+<section><h2>2 · Qué hace nuestro cliente</h2>
+<div class="kpis">
+<div class="kpi"><b>${p(c.distribucion.pctUnaVez)}</b><span>clientes que solo vinieron 1 vez</span></div>
+<div class="kpi"><b>${c.distribucion.tresOMas}</b><span>clientes con 3+ facturas</span></div>
+<div class="kpi"><b>${c.diasMediosEntreVisitas ?? '—'} días</b><span>entre visitas (repetidores)</span></div>
+<div class="kpi"><b>${p(c.pctFacturacionTop10)}</b><span>facturación en los 10 mayores clientes</span></div>
+</div>
+<p class="q">¿Cuánto compra cada cliente? <small>(20 mayores)</small></p>
+${tabla([['Cliente', (x) => e(x.nombre || x.codigo)], ['Facturas', (x) => x.facturas], ['Total', (x) => eur(x.total)], ['Ticket medio', (x) => eur(x.ticketMedio)], ['% material', (x) => p(x.pctProducto)], ['Última', (x) => e(x.ultima)]], c.top)}
+<p class="q">¿Cada cuánto vuelve? <small>(clientes con 3+ facturas)</small></p>
+${tabla([['Cliente', (x) => e(x.nombre || x.codigo)], ['Facturas', (x) => x.facturas], ['Cada… días', (x) => x.diasEntreVisitas ?? '—'], ['Servicios distintos', (x) => x.serviciosDistintos], ['Última', (x) => e(x.ultima)]], c.recurrentes)}
+<p class="q">¿Qué servicios combina? <small>(familias que aparecen juntas en la misma factura)</small></p>
+${tabla([['Combinación', (x) => e(x.par)], ['Facturas', (x) => x.facturas], ['% del total', (x) => p(x.pct)]], c.combinaciones)}
+<p class="q">¿Qué estamos ofreciendo en oficina? <small>(presupuestos por serie; estado 0 = pendiente)</small></p>
+${tabla([['Serie', (x) => e(x.serie)], ['Presupuestos', (x) => x.presupuestos], ['Importe', (x) => eur(x.importe)], ['Por estado', (x) => Object.entries(x.porEstado).map(([k, v]) => `${e(k)}: ${v}`).join(' · ')]], inf.presupuestos)}
+<p class="q">¿Qué podría venderse antes de que el técnico se vaya?</p>
+${tabla([['Servicio', (x) => e(x.servicio)], ['Facturas', (x) => x.facturas], ['Producto que mejor encaja', (x) => e(x.producto)], ['Ya lo llevan', (x) => p(x.pctConProducto)], ['Se fue sin él', (x) => x.sinProducto], ['Si se ofrece y acepta 1 de cada 5', (x) => eur(x.potencialSi20pct)]], inf.oportunidades)}
+</section>
+<p class="nota">Servicio/material se clasifica por la descripción de la línea (mano de obra, apertura, instalación, desplazamiento… = servicio). Guía de uso: GUIA-ESTRATEGIA-SERVICIOS.md</p>
+</main></body></html>`;
+}
+
+export { calcularInforme, informeHtml };
