@@ -400,8 +400,18 @@ function redondear(n) {
  * (o la variable COSTE_HORA_TECNICO), esas horas se imputan como coste.
  */
 
-const RE_HORAS = /\b(mano de obra|m\.?\s?o\.?|horas?|h\.)\b/i;
-const RE_SERVICIO = /(mano de obra|\bhoras?\b|desplazamiento|apertura|urgen|nocturn|festivo|instalaci|montaje|reparaci|revisi|ajuste|servicio|visita|retirada|mantenimiento)/i;
+// Horas de técnico: "mano (de) obra", "hora(s)". OJO: "H.COMERCIAL" o
+// "HORARIO GUARDIA" son franjas horarias, no horas.
+const RE_HORAS = /\b(mano (de )?obra|horas?)\b/i;
+const RE_SERVICIO = /(mano (de )?obra|\bhoras?\b|desplazamiento|apertura|urgen|nocturn|festivo|guardia|incremento|\bplus\b|asistencia|intervenci|instalaci|montaje|reparaci|revisi|ajuste|servicio|visita|retirada|mantenimiento|sustituci|igualar|engrase|copia)/i;
+// Recargos sin coste de material (el precio es casi todo margen)
+const RE_RECARGO = /(desplazamiento|incremento|\bplus\b|urgen|guardia|nocturn|festivo|recargo|kilometr)/i;
+// Líneas que no son una venta: anticipos/entregas a cuenta (se compensan en la factura final)
+const RE_ANTICIPO = /^\s*(entrega|anticipo)\b/i;
+// Clientes que son compañías de seguros / gestoras de siniestros
+const RE_ASEGURADORA = /(seguro|asegurador|reasegur|mapfre|generali|ocaso|caser\b|santa luc|sta\.? ?luc|asitur|allianz|\baxa\b|mutua|\breale\b|iris global|e\.?a\.?s\.?i\.?g|zurich|liberty|helvetia|pelayo|catalana occidente|linea directa|l[ií]nea directa|coris|multiasistencia|homeserve|europ assistance|inter partner|plus ultra|fiatc|occident|verti\b)/i;
+// Cuentas genéricas (no son un cliente concreto)
+const RE_GENERICO = /clientes? (de )?(mostrador|varios|contado)/i;
 
 // Consultas que puede pedir la página del informe: [columnas justas, todas]
 const CONSULTAS_ANALISIS = {
@@ -508,6 +518,10 @@ var __name = (f) => f;
 const COSTE_HORA_DEFECTO = ${Number(costeHoraDefecto) || 0};
 const RE_HORAS = ${RE_HORAS};
 const RE_SERVICIO = ${RE_SERVICIO};
+const RE_RECARGO = ${RE_RECARGO};
+const RE_ANTICIPO = ${RE_ANTICIPO};
+const RE_ASEGURADORA = ${RE_ASEGURADORA};
+const RE_GENERICO = ${RE_GENERICO};
 ${redondear}
 ${calcularInforme}
 ${informeHtml}
@@ -520,56 +534,93 @@ function calcularInforme({ ejercicios, facturas, articulos, familias, presupuest
   const num = (v) => { const n = Number(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
   const r2 = redondear;
   const pct = (a, b) => (b ? Math.round((a / b) * 1000) / 10 : 0);
+  const norm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-  const items = new Map();   // clave → stats del servicio/artículo
+  const items = new Map();   // clave → stats del servicio/artículo (solo negocio directo)
   const clientes = new Map();
-  const pares = new Map();   // "famA || famB" → nº facturas
-  let costeTot = 0, factConCoste = 0, fechaMax = '';
-  let totalFact = 0, totalProd = 0, totalServ = 0, costeConocido = 0, facturasSoloServicio = 0, horasTot = 0;
+  const aseguradoras = new Map();
+  const pares = new Map();
+  let fechaMax = '';
+  let totalFact = 0, totalAseg = 0, nFacAseg = 0;
+  let totalProd = 0, totalServ = 0, costeConocido = 0, facturasSoloServicio = 0, horasTot = 0, baseDirecta = 0;
+  let costeReal = 0, factCosteReal = 0; // líneas con coste real (material/horas), para la simulación
   const facturasValidas = [];
+
+  // Normaliza una línea de factura. Devuelve null si no es una venta
+  // (notas, direcciones, nº de siniestro, entregas a cuenta…).
+  const leerLinea = (l) => {
+    const codArt = String(l.ARTLFA || '').trim();
+    const art = codArt ? articulos.get(codArt) : null;
+    const desc = String(l.DESLFA || art?.DESART || '').replace(/\s+/g, ' ').trim();
+    const cant = num(l.CANLFA) || 0;
+    const importe = l.TOTLFA !== undefined && l.TOTLFA !== null && l.TOTLFA !== '' ? num(l.TOTLFA) : num(l.PRELFA) * cant;
+    if (RE_ANTICIPO.test(desc)) return null;
+    if (!codArt && Math.abs(importe) < 0.005) return null;      // texto/nota sin importe
+    const texto = art?.DESART || desc;                          // se clasifica por el artículo, no por el texto retocado
+    const esHoras = RE_HORAS.test(texto);
+    const esRecargo = !esHoras && RE_RECARGO.test(texto);
+    const famArt = art ? familias.get(String(art.FAMART || '').trim()) : null;
+    const esServicio = esHoras || RE_SERVICIO.test(texto);
+    let costeLinea = null, costeEsReal = false;
+    if (art && num(art.PCOART) > 0) { costeLinea = num(art.PCOART) * cant; costeEsReal = true; }
+    else if (num(l.COSLFA) > 0) { costeLinea = num(l.COSLFA) * cant; costeEsReal = true; }
+    else if (esHoras && costeHora) { costeLinea = costeHora * cant; costeEsReal = true; }
+    else if (esRecargo) costeLinea = 0;                         // desplazamientos/recargos: sin material
+    const clave = codArt || 'TXT:' + norm(desc).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 4).join(' ');
+    return {
+      codArt, clave, nombre: (art?.DESART || desc).slice(0, 80), cant, importe, esHoras, esRecargo,
+      tipo: esServicio ? 'servicio' : 'producto',
+      familia: famArt || (esServicio ? 'Servicios / mano de obra' : 'Sin familia'),
+      costeLinea, costeEsReal, descuento: !codArt && importe < 0,
+    };
+  };
 
   for (const fac of facturas) {
     if (!fac.lineas.length) continue;
-    let base = 0, horas = 0, coste = 0, prod = 0;
+    const lineas = fac.lineas.map(leerLinea).filter(Boolean);
+    if (!lineas.length) continue;
+    const base = lineas.reduce((a, x) => a + x.importe, 0);
+    totalFact += base;
+    if (fac.fecha > fechaMax) fechaMax = fac.fecha;
+    for (const x of lineas) if (x.costeEsReal) { costeReal += x.costeLinea; factCosteReal += x.importe; }
+
+    // ── Compañías de seguros: tarifas pactadas, se analizan aparte ──
+    if (RE_ASEGURADORA.test(fac.nombre)) {
+      totalAseg += base; nFacAseg++;
+      // Agrupa por compañía aunque tenga varias fichas (p. ej. Generali con dos códigos)
+      const n = norm(fac.nombre);
+      const marca = n.match(/(mapfre|generali|ocaso|asitur|allianz|\baxa\b|iris global|e\.?a\.?s\.?i\.?g|zurich|liberty|helvetia|pelayo|catalana occidente|l[ií]nea directa|coris|multiasistencia|homeserve|europ assistance|plus ultra|fiatc|santa luc|sta\.? ?luc|\breale\b)/);
+      const k = marca ? marca[0].replace(/[^a-z]/g, '').replace(/^staluc/, 'santaluc') : n.split(/\s+/).slice(0, 2).join(' ');
+      let a = aseguradoras.get(k);
+      if (!a) { a = { nombre: fac.nombre, fichas: new Set(), facturas: 0, total: 0, ultima: '' }; aseguradoras.set(k, a); }
+      a.fichas.add(fac.cliente); a.facturas++; a.total += base;
+      if (fac.fecha > a.ultima) { a.ultima = fac.fecha; a.nombre = fac.nombre; }
+      continue;
+    }
+
+    // ── Negocio directo (particulares, empresas, comunidades) ──
+    baseDirecta += base;
+    let horas = 0, coste = 0, prod = 0;
     const claves = new Set();
     const fams = new Set();
-    for (const l of fac.lineas) {
-      const codArt = String(l.ARTLFA || '').trim();
-      const art = codArt ? articulos.get(codArt) : null;
-      const desc = String(l.DESLFA || art?.DESART || '').trim();
-      if (!desc && !codArt) continue;
-      const cant = num(l.CANLFA) || 0;
-      const importe = l.TOTLFA !== undefined && l.TOTLFA !== null && l.TOTLFA !== '' ? num(l.TOTLFA) : num(l.PRELFA) * cant;
-      const esHoras = RE_HORAS.test(desc);
-      const esServicio = esHoras || RE_SERVICIO.test(desc);
-      let costeLinea = null;
-      if (art && num(art.PCOART) > 0) costeLinea = num(art.PCOART) * cant;
-      else if (num(l.COSLFA) > 0) costeLinea = num(l.COSLFA) * cant;
-      else if (esHoras && costeHora) costeLinea = costeHora * cant;
-      else if (esServicio && !esHoras) costeLinea = 0; // desplazamientos/recargos: sin coste de material
-      if (esHoras) horas += cant;
-
-      const clave = codArt || 'TXT:' + desc.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 4).join(' ');
-      const fam = (art && familias.get(String(art.FAMART || '').trim())) || (esServicio ? 'Servicios / mano de obra' : 'Sin familia');
-      let it = items.get(clave);
+    for (const x of lineas) {
+      if (x.descuento) continue; // descuentos/promos sin artículo: cuentan en el total, no son un servicio
+      let it = items.get(x.clave);
       if (!it) {
-        it = { clave, nombre: (art?.DESART || desc).slice(0, 80), familia: fam, tipo: esServicio ? 'servicio' : 'producto', facturas: 0, unidades: 0, facturacion: 0, coste: 0, conCoste: 0, clientes: new Set(), horasFacturas: 0, margenFacturas: 0, acomp: new Map(), _vistoEn: null };
-        items.set(clave, it);
+        it = { clave: x.clave, catalogo: Boolean(x.codArt), nombre: x.nombre, familia: x.familia, tipo: x.tipo, esHoras: x.esHoras, esRecargo: x.esRecargo, facturas: 0, unidades: 0, facturacion: 0, coste: 0, conCoste: 0, clientes: new Set(), horasFacturas: 0, margenFacturas: 0, acomp: new Map(), _vistoEn: null };
+        items.set(x.clave, it);
       }
       if (it._vistoEn !== fac) { it.facturas++; it._vistoEn = fac; }
-      it.unidades += cant;
-      it.facturacion += importe;
-      if (costeLinea !== null) { it.coste += costeLinea; it.conCoste += importe; costeConocido += importe; factConCoste += importe; coste += costeLinea; }
+      it.unidades += x.cant;
+      it.facturacion += x.importe;
+      if (x.costeLinea !== null) { it.coste += x.costeLinea; it.conCoste += x.importe; costeConocido += x.importe; coste += x.costeLinea; }
       it.clientes.add(fac.cliente);
-      claves.add(clave);
-      fams.add(fam);
-      base += importe;
-      if (esServicio) totalServ += importe; else { totalProd += importe; prod += importe; }
+      if (x.esHoras) horas += x.cant;
+      claves.add(x.clave);
+      fams.add(x.familia);
+      if (x.tipo === 'servicio') totalServ += x.importe; else { totalProd += x.importe; prod += x.importe; }
     }
     if (!claves.size) continue;
-    totalFact += base;
-    costeTot += coste;
-    if (fac.fecha > fechaMax) fechaMax = fac.fecha;
     horasTot += horas;
     if (prod <= 0) facturasSoloServicio++;
     const margenFac = base - coste;
@@ -577,15 +628,16 @@ function calcularInforme({ ejercicios, facturas, articulos, familias, presupuest
       const it = items.get(c);
       it.horasFacturas += horas;
       it.margenFacturas += margenFac;
-      for (const o of claves) if (o !== c) it.acomp.set(o, (it.acomp.get(o) || 0) + 1);
+      for (const o of claves) if (o !== c && !items.get(o).esRecargo && !items.get(o).esHoras) it.acomp.set(o, (it.acomp.get(o) || 0) + 1);
     }
     const fl = [...fams].sort();
     for (let i = 0; i < fl.length; i++) for (let j = i + 1; j < fl.length; j++) {
       const k = fl[i] + ' + ' + fl[j];
       pares.set(k, (pares.get(k) || 0) + 1);
     }
-    facturasValidas.push({ ...fac, base, prod, claves });
+    facturasValidas.push(fac);
 
+    if (RE_GENERICO.test(fac.nombre)) continue; // mostrador/varios: no es un cliente concreto
     let cl = clientes.get(fac.cliente);
     if (!cl) { cl = { codigo: fac.cliente, nombre: fac.nombre, fechas: [], total: 0, producto: 0, servicios: new Set() }; clientes.set(fac.cliente, cl); }
     cl.fechas.push(fac.fecha);
@@ -594,60 +646,70 @@ function calcularInforme({ ejercicios, facturas, articulos, familias, presupuest
     for (const c of claves) cl.servicios.add(c);
   }
 
-  // ── Servicios ──
+  // ── Servicios (negocio directo) ──
   const lista = [...items.values()].map((it) => {
-    const margen = it.conCoste ? it.conCoste - it.coste : null;
+    const cobertura = pct(it.conCoste, it.facturacion);
+    const margen = it.conCoste && cobertura >= 80 ? it.conCoste - it.coste : null; // sin coste fiable no se inventa margen
     const acomp = [...it.acomp.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
-      .map(([k, n]) => ({ nombre: items.get(k).nombre, tipo: items.get(k).tipo, facturas: n, pct: pct(n, it.facturas) }));
+      .map(([k, n]) => ({ nombre: items.get(k).nombre, tipo: items.get(k).tipo, catalogo: items.get(k).catalogo, clave: k, facturas: n, pct: pct(n, it.facturas) }));
     return {
-      clave: it.clave, nombre: it.nombre, familia: it.familia, tipo: it.tipo,
+      clave: it.clave, catalogo: it.catalogo, nombre: it.nombre, familia: it.familia, tipo: it.tipo, esHoras: it.esHoras, esRecargo: it.esRecargo,
       facturas: it.facturas, unidades: r2(it.unidades), facturacion: r2(it.facturacion),
       margen: margen === null ? null : r2(margen),
-      margenPct: margen === null || !it.conCoste ? null : pct(margen, it.conCoste),
-      coberturaCoste: pct(it.conCoste, it.facturacion),
+      margenPct: margen === null ? null : pct(margen, it.conCoste),
+      coberturaCoste: cobertura,
       clientes: it.clientes.size,
       horasMediasPorFactura: r2(it.horasFacturas / it.facturas),
-      margenPorHora: it.horasFacturas > 0 ? r2(it.margenFacturas / it.horasFacturas) : null,
+      margenPorHora: it.horasFacturas > 0 && costeHora ? r2(it.margenFacturas / it.horasFacturas) : null,
+      facturacionPorHora: it.horasFacturas > 0 ? r2(it.facturacion / it.horasFacturas) : null,
       acompanantes: acomp,
     };
   });
   const porFacturas = [...lista].sort((a, b) => b.facturas - a.facturas || b.facturacion - a.facturacion);
-  const conMargen = lista.filter((x) => x.margenPct !== null && x.coberturaCoste >= 80 && x.facturacion > 0);
   const mediana = (arr) => { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+  const conMargen = lista.filter((x) => x.margenPct !== null && x.facturacion > 0 && !x.esRecargo && x.facturas >= 3);
   const medMargen = mediana(conMargen.map((x) => x.margenPct));
-  const p70Fact = (() => { const s = lista.map((x) => x.facturacion).sort((a, b) => a - b); return s[Math.floor(s.length * 0.7)] || 0; })();
-  const conHoras = lista.filter((x) => x.margenPorHora !== null && x.facturas >= 3);
-  const medMargenHora = mediana(conHoras.map((x) => x.margenPorHora));
+  const umbralBajo = Math.max(0, Math.min(30, medMargen - 15));
+  const p70Fact = (() => { const s = lista.filter((x) => x.facturas >= 3).map((x) => x.facturacion).sort((a, b) => a - b); return s[Math.floor(s.length * 0.7)] || 0; })();
+  // Agenda: horas facturadas en las facturas donde aparece y lo que se factura por hora
+  const conHoras = lista.filter((x) => x.facturacionPorHora !== null && x.facturas >= 3 && x.horasMediasPorFactura >= 1 && !x.esRecargo);
+  const medFactHora = mediana(conHoras.map((x) => x.facturacionPorHora));
 
   const servicios = {
-    masVendidos: porFacturas.slice(0, 15),
-    casiNadie: lista.filter((x) => x.facturas <= 2 && x.facturacion > 0).sort((a, b) => b.facturacion - a.facturacion).slice(0, 20),
+    masVendidos: porFacturas.filter((x) => !x.esRecargo).slice(0, 15),
+    casiNadie: lista.filter((x) => x.catalogo && x.facturas <= 2 && x.facturacion > 0).sort((a, b) => b.facturacion - a.facturacion).slice(0, 20),
     articulosCatalogoSinVentas: [...articulos.keys()].filter((k) => k && !items.has(k)).length,
-    muchoFacturacionPocoBeneficio: conMargen.filter((x) => x.facturacion >= p70Fact && x.margenPct <= Math.min(medMargen, 30))
+    muchoFacturacionPocoBeneficio: conMargen.filter((x) => x.facturacion >= p70Fact && x.margenPct < umbralBajo)
       .sort((a, b) => b.facturacion - a.facturacion).slice(0, 15),
     medianaMargenPct: medMargen,
-    ocupanAgenda: conHoras.filter((x) => x.horasMediasPorFactura >= 1 && x.margenPorHora <= medMargenHora)
-      .sort((a, b) => a.margenPorHora - b.margenPorHora).slice(0, 15),
-    medianaMargenPorHora: medMargenHora,
-    potencialPrograma: lista.filter((x) => x.facturas >= 3 && x.acompanantes.length >= 2 && (x.margenPct === null || x.margenPct >= medMargen))
-      .map((x) => ({ ...x, puntuacion: r2(x.facturas * (1 + (x.acompanantes[0]?.pct || 0) / 100) * (x.margenPct === null ? 1 : x.margenPct / Math.max(medMargen, 1))) }))
-      .sort((a, b) => b.puntuacion - a.puntuacion).slice(0, 10),
+    umbralMargenBajo: umbralBajo,
+    margenRaro: conMargen.filter((x) => x.margenPct < 0).map((x) => ({ nombre: x.nombre, clave: x.clave, margenPct: x.margenPct })).slice(0, 15),
+    ocupanAgenda: conHoras.filter((x) => x.facturacionPorHora <= medFactHora)
+      .sort((a, b) => a.facturacionPorHora - b.facturacionPorHora).slice(0, 15),
+    medianaFacturacionPorHora: medFactHora,
+    potencialPrograma: lista.filter((x) => x.facturas >= 5 && !x.esRecargo && !x.esHoras && (x.acompanantes[0]?.pct || 0) >= 10 && (x.margenPct === null || x.margenPct >= umbralBajo))
+      .map((x) => ({ ...x, puntuacion: r2(x.facturas * (x.acompanantes[0]?.pct || 0) / 100 * (x.facturacion / x.facturas)) }))
+      .sort((a, b) => b.puntuacion - a.puntuacion)
+      .filter(function (x) { // el pack A+B y el B+A son el mismo: se deja uno
+        const par = [x.clave, x.acompanantes[0].clave].sort().join('|');
+        if (this.has(par)) return false; this.add(par); return true;
+      }, new Set()).slice(0, 10),
   };
 
-  // Las 4 decisiones del reel para cada servicio: desaparece, sube de
-  // precio, se transforma o se convierte en programa (o se mantiene).
+  // Las 4 decisiones del reel: desaparece, sube de precio, se transforma o
+  // pasa a programa (o se mantiene). Solo servicios con 3+ ventas.
   const enPrograma = new Set(servicios.potencialPrograma.map((x) => x.clave));
   const decidir = (x) => {
-    if (enPrograma.has(x.clave)) return { decision: 'Convertir en programa', motivo: `se vende a menudo y ya va con ${x.acompanantes[0]?.nombre || 'otros servicios'}` };
-    if (x.facturas <= 2 && (x.margenPct === null || x.margenPct < medMargen)) return { decision: 'Eliminar', motivo: 'casi nadie lo compra y no deja más margen que la media' };
-    if (x.margenPorHora !== null && x.horasMediasPorFactura >= 1 && x.margenPorHora < medMargenHora) return { decision: 'Transformar', motivo: `ocupa ${String(x.horasMediasPorFactura).replace('.', ',')} h de media y deja menos por hora que la media` };
-    if (x.margenPct !== null && x.margenPct < medMargen && x.facturas >= 3) return { decision: 'Subir precio', motivo: `margen ${String(x.margenPct).replace('.', ',')} % frente a ${String(medMargen).replace('.', ',')} % de mediana` };
-    return { decision: 'Mantener', motivo: '' };
+    if (enPrograma.has(x.clave)) return { decision: 'Convertir en programa', motivo: `el ${x.acompanantes[0].pct.toString().replace('.', ',')} % ya lo compra con ${x.acompanantes[0].nombre}` };
+    if (x.margenPct !== null && x.margenPct < 0) return { decision: 'Revisar coste', motivo: 'sale con pérdidas: revisa el precio de coste en FACTUSOL' };
+    if (x.margenPct !== null && x.margenPct < umbralBajo) return { decision: 'Subir precio', motivo: `margen ${String(x.margenPct).replace('.', ',')} % (la mediana es ${String(medMargen).replace('.', ',')} %)` };
+    if (x.facturacionPorHora !== null && x.horasMediasPorFactura >= 1 && x.facturacionPorHora < medFactHora * 0.75) return { decision: 'Transformar', motivo: `ocupa ${String(x.horasMediasPorFactura).replace('.', ',')} h por trabajo y se factura a ${Math.round(x.facturacionPorHora)} €/h (la mediana es ${Math.round(medFactHora)} €/h)` };
+    return { decision: 'Mantener', motivo: x.margenPct === null ? 'sin precio de coste: no se puede juzgar el margen' : '' };
   };
-  servicios.decisiones = [...lista].sort((a, b) => b.facturacion - a.facturacion).slice(0, 30)
+  servicios.decisiones = lista.filter((x) => x.facturas >= 3 && !x.esRecargo).sort((a, b) => b.facturacion - a.facturacion).slice(0, 30)
     .map((x) => ({ nombre: x.nombre, familia: x.familia, facturas: x.facturas, facturacion: x.facturacion, margenPct: x.margenPct, ...decidir(x) }));
 
-  // ── Clientes ──
+  // ── Clientes (directos, sin cuentas genéricas) ──
   const dias = (a, b) => (Date.parse(b) - Date.parse(a)) / 86400000;
   const listaCli = [...clientes.values()].map((c) => {
     const f = c.fechas.filter(Boolean).sort();
@@ -660,36 +722,37 @@ function calcularInforme({ ejercicios, facturas, articulos, familias, presupuest
     };
   }).sort((a, b) => b.total - a.total);
   const nCli = listaCli.length;
-  // Clientes a reactivar en las campañas: compraron y llevan más de 6 meses sin volver
   const corte = fechaMax ? new Date(Date.parse(fechaMax) - 182 * 86400000).toISOString().slice(0, 10) : '';
-  const reactivar = listaCli.filter((c) => c.ultima && c.ultima < corte)
+  const reactivar = listaCli.filter((c) => c.ultima && c.ultima < corte && c.total > 0)
     .map((c) => ({ ...c, telefono: telefonos.get(c.codigo) || '' }))
     .sort((a, b) => b.total - a.total);
   const unaVez = listaCli.filter((c) => c.facturas === 1).length;
   const dosVeces = listaCli.filter((c) => c.facturas === 2).length;
+  const totalCli = listaCli.reduce((a, c) => a + c.total, 0);
   const top10 = listaCli.slice(0, 10).reduce((a, c) => a + c.total, 0);
   const gapsTodos = listaCli.map((c) => c.diasEntreVisitas).filter((x) => x !== null);
 
-  // Oportunidades "antes de que el técnico se vaya": para cada servicio
-  // frecuente, el producto que más le acompaña y cuántas veces NO se vendió.
-  const oportunidades = porFacturas.filter((x) => x.tipo === 'servicio' && !RE_HORAS.test(x.nombre) && x.facturas >= 5).slice(0, 12).map((x) => {
+  // "Antes de que el técnico se vaya": en cada servicio frecuente, el
+  // artículo de catálogo que más le acompaña y cuántas veces NO se vendió.
+  const oportunidades = porFacturas.filter((x) => x.tipo === 'servicio' && !x.esHoras && !x.esRecargo && x.facturas >= 5).slice(0, 25).map((x) => {
     const it = items.get(x.clave);
-    const prodAcomp = [...it.acomp.entries()].filter(([k]) => items.get(k).tipo === 'producto').sort((a, b) => b[1] - a[1])[0];
-    if (!prodAcomp) return { servicio: x.nombre, facturas: x.facturas, producto: null };
+    const prodAcomp = [...it.acomp.entries()].filter(([k]) => { const o = items.get(k); return o.tipo === 'producto' && o.catalogo; }).sort((a, b) => b[1] - a[1])[0];
+    if (!prodAcomp) return null;
     const p = items.get(prodAcomp[0]);
     const precioMedio = p.facturacion / Math.max(p.facturas, 1);
     const sin = x.facturas - prodAcomp[1];
     return { servicio: x.nombre, facturas: x.facturas, producto: p.nombre, conProducto: prodAcomp[1], pctConProducto: pct(prodAcomp[1], x.facturas), sinProducto: sin, importeMedioProducto: r2(precioMedio), potencialSi20pct: r2(sin * 0.2 * precioMedio) };
-  }).filter((o) => o.producto && o.sinProducto > 0);
+  }).filter((o) => o && o.sinProducto > 0 && o.importeMedioProducto > 0).slice(0, 12);
 
-  // Presupuestos (lo que se ofrece desde oficina/recepción)
+  // Presupuestos (lo que se ofrece desde oficina). En FACTUSOL ESTPRE 0 = pendiente.
   const porSerie = {};
   for (const p of presupuestos) {
     const s = String(p.TIPPRE ?? '?');
     const e = String(p.ESTPRE ?? '?');
-    porSerie[s] ??= { serie: s, presupuestos: 0, importe: 0, porEstado: {} };
+    porSerie[s] ??= { serie: s, presupuestos: 0, importe: 0, pendientes: 0, importePendiente: 0, porEstado: {} };
     porSerie[s].presupuestos++;
     porSerie[s].importe = r2(porSerie[s].importe + num(p.TOTPRE));
+    if (e === '0') { porSerie[s].pendientes++; porSerie[s].importePendiente = r2(porSerie[s].importePendiente + num(p.TOTPRE)); }
     porSerie[s].porEstado[e] = (porSerie[s].porEstado[e] || 0) + 1;
   }
 
@@ -700,21 +763,25 @@ function calcularInforme({ ejercicios, facturas, articulos, familias, presupuest
     avisos,
     costeHora,
     resumen: {
-      facturas: nFac, facturacion: r2(totalFact), ticketMedio: r2(totalFact / Math.max(nFac, 1)),
+      facturacionTotal: r2(totalFact), facturacionAseguradoras: r2(totalAseg), pctAseguradoras: pct(totalAseg, totalFact),
+      facturas: nFac, facturacion: r2(baseDirecta), ticketMedio: r2(baseDirecta / Math.max(nFac, 1)),
       clientes: nCli, horasManoObra: r2(horasTot),
-      pctFacturacionProducto: pct(totalProd, totalFact), pctFacturacionServicio: pct(totalServ, totalFact),
+      pctFacturacionProducto: pct(totalProd, baseDirecta), pctFacturacionServicio: pct(totalServ, baseDirecta),
       pctFacturasSinMaterial: pct(facturasSoloServicio, nFac),
-      coberturaCoste: pct(costeConocido, totalFact),
+      coberturaCoste: pct(costeConocido, baseDirecta),
     },
-    // "Si sigo cobrando lo mismo, lo único que baja es el beneficio"
+    aseguradoras: [...aseguradoras.values()].map((a) => ({ nombre: a.nombre, fichas: a.fichas.size, facturas: a.facturas, total: r2(a.total), ticketMedio: r2(a.total / a.facturas), pctTotal: pct(a.total, totalFact), ultima: a.ultima }))
+      .sort((a, b) => b.total - a.total),
+    // "Si sigo cobrando lo mismo, lo único que baja es el beneficio" (todas las
+    // facturas, líneas con coste real: material y, si se indica, horas)
     subidaCostes: (() => {
-      const margen = factConCoste - costeTot;
-      const costeNuevo = costeTot * (1 + subidaCostes / 100);
+      const margen = factCosteReal - costeReal;
+      const costeNuevo = costeReal * (1 + subidaCostes / 100);
       return {
-        pct: subidaCostes, base: r2(factConCoste), margenActual: r2(margen), margenActualPct: pct(margen, factConCoste),
-        margenTrasSubida: r2(factConCoste - costeNuevo), margenTrasSubidaPct: pct(factConCoste - costeNuevo, factConCoste),
-        beneficioPerdido: r2(costeNuevo - costeTot),
-        subidaPreciosNecesariaPct: factConCoste ? Math.round(((costeNuevo - costeTot) / factConCoste) * 1000) / 10 : 0,
+        pct: subidaCostes, base: r2(factCosteReal), margenActual: r2(margen), margenActualPct: pct(margen, factCosteReal),
+        margenTrasSubida: r2(factCosteReal - costeNuevo), margenTrasSubidaPct: pct(factCosteReal - costeNuevo, factCosteReal),
+        beneficioPerdido: r2(costeNuevo - costeReal),
+        subidaPreciosNecesariaPct: factCosteReal ? Math.round(((costeNuevo - costeReal) / factCosteReal) * 1000) / 10 : 0,
       };
     })(),
     servicios,
@@ -722,7 +789,7 @@ function calcularInforme({ ejercicios, facturas, articulos, familias, presupuest
       top: listaCli.slice(0, 20),
       recurrentes: listaCli.filter((c) => c.facturas >= 3).sort((a, b) => b.facturas - a.facturas).slice(0, 20),
       distribucion: { unaVez, dosVeces, tresOMas: nCli - unaVez - dosVeces, pctUnaVez: pct(unaVez, nCli) },
-      pctFacturacionTop10: pct(top10, totalFact),
+      pctFacturacionTop10: pct(top10, totalCli),
       diasMediosEntreVisitas: gapsTodos.length ? Math.round(gapsTodos.reduce((a, b) => a + b, 0) / gapsTodos.length) : null,
       combinaciones: [...pares.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([par, n]) => ({ par, facturas: n, pct: pct(n, nFac) })),
     },
@@ -772,14 +839,19 @@ small,.nota,.vacio{color:var(--mu)}.aviso{background:#fff3cd;color:#664d03;paddi
 ${inf.avisos.map((a) => `<p class="aviso">⚠️ ${e(a)}</p>`).join('')}
 
 <section><h2>Resumen</h2><div class="kpis">
-<div class="kpi"><b>${eur(r.facturacion)}</b><span>facturación</span></div>
-<div class="kpi"><b>${r.facturas}</b><span>facturas</span></div>
-<div class="kpi"><b>${eur(r.ticketMedio)}</b><span>ticket medio</span></div>
-<div class="kpi"><b>${r.clientes}</b><span>clientes</span></div>
-<div class="kpi"><b>${p(r.pctFacturacionProducto)}</b><span>de la facturación es material</span></div>
-<div class="kpi"><b>${p(r.pctFacturasSinMaterial)}</b><span>facturas sin ningún material</span></div>
+<div class="kpi"><b>${eur(r.facturacionTotal)}</b><span>facturación total</span></div>
+<div class="kpi"><b>${p(r.pctAseguradoras)}</b><span>viene de compañías de seguros (${eur(r.facturacionAseguradoras)})</span></div>
+<div class="kpi"><b>${eur(r.facturacion)}</b><span>negocio directo (particulares, empresas, comunidades)</span></div>
+<div class="kpi"><b>${r.facturas}</b><span>facturas directas · ticket medio ${eur(r.ticketMedio)}</span></div>
+<div class="kpi"><b>${p(r.pctFacturacionProducto)}</b><span>del negocio directo es material</span></div>
+<div class="kpi"><b>${p(r.pctFacturasSinMaterial)}</b><span>facturas directas sin ningún material</span></div>
 </div>
-<p class="nota">Coste conocido para el ${p(r.coberturaCoste)} de la facturación (precio de coste del artículo${inf.costeHora ? `; horas a ${eur(inf.costeHora)}/h` : '; las horas de mano de obra no llevan coste — añade &amp;coste_hora=N a la URL para imputarlo'}).</p>
+<p class="nota">Los bloques 1, 2 y 3 analizan solo el <b>negocio directo</b>: en las compañías el precio lo marca la tarifa pactada, no se decide servicio a servicio. Coste conocido para el ${p(r.coberturaCoste)} del negocio directo${inf.costeHora ? ` (horas a ${eur(inf.costeHora)}/h)` : ' — añade &amp;coste_hora=N a la URL para imputar el coste de las horas de técnico'}.</p>
+</section>
+
+<section><h2>Compañías de seguros</h2>
+<p class="nota">Lo que hay que negociar para 2027 es la <b>tarifa con cada compañía</b>: si los costes suben y la tarifa no, cada aviso deja menos.</p>
+${tabla([['Compañía', (x) => `${e(x.nombre)}${x.fichas > 1 ? `<br><small>${x.fichas} fichas de cliente</small>` : ''}`], ['Facturas', (x) => x.facturas], ['Total', (x) => eur(x.total)], ['Ticket medio', (x) => eur(x.ticketMedio)], ['% de la facturación', (x) => p(x.pctTotal)], ['Última', (x) => e(x.ultima)]], inf.aseguradoras, 'No se ha detectado ninguna compañía de seguros por el nombre del cliente.')}
 </section>
 
 <section><h2>Si los costes suben un ${p(inf.subidaCostes.pct)} y seguimos igual…</h2>
@@ -797,20 +869,21 @@ ${inf.subidaCostes.base ? `<div class="kpis">
 <p class="q">¿Qué servicios hemos vendido más?</p>
 ${tabla([...colsServ, ['Clientes', (x) => x.clientes], ['Suele ir con…', acomp]], s.masVendidos)}
 
-<p class="q">¿Cuáles casi nadie ha comprado? <small>(1–2 facturas en el periodo; ${s.articulosCatalogoSinVentas} artículos del catálogo sin ninguna venta)</small></p>
+<p class="q">¿Cuáles casi nadie ha comprado? <small>(artículos de catálogo con 1–2 ventas: candidatos a eliminar; además hay ${s.articulosCatalogoSinVentas} artículos del catálogo sin ninguna venta)</small></p>
 ${tabla(colsServ, s.casiNadie)}
 
-<p class="q">¿Cuáles facturan mucho pero dejan poco beneficio? <small>(30 % que más factura y margen ≤ ${p(Math.min(s.medianaMargenPct, 30))})</small></p>
+<p class="q">¿Cuáles facturan mucho pero dejan poco beneficio? <small>(de los que más facturan, margen por debajo del ${p(s.umbralMargenBajo)}; la mediana es ${p(s.medianaMargenPct)})</small></p>
 ${tabla(colsServ, s.muchoFacturacionPocoBeneficio, 'Ninguno destaca, o falta precio de coste en los artículos (revisa PCOART en FACTUSOL).')}
+${s.margenRaro.length ? `<p class="aviso">⚠️ Estos artículos salen con <b>pérdidas</b>; casi seguro el precio de coste en FACTUSOL está mal (coste por caja en vez de por unidad, o desactualizado): ${s.margenRaro.map((x) => `${e(x.nombre)} <small>(${e(x.clave)}, ${p(x.margenPct)})</small>`).join(' · ')}</p>` : ''}
 
-<p class="q">¿Cuáles ocupan demasiado tiempo de agenda? <small>(≥ 1 h de media y margen por hora ≤ mediana ${eur(s.medianaMargenPorHora)}/h)</small></p>
-${tabla([['Servicio', (x) => e(x.nombre)], ['Facturas', (x) => x.facturas], ['Horas medias', (x) => String(x.horasMediasPorFactura).replace('.', ',')], ['Margen por hora', (x) => eur(x.margenPorHora)]], s.ocupanAgenda,
+<p class="q">¿Cuáles ocupan demasiado tiempo de agenda? <small>(≥ 1 h de técnico por trabajo y lo que se factura por hora está por debajo de la mediana, ${eur(s.medianaFacturacionPorHora)}/h)</small></p>
+${tabla([['Servicio', (x) => e(x.nombre)], ['Facturas', (x) => x.facturas], ['Horas por trabajo', (x) => String(x.horasMediasPorFactura).replace('.', ',')], ['Facturado por hora', (x) => eur(x.facturacionPorHora)], ['Margen por hora', (x) => eur(x.margenPorHora)]], s.ocupanAgenda,
   'Sin datos: las horas solo se detectan en líneas de "mano de obra"/"hora". Si no se facturan así, apúntalo en el parte de Zoho.')}
 
-<p class="q">¿Cuáles tienen potencial para convertirse en algo más grande? <small>(se venden a menudo, con buen margen y casi siempre acompañados)</small></p>
+<p class="q">¿Cuáles tienen potencial para convertirse en algo más grande? <small>(5+ ventas y al menos 1 de cada 10 clientes ya lo compra junto a otra cosa: ese es el pack natural)</small></p>
 ${tabla([['Servicio base', (x) => e(x.nombre)], ['Facturas', (x) => x.facturas], ['Margen', (x) => p(x.margenPct)], ['Pack natural: ya lo compran con…', acomp]], s.potencialPrograma)}
 
-<p class="q">Decisión por servicio: ¿desaparece, sube de precio, se transforma o pasa a programa? <small>(30 que más facturan + propuesta automática; la decisión final es vuestra)</small></p>
+<p class="q">Decisión por servicio: ¿sube de precio, se transforma o pasa a programa? <small>(los 30 que más facturan con 3+ ventas; propuesta automática, la decisión final es vuestra. Los candidatos a eliminar están en "casi nadie ha comprado")</small></p>
 ${tabla([['Servicio', (x) => `${e(x.nombre)}<br><small>${e(x.familia)}</small>`], ['Facturación', (x) => eur(x.facturacion)], ['Margen', (x) => p(x.margenPct)], ['Propuesta', (x) => `<b>${e(x.decision)}</b><br><small>${e(x.motivo)}</small>`]], s.decisiones)}
 </section>
 
@@ -819,7 +892,7 @@ ${tabla([['Servicio', (x) => `${e(x.nombre)}<br><small>${e(x.familia)}</small>`]
 <div class="kpi"><b>${p(c.distribucion.pctUnaVez)}</b><span>clientes que solo vinieron 1 vez</span></div>
 <div class="kpi"><b>${c.distribucion.tresOMas}</b><span>clientes con 3+ facturas</span></div>
 <div class="kpi"><b>${c.diasMediosEntreVisitas ?? '—'} días</b><span>entre visitas (repetidores)</span></div>
-<div class="kpi"><b>${p(c.pctFacturacionTop10)}</b><span>facturación en los 10 mayores clientes</span></div>
+<div class="kpi"><b>${p(c.pctFacturacionTop10)}</b><span>de lo facturado a clientes directos está en los 10 mayores</span></div>
 </div>
 <p class="q">¿Cuánto compra cada cliente? <small>(20 mayores)</small></p>
 ${tabla([['Cliente', (x) => e(x.nombre || x.codigo)], ['Facturas', (x) => x.facturas], ['Total', (x) => eur(x.total)], ['Ticket medio', (x) => eur(x.ticketMedio)], ['% material', (x) => p(x.pctProducto)], ['Última', (x) => e(x.ultima)]], c.top)}
@@ -827,17 +900,18 @@ ${tabla([['Cliente', (x) => e(x.nombre || x.codigo)], ['Facturas', (x) => x.fact
 ${tabla([['Cliente', (x) => e(x.nombre || x.codigo)], ['Facturas', (x) => x.facturas], ['Cada… días', (x) => x.diasEntreVisitas ?? '—'], ['Servicios distintos', (x) => x.serviciosDistintos], ['Última', (x) => e(x.ultima)]], c.recurrentes)}
 <p class="q">¿Qué servicios combina? <small>(familias que aparecen juntas en la misma factura)</small></p>
 ${tabla([['Combinación', (x) => e(x.par)], ['Facturas', (x) => x.facturas], ['% del total', (x) => p(x.pct)]], c.combinaciones)}
-<p class="q">¿Qué estamos ofreciendo en oficina? <small>(presupuestos por serie; estado 0 = pendiente)</small></p>
-${tabla([['Serie', (x) => e(x.serie)], ['Presupuestos', (x) => x.presupuestos], ['Importe', (x) => eur(x.importe)], ['Por estado', (x) => Object.entries(x.porEstado).map(([k, v]) => `${e(k)}: ${v}`).join(' · ')]], inf.presupuestos)}
+<p class="q">¿Qué estamos ofreciendo en oficina? <small>(presupuestos por serie)</small></p>
+${tabla([['Serie', (x) => e(x.serie)], ['Presupuestos', (x) => x.presupuestos], ['Importe', (x) => eur(x.importe)], ['Sin respuesta (estado 0)', (x) => `<b>${x.pendientes}</b> · ${eur(x.importePendiente)}`], ['Por estado', (x) => Object.entries(x.porEstado).map(([k, v]) => `${e(k)}: ${v}`).join(' · ')]], inf.presupuestos)}
+<p class="nota">Los presupuestos pendientes son la venta más fácil de recuperar: el cliente ya pidió precio. Marta puede hacer el seguimiento (GUIA-SEGUIMIENTO-PRESUPUESTOS.md).</p>
 <p class="q">¿Qué podría venderse antes de que el técnico se vaya?</p>
 ${tabla([['Servicio', (x) => e(x.servicio)], ['Facturas', (x) => x.facturas], ['Producto que mejor encaja', (x) => e(x.producto)], ['Ya lo llevan', (x) => p(x.pctConProducto)], ['Se fue sin él', (x) => x.sinProducto], ['Si se ofrece y acepta 1 de cada 5', (x) => eur(x.potencialSi20pct)]], inf.oportunidades)}
 </section>
 
 <section><h2>3 · Campañas: a quién reactivar</h2>
-<p class="nota">Halloween, Black Friday y Navidad no como "promociones desesperadas" sino para captar, <b>reactivar</b>, vender packs y crear recurrencia. ${inf.reactivar.total} clientes compraron y no han vuelto desde el ${e(inf.reactivar.desde)} (${eur(inf.reactivar.importeHistorico)} facturados en el periodo). Los 40 de más valor:</p>
-${tabla([['Cliente', (x) => e(x.nombre || x.codigo)], ['Teléfono', (x) => e(x.telefono)], ['Facturas', (x) => x.facturas], ['Total', (x) => eur(x.total)], ['Última', (x) => e(x.ultima)]], inf.reactivar.lista)}
+<p class="nota">Halloween, Black Friday y Navidad no como "promociones desesperadas" sino para captar, <b>reactivar</b>, vender packs y crear recurrencia. ${inf.reactivar.total} clientes directos (sin compañías ni cuentas genéricas) compraron y no han vuelto desde el ${e(inf.reactivar.desde)} (${eur(inf.reactivar.importeHistorico)} facturados en el periodo). Los 40 de más valor:</p>
+${tabla([['Cliente', (x) => e(x.nombre || x.codigo)], ['Contacto', (x) => e(x.telefono)], ['Facturas', (x) => x.facturas], ['Total', (x) => eur(x.total)], ['Última', (x) => e(x.ultima)]], inf.reactivar.lista)}
 </section>
-<p class="nota">Servicio/material se clasifica por la descripción de la línea (mano de obra, apertura, instalación, desplazamiento… = servicio). Guía de uso: GUIA-ESTRATEGIA-SERVICIOS.md</p>
+<p class="nota">Servicio/material se clasifica por la descripción del artículo (mano de obra, apertura, instalación, desplazamiento… = servicio). Las compañías de seguros se detectan por el nombre del cliente. No cuentan como venta las notas sin importe ni las entregas a cuenta. Guía de uso: GUIA-ESTRATEGIA-SERVICIOS.md</p>
 </main></body></html>`;
 }
 
