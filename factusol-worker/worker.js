@@ -88,24 +88,34 @@ export default {
         return json({ ok: true, ...sondas }, 200, cors);
       }
 
-      // Análisis de servicios y clientas/clientes (estrategia "de tratamiento
-      // a programa"). Protegido con la misma clave que /diag.
-      //   /analisis?k=CLAVE                        → informe HTML del año en curso
-      //   /analisis?k=CLAVE&ejercicios=2025,2026   → varios años (mejor para frecuencia)
-      //   /analisis?k=CLAVE&formato=json           → datos en bruto
+      // Informe de servicios y clientes (estrategia "de servicio suelto a
+      // programa"). Protegido con la misma clave que /diag.
+      //   /analisis?k=CLAVE&ejercicios=2025,2026[&coste_hora=25][&subida_costes=8][&formato=json]
+      // El plan gratuito de Workers solo da ~10 ms de CPU por petición, así que
+      // el Worker NO procesa las facturas: devuelve una página que pide los
+      // datos tabla a tabla (&dato=...), que el Worker pasa tal cual desde la
+      // API Delsol sin leerlos, y el cálculo se hace en el navegador.
       if (url.pathname === '/analisis') {
         if (!env.DIAG_KEY || url.searchParams.get('k') !== env.DIAG_KEY) {
           return json({ ok: false, error: 'Análisis deshabilitado o clave incorrecta' }, 403, cors);
         }
-        const ejercicios = (url.searchParams.get('ejercicios') || ejercicioActual())
-          .split(',').map((e) => e.trim()).filter((e) => /^\d{4}$/.test(e));
-        if (!ejercicios.length) return json({ ok: false, error: 'Parámetro ejercicios no válido (ej. 2025,2026)' }, 400, cors);
+        const dato = url.searchParams.get('dato');
+        if (!dato) {
+          return new Response(paginaAnalisis(Number(env.COSTE_HORA_TECNICO) || 0), {
+            status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+          });
+        }
+        const sql = CONSULTAS_ANALISIS[dato]?.[url.searchParams.get('todo') ? 1 : 0];
+        const ej = url.searchParams.get('ej') || ejercicioActual();
+        if (!sql || !/^\d{4}$/.test(ej)) return json({ ok: false, error: 'Dato o ejercicio no válido' }, 400, cors);
         const token = await autenticar(env);
-        const costeHora = Number(url.searchParams.get('coste_hora') || env.COSTE_HORA_TECNICO) || 0;
-        const subidaCostes = Number(url.searchParams.get('subida_costes') ?? 8) || 0;
-        const informe = await analizarNegocio(env, token, ejercicios, costeHora, subidaCostes);
-        if (url.searchParams.get('formato') === 'json') return json({ ok: true, ...informe }, 200, cors);
-        return new Response(informeHtml(informe), { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+        const res = await fetch(DELSOL_BASE + EP.consulta, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ ejercicio: ej, consulta: sql }),
+        });
+        // Se reenvía el cuerpo sin parsearlo (no consume CPU del Worker)
+        return new Response(res.body, { status: res.status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
       }
 
       if (url.pathname === '/presupuesto' && request.method === 'POST') {
@@ -393,51 +403,113 @@ function redondear(n) {
 const RE_HORAS = /\b(mano de obra|m\.?\s?o\.?|horas?|h\.)\b/i;
 const RE_SERVICIO = /(mano de obra|\bhoras?\b|desplazamiento|apertura|urgen|nocturn|festivo|instalaci|montaje|reparaci|revisi|ajuste|servicio|visita|retirada|mantenimiento)/i;
 
-async function analizarNegocio(env, token, ejercicios, costeHora = 0, subidaCostes = 0) {
-  const q = async (sql, ej) => {
-    try { return await consulta(env, token, sql, ej); } catch (e) { return { error: String(e.message || e) }; }
+// Consultas que puede pedir la página del informe: [columnas justas, todas]
+const CONSULTAS_ANALISIS = {
+  art: ['SELECT CODART, DESART, FAMART, PCOART FROM F_ART', 'SELECT * FROM F_ART'],
+  fam: ['SELECT CODFAM, DESFAM FROM F_FAM', 'SELECT * FROM F_FAM'],
+  cli: ['SELECT CODCLI, TELCLI, MOVCLI FROM F_CLI', 'SELECT * FROM F_CLI'],
+  fac: ['SELECT TIPFAC, CODFAC, FECFAC, CLIFAC, CNOFAC FROM F_FAC', 'SELECT * FROM F_FAC'],
+  lfa: ['SELECT TIPLFA, CODLFA, ARTLFA, DESLFA, CANLFA, PRELFA, TOTLFA, COSLFA FROM F_LFA', 'SELECT * FROM F_LFA'],
+  pre: ['SELECT TIPPRE, ESTPRE, TOTPRE FROM F_PRE', 'SELECT * FROM F_PRE'],
+};
+
+/** Página que descarga los datos y calcula el informe en el navegador.
+ *  Reutiliza calcularInforme/informeHtml enviando su código fuente. */
+function paginaAnalisis(costeHoraDefecto) {
+  const cliente = async () => {
+    const P = new URLSearchParams(location.search);
+    const K = P.get('k');
+    const anio = String(new Date().getFullYear());
+    const ejercicios = (P.get('ejercicios') || anio).split(',').map((e) => e.trim()).filter((e) => /^\d{4}$/.test(e));
+    const costeHora = Number(P.get('coste_hora')) || COSTE_HORA_DEFECTO;
+    const subidaCostes = P.has('subida_costes') ? Number(P.get('subida_costes')) || 0 : 8;
+    const estado = document.getElementById('estado');
+    const paso = (t) => { estado.textContent = t; };
+
+    const filas = (j) => (Array.isArray(j?.resultado) ? j.resultado : []).map((reg) => {
+      const f = {};
+      for (const c of reg || []) f[String(c.columna).toUpperCase()] = c.dato;
+      return f;
+    });
+    const leer = async (dato, ej) => {
+      let error = '';
+      for (const todo of [false, true]) {
+        try {
+          const r = await fetch(`/analisis?k=${encodeURIComponent(K)}&dato=${dato}&ej=${ej}${todo ? '&todo=1' : ''}`);
+          const t = await r.text();
+          let j;
+          try { j = JSON.parse(t); } catch { error = `HTTP ${r.status}: ${t.slice(0, 200)}`; continue; }
+          if (j.ok === false) { error = j.error; continue; }
+          if (!r.ok || (j.respuesta && String(j.respuesta).toUpperCase() !== 'OK')) { error = JSON.stringify(j).slice(0, 300); continue; }
+          return filas(j);
+        } catch (e) { error = String(e.message || e); }
+      }
+      return { error };
+    };
+
+    const avisos = [];
+    const ultimo = ejercicios[ejercicios.length - 1];
+    paso('Leyendo artículos y clientes…');
+    const arts = await leer('art', ultimo);
+    const fams = await leer('fam', ultimo);
+    const clis = await leer('cli', ultimo);
+    const articulos = new Map();
+    if (Array.isArray(arts)) for (const a of arts) articulos.set(String(a.CODART || '').trim(), a);
+    else avisos.push('No se pudo leer F_ART: ' + arts.error);
+    const familias = new Map();
+    if (Array.isArray(fams)) for (const f of fams) familias.set(String(f.CODFAM || '').trim(), f.DESFAM || f.CODFAM);
+    const telefonos = new Map();
+    if (Array.isArray(clis)) for (const c of clis) telefonos.set(String(c.CODCLI ?? '').trim(), c.MOVCLI || c.TELCLI || '');
+
+    const facturas = new Map();
+    const presupuestos = [];
+    for (const ej of ejercicios) {
+      paso(`Leyendo facturas de ${ej}…`);
+      const cab = await leer('fac', ej);
+      if (!Array.isArray(cab)) { avisos.push(`Ejercicio ${ej}: no se pudo leer F_FAC (${cab.error})`); continue; }
+      for (const f of cab) {
+        facturas.set(`${ej}|${f.TIPFAC}|${f.CODFAC}`, {
+          id: `${f.TIPFAC}/${f.CODFAC}`, cliente: String(f.CLIFAC ?? '').trim(), nombre: f.CNOFAC || '',
+          fecha: String(f.FECFAC || '').slice(0, 10), lineas: [],
+        });
+      }
+      paso(`Leyendo líneas de factura de ${ej}…`);
+      const lin = await leer('lfa', ej);
+      if (!Array.isArray(lin)) { avisos.push(`Ejercicio ${ej}: no se pudo leer F_LFA (${lin.error})`); continue; }
+      for (const l of lin) {
+        const fac = facturas.get(`${ej}|${l.TIPLFA}|${l.CODLFA}`);
+        if (fac) fac.lineas.push(l);
+      }
+      const pre = await leer('pre', ej);
+      if (Array.isArray(pre)) presupuestos.push(...pre);
+    }
+
+    paso('Calculando…');
+    const informe = calcularInforme({ ejercicios, facturas: [...facturas.values()], articulos, familias, presupuestos, costeHora, subidaCostes, telefonos, avisos });
+    if (P.get('formato') === 'json') {
+      document.body.innerHTML = '<pre style="white-space:pre-wrap;font:12px monospace;padding:16px"></pre>';
+      document.querySelector('pre').textContent = JSON.stringify(informe, null, 1);
+      return;
+    }
+    document.open();
+    document.write(informeHtml(informe));
+    document.close();
   };
-  const avisos = [];
-  const ultimo = ejercicios[ejercicios.length - 1];
 
-  // Catálogo (del último ejercicio pedido)
-  const arts = await q('SELECT * FROM F_ART', ultimo);
-  const fams = await q('SELECT * FROM F_FAM', ultimo);
-  const articulos = new Map();
-  if (Array.isArray(arts)) for (const a of arts) articulos.set(String(a.CODART || '').trim(), a);
-  else avisos.push('No se pudo leer F_ART: ' + arts.error);
-  // Teléfonos, para la lista de clientes a reactivar en las campañas
-  const clis = await q('SELECT CODCLI, TELCLI, MOVCLI FROM F_CLI', ultimo);
-  const telefonos = new Map();
-  if (Array.isArray(clis)) for (const c of clis) telefonos.set(String(c.CODCLI ?? '').trim(), c.MOVCLI || c.TELCLI || '');
-  const familias = new Map();
-  if (Array.isArray(fams)) for (const f of fams) familias.set(String(f.CODFAM || '').trim(), f.DESFAM || f.CODFAM);
-
-  const facturas = new Map(); // "ej|tip|cod" → { cliente, nombre, fecha, lineas: [] }
-  const presupuestos = [];
-  for (const ej of ejercicios) {
-    const cab = await q('SELECT * FROM F_FAC', ej);
-    if (!Array.isArray(cab)) { avisos.push(`Ejercicio ${ej}: no se pudo leer F_FAC (${cab.error})`); continue; }
-    for (const f of cab) {
-      facturas.set(`${ej}|${f.TIPFAC}|${f.CODFAC}`, {
-        id: `${f.TIPFAC}/${f.CODFAC}`,
-        cliente: String(f.CLIFAC ?? '').trim(),
-        nombre: f.CNOFAC || '',
-        fecha: String(f.FECFAC || '').slice(0, 10),
-        lineas: [],
-      });
-    }
-    const lin = await q('SELECT * FROM F_LFA', ej);
-    if (!Array.isArray(lin)) { avisos.push(`Ejercicio ${ej}: no se pudo leer F_LFA (${lin.error})`); continue; }
-    for (const l of lin) {
-      const fac = facturas.get(`${ej}|${l.TIPLFA}|${l.CODLFA}`);
-      if (fac) fac.lineas.push(l);
-    }
-    const pre = await q('SELECT * FROM F_PRE', ej);
-    if (Array.isArray(pre)) presupuestos.push(...pre.map((p) => ({ ...p, _ej: ej })));
-  }
-
-  return calcularInforme({ ejercicios, facturas: [...facturas.values()], articulos, familias, presupuestos, costeHora, subidaCostes, telefonos, avisos });
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Análisis de servicios y clientes</title>
+<style>body{margin:0;font:16px/1.5 system-ui,sans-serif;background:#f6f7f9;color:#1d2330;display:grid;place-items:center;min-height:100vh;padding:16px;box-sizing:border-box}
+@media (prefers-color-scheme:dark){body{background:#14171c;color:#e8eaed}}</style></head>
+<body><p id="estado">Preparando el informe…</p>
+<script>
+const COSTE_HORA_DEFECTO = ${Number(costeHoraDefecto) || 0};
+const RE_HORAS = ${RE_HORAS};
+const RE_SERVICIO = ${RE_SERVICIO};
+${redondear}
+${calcularInforme}
+${informeHtml}
+(${cliente})().catch((e) => { document.getElementById('estado').textContent = 'Error: ' + (e.message || e); });
+</script></body></html>`;
 }
 
 /** Cálculo puro (sin red) — separado para poder probarlo con datos de ejemplo. */
