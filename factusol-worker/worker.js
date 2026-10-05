@@ -502,6 +502,9 @@ function paginaAnalisis(costeHoraDefecto) {
 @media (prefers-color-scheme:dark){body{background:#14171c;color:#e8eaed}}</style></head>
 <body><p id="estado">Preparando el informe…</p>
 <script>
+// Cloudflare (esbuild keepNames) inserta llamadas __name(fn, "nombre") en el
+// código de las funciones; al copiarlas al navegador hace falta definirla.
+var __name = (f) => f;
 const COSTE_HORA_DEFECTO = ${Number(costeHoraDefecto) || 0};
 const RE_HORAS = ${RE_HORAS};
 const RE_SERVICIO = ${RE_SERVICIO};
