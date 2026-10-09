@@ -1932,6 +1932,49 @@ const ESQUEMA_CLASIFICACION = {
   },
 };
 
+// Clasifica la respuesta de un cliente al seguimiento de su presupuesto.
+// Devuelve: acepta | precio | aplaza | declina | duda.
+// Primero la IA (entiende "de momento no voy a hacer nada", "lo dejamos
+// para después del verano"…); si falla o tarda, palabras clave.
+const CATEGORIAS_PRESU = ["acepta", "precio", "aplaza", "declina", "duda"];
+async function clasificarRespuestaPresu(mensaje) {
+  try {
+    const res = await Promise.race([
+      openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0,
+        max_tokens: 10,
+        messages: [
+          {
+            role: "system",
+            content:
+`Un cliente de Ibérica Seguridad (cerrajería y puertas de seguridad) responde al seguimiento de un presupuesto que le enviamos. Clasifica su respuesta con UNA sola palabra:
+- acepta: quiere seguir adelante, acepta, pregunta cuándo podéis venir a hacerlo.
+- precio: le parece caro, pide descuento, lo compara con otro presupuesto.
+- aplaza: no por ahora, de momento no, más adelante, se lo está pensando, tiene que consultarlo, no va a hacer nada por el momento.
+- declina: no lo va a hacer, ya lo hizo con otra empresa, no le interesa.
+- duda: hace una pregunta concreta o pide algo que debe responder una persona.
+Responde solo la palabra.`,
+          },
+          { role: "user", content: mensaje },
+        ],
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
+    ]);
+    const cat = normalizaTxt(res.choices?.[0]?.message?.content || "").replace(/[^a-z]/g, "");
+    if (CATEGORIAS_PRESU.includes(cat)) return cat;
+  } catch (e) { console.error("[Presupuestos] Clasificación IA falló, uso palabras clave:", e.message); }
+  return clasificarRespuestaPresuPorPalabras(mensaje);
+}
+function clasificarRespuestaPresuPorPalabras(mensaje) {
+  const low = normalizaTxt(mensaje);
+  if (/(adelante|acepto|acepta(mos)?|de acuerdo|confirmo|hacedlo|cuando (pueden|podeis|puedan)|vale,? si|queremos hacerlo|me lo quedo)/.test(low)) return "acepta";
+  if (/(caro|carisimo|precio|coste|cuesta|barato|rebaja|descuento|competencia|otro presupuesto)/.test(low)) return "precio";
+  if (/(pensar|pensando|mas adelante|todavia no|aun no|ahora no|por (el|ahora|lo pronto)|de momento|por ahora|ya (te|os) (dire|digo)|consultar|decidir|dudando|no lo (tengo|tenemos) claro|no (voy|vamos) a hacer nada)/.test(low)) return "aplaza";
+  if (/(no (lo )?(quiero|queremos|vamos a hacerlo|va a ser)|no me interesa|descartado|ya lo (hice|hicimos|contrate|contratamos)|otra empresa|dejalo|no,? gracias)/.test(low)) return "declina";
+  return "duda";
+}
+
 async function clasificarConIA(estado, mensaje) {
   const historial = (estado.historialIA || []).slice(-6);
   try {
@@ -2430,7 +2473,6 @@ async function procesarMensaje(telefono, texto) {
   if (estado.step === "presu_respuesta") {
     const ref    = estado.presu?.ref || "—";
     const caseId = estado.presu?.caseId || null;
-    const low    = normalizaTxt(msg);
     const seg    = caseId ? seguimientosPresu[caseId] : null;
     if (seg) { seg.estado = "respondido"; guardarSeguimientosPresu(); }
     estado.step = "menu_principal";
@@ -2448,8 +2490,14 @@ async function procesarMensaje(telefono, texto) {
       } catch (e) { console.error("[Presupuestos] Aviso falló:", e.message); }
     };
 
+    // Qué quiere decir el cliente: la IA entiende las mil formas de decirlo
+    // ("de momento no voy a hacer nada" es aplazar, no una duda); las
+    // palabras clave quedan solo de respaldo si la IA no responde.
+    const categoria = await clasificarRespuestaPresu(msg);
+    console.log(`[Presupuestos] Respuesta de ${telefono} (${ref}) clasificada como: ${categoria}`);
+
     // 1) Señal de venta: quiere seguir adelante
-    if (/(adelante|acepto|acepta(mos)?|de acuerdo|me interesa|confirmo|hacedlo|cuando (pueden|podeis|puedan)|vale,? (si|sí)|queremos hacerlo|si,? me lo quedo)/.test(low)) {
+    if (categoria === "acepta") {
       await enviarMensaje(telefono, "¡Genial! 🙌 Le paso ahora mismo tu confirmación al equipo y te llaman para cuadrar fechas. ¡Gracias por confiar en Ibérica!");
       crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente ACEPTA. Respuesta: "${msg.slice(0, 300)}"`);
       registrarResultadoPresu(ref, "respondio_ACEPTA");
@@ -2457,7 +2505,7 @@ async function procesarMensaje(telefono, texto) {
       return;
     }
     // 2) Objeción de precio
-    if (/(caro|carisimo|precio|coste|cuesta|barato|rebaja|descuento|mas barato|competencia|otro presupuesto)/.test(low)) {
+    if (categoria === "precio") {
       await enviarMensaje(
         telefono,
         "Te entiendo, es una inversión importante. Ten en cuenta que incluye la instalación por nuestro equipo propio y 3 años de garantía, y tenemos financiación para pagarlo con comodidad. Si quieres, un compañero te llama y ve contigo cómo ajustarlo — sin ningún compromiso 🙂"
@@ -2467,15 +2515,15 @@ async function procesarMensaje(telefono, texto) {
       await avisar("💶 Objeción de precio");
       return;
     }
-    // 3) Se lo está pensando / más adelante
-    if (/(pensar|pensando|mas adelante|todavia no|aun no|ya (te|os) (dire|digo)|consultar|decidir|dudando|no lo (tengo|tenemos) claro)/.test(low)) {
+    // 3) Se lo está pensando / de momento no / más adelante
+    if (categoria === "aplaza") {
       await enviarMensaje(telefono, "¡Claro, sin ninguna prisa! 🙂 Te mantenemos el presupuesto, y cualquier duda que te surja mientras lo decides me la escribes por aquí y te la resuelvo.");
-      crearNotaParte(caseId, `Seguimiento presupuesto (Marta): se lo está pensando. Respuesta: "${msg.slice(0, 300)}"`);
-      registrarResultadoPresu(ref, "respondio_se_lo_piensa");
+      crearNotaParte(caseId, `Seguimiento presupuesto (Marta): APLAZA / se lo piensa (no por ahora). Respuesta: "${msg.slice(0, 300)}"`);
+      registrarResultadoPresu(ref, "respondio_aplaza");
       return;
     }
     // 4) Lo rechaza / lo hizo con otro
-    if (/(no (lo )?(quiero|queremos|vamos|va a ser)|no me interesa|descartado|ya lo (hice|hicimos|contrate|contratamos)|otra empresa|dejalo|no,? gracias)/.test(low)) {
+    if (categoria === "declina") {
       await enviarMensaje(telefono, "Entendido, ¡y gracias por decírnoslo! 🙏 Te guardamos el presupuesto por si más adelante lo retomas. Aquí nos tienes para lo que necesites 🔐");
       crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente DECLINA. Motivo/respuesta: "${msg.slice(0, 300)}"`);
       registrarResultadoPresu(ref, "respondio_declina");
