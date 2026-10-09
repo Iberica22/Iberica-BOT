@@ -976,10 +976,11 @@ async function sondearPresupuestosEnviados() {
       if (!esCasoPresupuestoEnviado(caso)) {
         // Si estaba en seguimiento y el CRM ya cambió de estado (aceptado,
         // cerrado, rechazado...), la cadencia se cancela en silencio.
-        if (seg && !["respondido", "cancelado", "cerrado_sin_respuesta"].includes(seg.estado)) {
+        if (seg && !["respondido", "cancelado", "cerrado_sin_respuesta", "no_enviable"].includes(seg.estado)) {
           seg.estado = "cancelado";
+          seg.estadoFinalCrm = `${caso.Status || "?"} / ${caso.Subestado || "—"}`;
           resumen.cancelados++;
-          registrarResultadoPresu(seg.ref, "cancelado_cambio_de_estado_en_crm");
+          registrarResultadoPresu(seg.ref, `cancelado_cambio_de_estado_en_crm: ${seg.estadoFinalCrm}`);
           guardarSeguimientosPresu();
         }
         continue;
@@ -1123,8 +1124,9 @@ async function barridoToquesPresupuesto(forzarVentana) {
         const caso = c.data?.data?.[0];
         if (caso && !esCasoPresupuestoEnviado(caso)) {
           seg.estado = "cancelado";
+          seg.estadoFinalCrm = `${caso.Status || "?"} / ${caso.Subestado || "—"}`;
           guardarSeguimientosPresu();
-          registrarResultadoPresu(seg.ref, "cancelado_cambio_de_estado_en_crm");
+          registrarResultadoPresu(seg.ref, `cancelado_cambio_de_estado_en_crm: ${seg.estadoFinalCrm}`);
           continue;
         }
       } catch (e) { console.error("[Presupuestos] Re-verificación falló:", e.message); }
@@ -3574,6 +3576,40 @@ app.get("/admin/api/presupuestos-stats", authAdmin, (req, res) => {
 
 // Lanza a mano el sondeo + barrido (con ?forzar=1 se salta la ventana
 // comercial — útil para probar; PRESU_AUTO debe estar en on igualmente)
+// ── ¿Qué ha pasado con los presupuestos que Marta siguió? ────
+// Consulta en Zoho el estado ACTUAL de cada presupuesto en el que Marta
+// llegó a escribir al cliente (toque 1 enviado), y lo agrupa por estado.
+// Es la base para medir cuántos se cierran tras el seguimiento.
+app.get("/admin/api/presupuestos-resultados", authAdmin, async (req, res) => {
+  const contactados = Object.values(seguimientosPresu).filter((s) => s.toque1Ts);
+  let token;
+  try { token = await obtenerTokenZoho(); }
+  catch (e) { return res.json({ ok: false, motivo: `sin_token_zoho: ${e.message}` }); }
+  const detalle = [];
+  for (const seg of contactados) {
+    let estadoActual = null;
+    try {
+      const c = await axios.get(`https://www.zohoapis.eu/crm/v2/Cases/${seg.caseId}`, {
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+      });
+      const caso = c.data?.data?.[0];
+      if (caso) estadoActual = `${caso.Status || "?"} / ${caso.Subestado || "—"}`;
+    } catch (e) { estadoActual = `error: ${e.response?.status || e.message}`; }
+    detalle.push({
+      ref: seg.ref, nombre: seg.nombre || null,
+      seguimientoMarta: seg.estado,
+      respondioAMarta: seg.estado === "respondido",
+      toques: seg.toque2Ts ? 2 : 1,
+      estadoActualZoho: estadoActual,
+    });
+  }
+  const porEstadoZoho = detalle.reduce((acc, d) => {
+    acc[d.estadoActualZoho || "desconocido"] = (acc[d.estadoActualZoho || "desconocido"] || 0) + 1;
+    return acc;
+  }, {});
+  res.json({ ok: true, contactadosPorMarta: detalle.length, porEstadoZoho, detalle });
+});
+
 app.get("/admin/api/test-presupuestos", authAdmin, async (req, res) => {
   const sondeo  = await sondearPresupuestosEnviados();
   const barrido = await barridoToquesPresupuesto(req.query.forzar === "1");
