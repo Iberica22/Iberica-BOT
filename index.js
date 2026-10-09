@@ -611,7 +611,7 @@ async function buscarOCrearMiembroWoztell(channelId, telefono, nombre) {
 
 // Envío genérico de una plantilla aprobada de Meta al chat de un cliente
 // (requiere conversaciones[telefono] con memberId/channelId ya puestos).
-async function enviarPlantillaWoztell(telefono, elementName, parametros) {
+async function enviarPlantillaWoztell(telefono, elementName, parametros, idioma = "es") {
   const estado = conversaciones[telefono];
   try {
     const res = await axios.post(
@@ -622,7 +622,7 @@ async function enviarPlantillaWoztell(telefono, elementName, parametros) {
         response: [{
           type: "TEMPLATE",
           elementName,
-          languageCode: "es",
+          languageCode: idioma,
           components: [{ type: "body", parameters: (parametros || []).map((t) => ({ type: "text", text: String(t) })) }],
         }],
       }
@@ -913,6 +913,9 @@ function registrarResultadoPresu(ref, resultado) {
 const PRESU_DIAS_TOQUE1 = parseInt(process.env.PRESU_DIAS_TOQUE1 || "3");
 const PRESU_DIAS_TOQUE2 = parseInt(process.env.PRESU_DIAS_TOQUE2 || "8");
 const PRESU_DIAS_CIERRE = parseInt(process.env.PRESU_DIAS_CIERRE || "11");
+// Días de retraso máximo de un toque que no se ha podido enviar (chat en
+// pausa, plantilla rechazada…) antes de pasárselo a una persona.
+const PRESU_DIAS_RETRASO_MAX = parseInt(process.env.PRESU_DIAS_RETRASO_MAX || "3");
 const presuActivo = () => (process.env.PRESU_AUTO || "off").toLowerCase() === "on";
 
 function esCasoPresupuestoEnviado(caso) {
@@ -1060,7 +1063,7 @@ async function enviarToquePresu(seg, numToque) {
   estado.presu = { ref: seg.ref, caseId: seg.caseId };
 
   const nombreCorto = seg.nombre ? String(seg.nombre).trim().split(/\s+/)[0] : "de nuevo";
-  const r = await enviarPlantillaWoztell(clave, plantilla, [nombreCorto]);
+  const r = await enviarPlantillaWoztell(clave, plantilla, [nombreCorto], process.env.PRESU_TEMPLATE_LANG || "es");
   if (!r.ok) {
     estado.step = "menu_principal";
     return { ok: false, motivo: "plantilla_fallida", detalle: r.detalle, reintentar: true };
@@ -1125,6 +1128,32 @@ async function barridoToquesPresupuesto(forzarVentana) {
           continue;
         }
       } catch (e) { console.error("[Presupuestos] Re-verificación falló:", e.message); }
+
+      // Si el toque lleva ya varios días de retraso (chat en pausa, plantilla
+      // rechazada…), Marta deja de intentarlo: un "¿pudiste verlo?" 3 semanas
+      // tarde queda raro y reintentar cada 30 min no sirve. Se pasa a una
+      // persona con el motivo, para que llame.
+      const retraso = ahora - ((desde || 0) + dias * dia);
+      if (retraso > PRESU_DIAS_RETRASO_MAX * dia) {
+        const ultimoMotivo = (presuHistorial.find((h) => h.ref === seg.ref)?.resultado || "desconocido").split(":")[0];
+        seg.estado = "no_enviable";
+        guardarSeguimientosPresu();
+        resumen.cierres++;
+        registrarResultadoPresu(seg.ref, `no_enviable_aviso_al_equipo (${ultimoMotivo})`);
+        try {
+          const dest = determinarDestinatarioNotificacion();
+          const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+          await enviarNotificacionAgente(dest, {
+            nombre: seg.nombre || `Cliente ${String(seg.clave).slice(-9)}`,
+            telefono: String(seg.clave).slice(-9),
+            direccion: "—",
+            descripcion: `Presupuesto ${seg.ref}: Marta no pudo hacer el seguimiento ${numToque} por WhatsApp (${ultimoMotivo}) — conviene llamada comercial`,
+            apertura: ahoraStr, refParte: seg.ref, agente: "Seguimiento presupuestos",
+          });
+        } catch (e) { console.error("[Presupuestos] Aviso de no enviable falló:", e.message); }
+        crearNotaParte(seg.caseId, `Seguimiento presupuesto (Marta): no se pudo enviar el seguimiento ${numToque} por WhatsApp (${ultimoMotivo}). Avisado el equipo para llamada comercial.`);
+        continue;
+      }
 
       const r = await enviarToquePresu(seg, numToque);
       if (r.ok) {

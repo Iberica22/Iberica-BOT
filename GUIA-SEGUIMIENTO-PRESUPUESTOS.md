@@ -69,6 +69,8 @@ y protege la marca. Nunca precios, nunca urgencia artificial.)
 | `PRESU_TEMPLATE` | `seguimiento_presupuesto` | Toque 1 |
 | `PRESU_TEMPLATE2` | `seguimiento_presupuesto_3` | Toque 2 (si falta, reutiliza la 1) |
 | `PRESU_DIAS_TOQUE1/2/CIERRE` | 3 / 8 / 11 | Opcional, para ajustar la cadencia |
+| `PRESU_TEMPLATE_LANG` | `es` | Idioma de las plantillas en Meta. Si en el WhatsApp Manager aparecen como "Español (España)", poner `es_ES` |
+| `PRESU_DIAS_RETRASO_MAX` | 3 | Si un mensaje lleva más de estos días sin poder enviarse (chat en pausa, plantilla rechazada), Marta lo deja, avisa al equipo para llamar y lo anota en el parte (estado `no_enviable`) |
 
 ## Panel
 
