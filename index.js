@@ -97,6 +97,22 @@ function esEnvioDelBot(telefono, texto) {
 // generan evento de texto en el webhook, pero sí un acuse SENT con su wamid:
 // un acuse cuyo wamid no está aquí = mensaje escrito a mano → auto-takeover.
 const wamidsBot = new Map(); // wamid -> ts
+// El registro se guarda en Redis: tras un redeploy el bot sigue sabiendo
+// qué mensajes envió él, y entonces cualquier acuse con un wamid que no
+// conoce es de un mensaje escrito por una persona (WhatsApp Web, app,
+// inbox de Woztell). Sin esta memoria, esos acuses había que ignorarlos.
+let wamidsCargados = false;          // registro recuperado de Redis al arrancar
+const arranqueTs = Date.now();       // envíos de la instancia anterior aún en vuelo
+let guardadoWamidsPendiente = null;
+function guardarWamidsBot() {
+  if (guardadoWamidsPendiente) return;
+  guardadoWamidsPendiente = setTimeout(() => {
+    guardadoWamidsPendiente = null;
+    const limite = Date.now() - 3 * 24 * 3600 * 1000;
+    const vivos = [...wamidsBot].filter(([, ts]) => ts >= limite).slice(-3000);
+    redisSet("iberica:wamidsBot", Object.fromEntries(vivos));
+  }, 2000);
+}
 function registrarWamidsEnvio(resData) {
   try {
     for (const r of resData?.sendResult?.result || []) {
@@ -106,11 +122,21 @@ function registrarWamidsEnvio(resData) {
       ].filter(Boolean);
       for (const id of ids) wamidsBot.set(id, Date.now());
     }
-    if (wamidsBot.size > 500) {
-      const limite = Date.now() - 24 * 3600 * 1000;
+    if (wamidsBot.size > 3000) {
+      const limite = Date.now() - 3 * 24 * 3600 * 1000;
       for (const [id, ts] of wamidsBot) if (ts < limite) wamidsBot.delete(id);
     }
+    guardarWamidsBot();
   } catch (_) { /* nunca romper un envío por el registro */ }
+}
+
+// Últimos acuses con wamid ajeno y qué se hizo con ellos (diagnóstico del
+// auto-takeover, persistente): /admin/api/takeover-diag
+let acusesAjenos = [];
+function registrarAcuseAjeno(entrada) {
+  acusesAjenos.unshift({ ts: new Date().toISOString(), ...entrada });
+  if (acusesAjenos.length > 40) acusesAjenos.pop();
+  redisSet("iberica:acusesAjenos", acusesAjenos);
 }
 
 // Un mensaje SALIENTE que el bot no envió = una persona de la oficina está
@@ -218,26 +244,38 @@ function manejarAcuseEnvio(body, tipo) {
   if (wamidsBot.has(wamid)) return;        // acuse de un envío del propio bot
   if (NOMBRES_AGENTES[telefono]) return;   // notificación interna a un agente
 
+  const conocido = () => conversaciones[telefono] || actividad[telefono];
+  let pista = "";
+  try { pista = Buffer.from(String(wamid).replace(/^wamid\./, ""), "base64").toString("latin1").replace(/[^\x20-\x7e]/g, "·").slice(0, 32); } catch (_) {}
+
   // Mensaje escrito desde la app del móvil → intervención humana segura.
   // Ojo: usar `actividad` (persistente en Redis) y no solo `conversaciones`
   // (memoria volátil): tras un redeploy las conversaciones se vacían y las
   // respuestas manuales deben seguir pausando/renovando la pausa igualmente.
   if (esWamidDeApp(wamid)) {
-    if (!conversaciones[telefono] && !actividad[telefono]) return; // número desconocido
+    if (!conocido()) return; // número desconocido
+    registrarAcuseAjeno({ tipo, telefono, pista, accion: "pausa (app)" });
     pausarPorIntervencion(canal, telefono, "respuesta manual desde la app de WhatsApp");
     return;
   }
 
-  // DELIVERED/READ de envíos API con wamid desconocido: pueden ser mensajes
-  // del propio bot anteriores a un reinicio (el registro vive en memoria) —
-  // no son señal fiable. Solo el acuse SENT desconocido indica un envío
-  // API ajeno (p. ej. inbox de Woztell), con margen por si el acuse llega
-  // antes que la respuesta HTTP del envío del bot.
-  if (tipo !== "SENT") return;
+  // Wamid desconocido con aspecto de envío API: un mensaje escrito desde
+  // WhatsApp Web o el inbox de Woztell. SENT y DELIVERED se usan como señal
+  // (con 4 s de margen por si el acuse llega antes que la respuesta HTTP del
+  // envío del bot). DELIVERED solo cuando el registro de wamids del bot es
+  // fiable: recuperado de Redis y pasados 2 min del arranque (mensajes de la
+  // instancia anterior aún en vuelo). READ nunca: puede llegar días después
+  // de un mensaje del bot anterior a que existiera el registro persistente.
+  const registroFiable = wamidsCargados && Date.now() - arranqueTs > 2 * 60 * 1000;
+  if (tipo === "READ" || (tipo === "DELIVERED" && !registroFiable)) {
+    if (conocido()) registrarAcuseAjeno({ tipo, telefono, pista, accion: "ignorado" + (tipo === "READ" ? "" : " (registro aún no fiable)") });
+    return;
+  }
   setTimeout(() => {
     if (wamidsBot.has(wamid)) return;
-    if (!conversaciones[telefono] && !actividad[telefono]) return;
-    pausarPorIntervencion(canal, telefono, "respuesta manual de oficina (acuse SENT ajeno)");
+    if (!conocido()) return;
+    registrarAcuseAjeno({ tipo, telefono, pista, accion: "pausa" });
+    pausarPorIntervencion(canal, telefono, `respuesta manual de oficina (acuse ${tipo} ajeno)`);
   }, 4000);
 }
 
@@ -1333,6 +1371,13 @@ async function cargarEstadoDesdeRedis() {
     redisGet("iberica:captacionLeads"),
   ]);
   const historialGuardado = await redisGet("iberica:resenasHistorial");
+  const wamidsGuardados = await redisGet("iberica:wamidsBot");
+  if (wamidsGuardados) {
+    for (const [id, ts] of Object.entries(wamidsGuardados)) wamidsBot.set(id, ts);
+  }
+  if (process.env.UPSTASH_REDIS_REST_URL) wamidsCargados = true;
+  const acusesGuardados = await redisGet("iberica:acusesAjenos");
+  if (Array.isArray(acusesGuardados)) acusesAjenos = acusesGuardados;
   if (Array.isArray(historialGuardado)) resenasHistorial = historialGuardado;
   const enCursoGuardadas = await redisGet("iberica:resenasEnCurso");
   if (enCursoGuardadas) Object.assign(resenasEnCurso, enCursoGuardadas);
@@ -1992,7 +2037,7 @@ async function clasificarConIA(estado, mensaje) {
 - presupuesto: quiere precio o presupuesto de un trabajo, puerta, cerradura u otro producto.
 - servicios: pide información general (qué hacéis, horario, zona, garantías, financiación...).
 - expediente: pregunta cómo va su parte, reparación, expediente o aviso ya abierto.
-- agente: pide expresamente hablar con una persona o que le llamen.
+- agente: pide expresamente hablar con una persona o que le llamen, o pide algo administrativo que solo puede resolver la oficina (una factura, un recibo, un pago, un cambio de datos).
 - saludo: solo saluda, se despide o da las gracias, sin petición concreta.
 - es_maquina: pregunta si está hablando con un robot, una IA o una persona.
 - no_claro: nada de lo anterior encaja con claridad.
@@ -3498,6 +3543,17 @@ app.get("/admin/api/ia-log", authAdmin, (req, res) => {
 });
 
 // ── Últimos eventos crudos del webhook (diagnóstico) ─────────
+// Auto-takeover: últimos acuses de mensajes que el bot no envió y qué se
+// hizo con cada uno (pausa / ignorado), para revisar un "Marta habló encima".
+app.get("/admin/api/takeover-diag", authAdmin, (req, res) => {
+  res.json({
+    registroWamidsPersistente: wamidsCargados,
+    wamidsDelBotRecordados: wamidsBot.size,
+    minutosDesdeArranque: Math.round((Date.now() - arranqueTs) / 60000),
+    acusesAjenos,
+  });
+});
+
 app.get("/admin/api/eventos", authAdmin, (req, res) => {
   res.json({ total: eventosRecientes.length, eventos: eventosRecientes });
 });
