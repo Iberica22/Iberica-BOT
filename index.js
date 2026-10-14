@@ -1884,7 +1884,9 @@ const BASE_CONOCIMIENTO = `
 EMPRESA: Ibérica Servi & Security S.L. ("Ibérica Seguridad") — seguridad, cerrajería, automatismos y domótica.
 UBICACIÓN: C/ San Leonardo 34, 04004 Almería. Trabajamos en Almería y provincia.
 CONTACTO: Teléfono 950 088 086 · Email pedidos@ibericaseguridad.com
-HORARIO DE OFICINA: Lunes a viernes, 9:00–19:00.
+HORARIO DE LA TIENDA Y EXPOSICIÓN (atención al público en C/ San Leonardo 34: copias de llaves, venta en mostrador, ver puertas y cerraduras): lunes a viernes, de 9:30 a 13:30 y de 17:00 a 20:00. Al mediodía, de 13:30 a 17:00, está CERRADA.
+URGENCIAS DE CERRAJERÍA: 24 horas, todos los días.
+OTROS HORARIOS (sábados, festivos, agosto…): no figuran aquí; si preguntan, no los supongas: di que te lo confirma un compañero.
 EXPERIENCIA: Más de 20 años en el sector. Fabricación, instalación y asesoramiento propio, sin depender de terceros.
 
 SERVICIOS:
