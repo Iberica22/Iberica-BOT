@@ -723,13 +723,18 @@ async function enviarPlantillaWoztell(telefono, elementName, parametros, idioma 
 
 // Deja constancia de la respuesta de la encuesta en el propio parte del CRM
 // (Notas del módulo Partes), para no perder la información que daba PERE.
+// El título de la nota sale del tema: seguimiento de presupuesto o encuesta
+function tituloNota(contenido) {
+  return /^Seguimiento presupuesto/.test(String(contenido)) ? "Seguimiento presupuesto (Marta)" : "Encuesta postventa (Marta)";
+}
+
 async function crearNotaParte(caseId, contenido) {
   if (!caseId) return;
   try {
     const token = await obtenerTokenZoho();
     await axios.post(
       "https://www.zohoapis.eu/crm/v2/Notes",
-      { data: [{ Note_Title: "Encuesta postventa (Marta)", Note_Content: contenido, Parent_Id: caseId, se_module: "Cases" }] },
+      { data: [{ Note_Title: tituloNota(contenido), Note_Content: contenido, Parent_Id: caseId, se_module: "Cases" }] },
       { headers: { Authorization: `Zoho-oauthtoken ${token}`, "Content-Type": "application/json" } }
     );
     console.log(`[Reseñas] Respuesta registrada como nota en el parte ${caseId}`);
@@ -1035,18 +1040,25 @@ function esCasoPresupuestoEnviado(caso) {
          normalizaTxt(caso?.Subestado || "").includes("enviado");
 }
 
-// Tipo de cliente del presupuesto. PRESU_CAMPO_TIPO = nombre técnico de un
-// campo de Zoho que lo diga, si existe; si no, se deduce: compañía de
-// seguros (mismo criterio que reseñas), comunidad o empresa por el nombre,
-// y particular en el resto. Comprobable en /admin/api/presupuestos-tipos.
+// Tipo de cliente del presupuesto, por el campo "Origen del Parte" de Zoho:
+//   Compañía de Seguros → compania · Administrador de Fincas → comunidad
+//   Teléfono, Tienda, Recomendación de terceros → particular (siempre)
+// PRESU_CAMPO_TIPO fuerza otro campo. Si el origen está vacío (-None-), se
+// deduce: compañía (mismo criterio que reseñas), comunidad o empresa por el
+// nombre, y particular en el resto. Comprobable en /admin/api/presupuestos-tipos.
+function campoOrigenParte(caso) {
+  const campo = process.env.PRESU_CAMPO_TIPO || Object.keys(caso || {}).find((k) => /origen/i.test(k));
+  const v = campo ? caso[campo] : null;
+  return v ? normalizaTxt(typeof v === "object" ? (v.name || "") : String(v)) : "";
+}
+
 function tipoClientePresu(caso, contacto = {}) {
-  const campo = process.env.PRESU_CAMPO_TIPO;
-  if (campo && caso?.[campo]) {
-    const v = normalizaTxt(typeof caso[campo] === "object" ? (caso[campo].name || "") : String(caso[campo]));
+  const v = campoOrigenParte(caso);
+  if (v && v !== "-none-") {
     if (v.includes("compa") || v.includes("segur")) return "compania";
-    if (v.includes("comunidad")) return "comunidad";
+    if (v.includes("administrador") || v.includes("finca") || v.includes("comunidad")) return "comunidad";
     if (v.includes("empresa")) return "empresa";
-    if (v.includes("particular")) return "particular";
+    if (/telefono|tienda|recomendacion|particular/.test(v)) return "particular";
   }
   if (parteDeAseguradora(caso)) return "compania";
   const nombres = normalizaTxt([caso?.Related_To?.name, caso?.Account_Name?.name, contacto.Account_Name?.name, contacto.Full_Name]
@@ -1071,7 +1083,11 @@ function importePresu(caso) {
     if (v == null || typeof v === "object") continue;
     if (/importe|amount|total|precio/i.test(k)) { const n = leer(v); if (n) return n; }
   }
-  return null;
+  // Si no hay campo, la cantidad en euros que ponga la descripción del parte
+  // ("Importe: 1.250 €", "presupuesto 800€"); con varias, la mayor (el total).
+  const desc = String(caso?.Description || "");
+  const cantidades = [...desc.matchAll(/(\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?\s?(?:€|eur(?:os)?\b)/gi)].map((m) => leer(m[0])).filter(Boolean);
+  return cantidades.length ? Math.max(...cantidades) : null;
 }
 
 // Seguimientos creados con el protocolo anterior (toques 1-2-3) → modelo

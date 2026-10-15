@@ -26,16 +26,17 @@ Fuentes: [Sandler, prospects que no devuelven la llamada](https://go.sandler.com
    "Presupuesto" y Subestado "enviado" entra en seguimiento. Solo entran los
    que pasan a ese estado después de activar el circuito. Los teléfonos de
    relleno (000000000…) se descartan.
-2. **Tipo de cliente**, deducido del parte:
-   - **compañía**: el parte es de aseguradora;
-   - **comunidad**: el nombre lleva "comunidad", "propietarios", "CP"…;
-   - **empresa**: S.L., S.A., la empresa del contacto…;
-   - **particular**: el resto.
+2. **Tipo de cliente**, sacado del campo **Origen del Parte** de Zoho:
+   - Compañía de Seguros → **compañía**;
+   - Administrador de Fincas → **comunidad**;
+   - Teléfono, Tienda y Recomendación de terceros → **particular**, siempre.
 
-   Si en Zoho hay un campo con el tipo, se indica en `PRESU_CAMPO_TIPO`. El
-   **importe** se lee del campo `PRESU_CAMPO_IMPORTE`, o si no, del primer
-   campo que se llame importe/total/precio. Para comprobarlo:
-   `/admin/api/presupuestos-tipos`.
+   Si el origen está vacío (-None-), el bot lo deduce del nombre (comunidad,
+   empresa con S.L./S.A., o particular).
+
+   **Importe**: del campo **Importe** del parte si existe y está relleno; si
+   no, de la cantidad en euros que ponga la descripción del parte (si hay
+   varias, la mayor). Para comprobarlo: `/admin/api/presupuestos-tipos`.
 3. **Plan por tipo** (días desde el envío). Los WhatsApp salen solo L-V de
    9:30 a 19:00 y nunca en festivo:
 
