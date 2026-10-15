@@ -1884,9 +1884,12 @@ const BASE_CONOCIMIENTO = `
 EMPRESA: Ibérica Servi & Security S.L. ("Ibérica Seguridad") — seguridad, cerrajería, automatismos y domótica.
 UBICACIÓN: C/ San Leonardo 34, 04004 Almería. Trabajamos en Almería y provincia.
 CONTACTO: Teléfono 950 088 086 · Email pedidos@ibericaseguridad.com
-HORARIO DE LA TIENDA Y EXPOSICIÓN (atención al público en C/ San Leonardo 34: copias de llaves, venta en mostrador, ver puertas y cerraduras): lunes a viernes, de 9:30 a 13:30 y de 17:00 a 20:00. Al mediodía, de 13:30 a 17:00, está CERRADA.
+HORARIO DE LA TIENDA Y EXPOSICIÓN (atención al público en C/ San Leonardo 34: copias de llaves, venta en mostrador, ver puertas y cerraduras):
+- Todo el año salvo agosto: lunes a viernes, de 9:30 a 13:30 y de 17:00 a 20:00. Al mediodía, de 13:30 a 17:00, está CERRADA.
+- En agosto: lunes a viernes, solo de mañana, de 9:30 a 13:30.
+- Sábados y domingos: CERRADA, todo el año.
 URGENCIAS DE CERRAJERÍA: 24 horas, todos los días.
-OTROS HORARIOS (sábados, festivos, agosto…): no figuran aquí; si preguntan, no los supongas: di que te lo confirma un compañero.
+FESTIVOS: no figuran aquí; si preguntan por un festivo concreto, no lo supongas: di que te lo confirma un compañero.
 EXPERIENCIA: Más de 20 años en el sector. Fabricación, instalación y asesoramiento propio, sin depender de terceros.
 
 SERVICIOS:
@@ -1901,6 +1904,24 @@ SERVICIOS:
 - Instalación de puertas con retirada de la antigua incluida y 3 años de garantía por escrito.
 - Financiación disponible: 12 cuotas sin intereses con Cetelem.
 `;
+
+// La IA no sabe qué día es: se le da la fecha de hoy (hora de Madrid) y el
+// horario de tienda que aplica hoy, para que no confunda agosto con el
+// resto del año ni diga "abrimos" un sábado.
+function fechaYHorarioDeHoy(ahora = new Date()) {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", weekday: "long", day: "numeric", month: "long", year: "numeric" })
+      .formatToParts(ahora).map((x) => [x.type, x.value])
+  );
+  const mes = Number(new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Madrid", month: "numeric" }).format(ahora));
+  const finde = ["sábado", "domingo"].includes(p.weekday);
+  const hoy = finde
+    ? "hoy la tienda está CERRADA (fin de semana)"
+    : mes === 8
+      ? "hoy la tienda abre solo de mañana, de 9:30 a 13:30 (horario de agosto)"
+      : "hoy la tienda abre de 9:30 a 13:30 y de 17:00 a 20:00";
+  return `HOY: ${p.weekday} ${p.day} de ${p.month} de ${p.year} (hora de Madrid) — ${hoy}.`;
+}
 
 // ── Últimos eventos crudos del webhook (GET /admin/api/eventos) ──
 const eventosRecientes = [];
@@ -2098,7 +2119,8 @@ REGLAS INQUEBRANTABLES:
 6. No hables de otras empresas o competidores, ni de temas ajenos a los servicios de Ibérica Seguridad: reconduce con amabilidad.
 
 FICHA DE LA EMPRESA:
-${BASE_CONOCIMIENTO}`,
+${BASE_CONOCIMIENTO}
+${fechaYHorarioDeHoy()}`,
       },
       ...estado.historialIA,
       ...mensajesExtra,

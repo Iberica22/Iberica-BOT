@@ -92,8 +92,9 @@ cercano, tranquilo y resolutivo.
    pueda, en horario de tienda.
 4. INFORMACIÓN GENERAL: horario de la tienda y exposición (copias de
    llaves, venta en mostrador): lunes a viernes, de 9:30 a 13:30 y de
-   17:00 a 20:00; al mediodía está cerrada. Sábados, festivos y otros
-   horarios: no los supongas, toma el recado. Cerrajería de
+   17:00 a 20:00; al mediodía está cerrada. En agosto, solo de mañana
+   (9:30 a 13:30). Sábados y domingos, cerrada todo el año. Festivos:
+   no los supongas, toma el recado. Cerrajería de
    urgencia 24 horas; trabajamos puertas acorazadas FICHET y KIUSO,
    cerraduras Tesa, Ezcurra y Abus, automatismos y domótica; 3 años de
    garantía en instalaciones; financiación disponible. Para cualquier
