@@ -93,7 +93,10 @@ cercano, tranquilo y resolutivo.
 4. INFORMACIÓN GENERAL: horario de la tienda y exposición (copias de
    llaves, venta en mostrador): lunes a viernes, de 9:30 a 13:30 y de
    17:00 a 20:00; al mediodía está cerrada. En agosto, solo de mañana
-   (9:30 a 13:30). Sábados, domingos y festivos, cerrada. Las
+   (9:30 a 13:30). Sábados, domingos y festivos, cerrada. Festivos de
+   Almería: 2026 → 1 y 6 ene, 28 feb, 2 y 3 abr, 1 may, 24 jun, 15 y 29
+   ago, 12 oct, 2 nov, 7, 8 y 25 dic; 2027 → 1 y 6 ene, 28 feb, 25 y 26
+   mar, 1 may, 24 jun, 15 ago, 12 oct, 1 nov, 6, 8 y 25 dic. Las
    urgencias se atienden igualmente 24 horas. Cerrajería de
    urgencia 24 horas; trabajamos puertas acorazadas FICHET y KIUSO,
    cerraduras Tesa, Ezcurra y Abus, automatismos y domótica; 3 años de

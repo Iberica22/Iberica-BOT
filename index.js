@@ -1889,7 +1889,7 @@ HORARIO DE LA TIENDA Y EXPOSICIÓN (atención al público en C/ San Leonardo 34:
 - En agosto: lunes a viernes, solo de mañana, de 9:30 a 13:30.
 - Sábados y domingos: CERRADA, todo el año.
 URGENCIAS DE CERRAJERÍA: 24 horas, todos los días.
-FESTIVOS: la tienda y exposición CIERRAN todos los festivos (nacionales, de Andalucía y locales de Almería). Las urgencias de cerrajería siguen atendiéndose 24 horas. Si alguien quiere venir un día concreto y no sabes si es festivo, recuérdale que los festivos está cerrada; no afirmes que un día es o no es festivo.
+FESTIVOS: la tienda y exposición CIERRAN todos los festivos (nacionales, de Andalucía y locales de Almería). Las urgencias de cerrajería siguen atendiéndose 24 horas. Los festivos de las próximas semanas te los indica la línea "PRÓXIMOS FESTIVOS" al final de esta ficha; para fechas que no aparezcan ahí, no afirmes si un día es o no festivo.
 EXPERIENCIA: Más de 20 años en el sector. Fabricación, instalación y asesoramiento propio, sin depender de terceros.
 
 SERVICIOS:
@@ -1905,9 +1905,32 @@ SERVICIOS:
 - Financiación disponible: 12 cuotas sin intereses con Cetelem.
 `;
 
-// La IA no sabe qué día es: se le da la fecha de hoy (hora de Madrid) y el
-// horario de tienda que aplica hoy, para que no confunda agosto con el
-// resto del año ni diga "abrimos" un sábado.
+// Festivos de Almería capital en los que cierra la tienda. Fuente: los
+// calendarios laborales 2026 y 2027 de calendarios.ideal.es, que se
+// declaran provisionales; revisar cuando salgan los oficiales.
+const FESTIVOS_ALMERIA = {
+  "2026-01-01": "Año Nuevo", "2026-01-06": "Epifanía del Señor", "2026-02-28": "Día de Andalucía",
+  "2026-04-02": "Jueves Santo", "2026-04-03": "Viernes Santo", "2026-05-01": "Fiesta del Trabajo",
+  "2026-06-24": "San Juan Bautista", "2026-08-15": "Asunción de la Virgen", "2026-08-29": "Virgen del Mar",
+  "2026-10-12": "Fiesta Nacional de España", "2026-11-02": "Todos los Santos (trasladado al lunes)",
+  "2026-12-07": "Día de la Constitución (trasladado al lunes)", "2026-12-08": "La Inmaculada Concepción",
+  "2026-12-25": "Navidad",
+  "2027-01-01": "Año Nuevo", "2027-01-06": "Epifanía del Señor", "2027-02-28": "Día de Andalucía",
+  "2027-03-25": "Jueves Santo", "2027-03-26": "Viernes Santo", "2027-05-01": "Fiesta del Trabajo",
+  "2027-06-24": "San Juan Bautista", "2027-08-15": "Asunción de la Virgen", "2027-10-12": "Fiesta Nacional de España",
+  "2027-11-01": "Todos los Santos", "2027-12-06": "Día de la Constitución", "2027-12-08": "La Inmaculada Concepción",
+  "2027-12-25": "Navidad",
+};
+const ULTIMO_FESTIVO_CONOCIDO = Object.keys(FESTIVOS_ALMERIA).sort().at(-1);
+
+// Fecha YYYY-MM-DD en hora de Madrid
+function diaMadrid(fecha) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).format(fecha);
+}
+
+// La IA no sabe qué día es: se le da la fecha de hoy (hora de Madrid), el
+// horario de tienda que aplica hoy y los próximos festivos, para que no
+// confunda agosto con el resto del año ni diga "abrimos" un festivo.
 function fechaYHorarioDeHoy(ahora = new Date()) {
   const p = Object.fromEntries(
     new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", weekday: "long", day: "numeric", month: "long", year: "numeric" })
@@ -1915,12 +1938,30 @@ function fechaYHorarioDeHoy(ahora = new Date()) {
   );
   const mes = Number(new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Madrid", month: "numeric" }).format(ahora));
   const finde = ["sábado", "domingo"].includes(p.weekday);
-  const hoy = finde
-    ? "hoy la tienda está CERRADA (fin de semana)"
-    : mes === 8
-      ? "hoy la tienda abre solo de mañana, de 9:30 a 13:30 (horario de agosto)"
-      : "hoy la tienda abre de 9:30 a 13:30 y de 17:00 a 20:00";
-  return `HOY: ${p.weekday} ${p.day} de ${p.month} de ${p.year} (hora de Madrid) — ${hoy}.`;
+  const festivoHoy = FESTIVOS_ALMERIA[diaMadrid(ahora)];
+  const hoy = festivoHoy
+    ? `hoy es festivo (${festivoHoy}): la tienda está CERRADA`
+    : finde
+      ? "hoy la tienda está CERRADA (fin de semana)"
+      : mes === 8
+        ? "hoy la tienda abre solo de mañana, de 9:30 a 13:30 (horario de agosto)"
+        : "hoy la tienda abre de 9:30 a 13:30 y de 17:00 a 20:00";
+
+  // Festivos de los próximos 60 días, para preguntas tipo "¿abrís el lunes?"
+  const hoyIso = diaMadrid(ahora);
+  const limite = diaMadrid(new Date(ahora.getTime() + 60 * 24 * 3600 * 1000));
+  const fmt = new Intl.DateTimeFormat("es-ES", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long" });
+  const proximos = Object.entries(FESTIVOS_ALMERIA)
+    .filter(([d]) => d > hoyIso && d <= limite)
+    .map(([d, nombre]) => `${fmt.format(new Date(`${d}T12:00:00Z`))} (${nombre})`);
+  const lineaFestivos = proximos.length
+    ? `PRÓXIMOS FESTIVOS, tienda cerrada: ${proximos.join("; ")}.`
+    : "PRÓXIMOS FESTIVOS: ninguno en los próximos 60 días.";
+  const aviso = limite > ULTIMO_FESTIVO_CONOCIDO
+    ? " Más allá de esas fechas no tienes el calendario: no afirmes si un día es festivo."
+    : "";
+
+  return `HOY: ${p.weekday} ${p.day} de ${p.month} de ${p.year} (hora de Madrid) — ${hoy}.\n${lineaFestivos}${aviso}`;
 }
 
 // ── Últimos eventos crudos del webhook (GET /admin/api/eventos) ──
