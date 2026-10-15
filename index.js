@@ -549,32 +549,11 @@ function claveClientePorTelefono(t) {
 // plantilla se configura en RESENA_TEMPLATE (p. ej. "encuesta_postventa"),
 // con una única variable {{1}} = nombre del cliente.
 async function enviarPlantillaResena(telefono, nombre) {
-  const estado = conversaciones[telefono];
-  try {
-    const res = await axios.post(
-      `https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`,
-      {
-        channelId: estado.channelId,
-        memberId:  estado.memberId,
-        response: [{
-          type: "TEMPLATE",
-          elementName: process.env.RESENA_TEMPLATE,
-          languageCode: "es",
-          components: [{ type: "body", parameters: [{ type: "text", text: nombre || "de nuevo" }] }],
-        }],
-      }
-    );
-    registrarWamidsEnvio(res.data);
-    const ok = res.data?.ok === 1 && res.data?.sendResult?.result?.[0]?.ok !== 0;
-    if (!ok) console.error("[Reseñas] ❌ Plantilla rechazada:", JSON.stringify(res.data).slice(0, 300));
-    // detalle: el motivo del rechazo, para que quede en el historial de
-    // /admin/api/resenas-stats y no haya que ir a buscar el log del momento
-    return { ok, detalle: ok ? null : JSON.stringify(res.data?.sendResult?.result?.[0] || res.data).slice(0, 180) };
-  } catch (e) {
-    console.error("[Reseñas] ❌ Error enviando plantilla:", e.response?.data || e.message);
-    return { ok: false, detalle: JSON.stringify(e.response?.data || e.message).slice(0, 180) };
-  }
+  const r = await enviarPlantillaConRespaldo(telefono, process.env.RESENA_TEMPLATE, [nombre || "de nuevo"], "es", nombre);
+  if (!r.ok) console.error("[Reseñas] ❌ Plantilla rechazada:", String(r.detalle).slice(0, 300));
+  return r;
 }
+
 
 // ── Envío "en frío": clientes que nunca han escrito al WhatsApp ──────
 // Woztell solo envía a members existentes. Para encuestar TODOS los partes
@@ -645,6 +624,49 @@ async function buscarOCrearMiembroWoztell(channelId, telefono, nombre) {
   const nuevo = m?.createMember?.member?._id;
   if (!nuevo) throw new Error("createMember_sin_member_en_respuesta");
   return { memberId: nuevo, creado: true };
+}
+
+// Las plantillas de Meta pertenecen a la cuenta de UN número: las de Marta
+// existen en la del número del BOT (WOZTELL_CHANNEL_ID). Si el cliente ya
+// tiene chat con otro número de la empresa y desde ahí Meta responde que la
+// plantilla no existe (error 132001), se reenvía desde el número del BOT.
+// Las respuestas del cliente por ese número las recoge Marta igualmente.
+async function enviarPlantillaConRespaldo(clave, elementName, parametros, idioma, nombre) {
+  const estado = conversaciones[clave];
+  let r = await enviarPlantillaWoztell(clave, elementName, parametros, idioma);
+  const canalBot = process.env.WOZTELL_CHANNEL_ID;
+  if (!r.ok && /\b132001\b/.test(String(r.detalle || "")) && canalBot && estado.channelId !== canalBot) {
+    const canalOriginal = estado.channelId, memberOriginal = estado.memberId;
+    try {
+      const m = await buscarOCrearMiembroWoztell(canalBot, clave, nombre);
+      estado.channelId = canalBot;
+      estado.memberId  = m.memberId;
+      r = await enviarPlantillaWoztell(clave, elementName, parametros, idioma);
+      if (r.ok) {
+        console.log(`[Plantilla] ${elementName} no existe en el canal ${canalOriginal}: enviada a ${clave} desde el número del BOT`);
+        r.desdeCanalBot = true;
+      } else {
+        estado.channelId = canalOriginal;
+        estado.memberId  = memberOriginal;
+      }
+    } catch (e) {
+      estado.channelId = canalOriginal;
+      estado.memberId  = memberOriginal;
+      console.error(`[Plantilla] Respaldo por el número del BOT falló para ${clave}:`, e.message);
+    }
+  }
+  return r;
+}
+
+// ¿Teléfono al que tiene sentido escribir? Descarta los de relleno de Zoho
+// (000000000, 111111111...) y los españoles que no empiezan por 6, 7, 8 o 9.
+function telefonoValido(clave) {
+  const d = String(clave || "").replace(/\D/g, "");
+  if (d.startsWith("34") && d.length === 11) {
+    const nacional = d.slice(2);
+    return /^[6789]\d{8}$/.test(nacional) && !/^(\d)\1+$/.test(nacional);
+  }
+  return d.length >= 10 && !/^(\d)\1+$/.test(d);
 }
 
 // Envío genérico de una plantilla aprobada de Meta al chat de un cliente
@@ -730,6 +752,7 @@ async function pedirResena({ telefono, nombre, refParte, caseId }) {
     if (d.length < 9) return { ok: false, motivo: "telefono_invalido_en_zoho" };
     clave = d.length === 9 ? `34${d}` : d;
   }
+  if (!telefonoValido(clave)) return { ok: false, motivo: "telefono_invalido_en_zoho" };
   // No interrumpir si una persona de la oficina está atendiendo el chat AHORA.
   // Ojo: con el auto-takeover casi todos los clientes activos acaban con una
   // pausa de 6h (la oficina remata el trabajo por WhatsApp justo antes de
@@ -1073,6 +1096,12 @@ async function sondearPresupuestosEnviados() {
       }
       const d = String(telefonoCli).replace(/\D/g, "");
       const clave = claveClientePorTelefono(telefonoCli) || (d.length === 9 ? `34${d}` : d);
+      if (!telefonoValido(clave)) {
+        seguimientosPresu[caso.id] = { caseId: caso.id, ref: caso.ref_Parte || caso.id, estado: "cancelado", enviadoTs };
+        registrarResultadoPresu(caso.ref_Parte || caso.id, `telefono_invalido_en_zoho: ${telefonoCli}`);
+        guardarSeguimientosPresu();
+        continue;
+      }
       seguimientosPresu[caso.id] = {
         caseId: caso.id, ref: caso.ref_Parte || caso.id,
         telefono: telefonoCli, clave, nombre: nombreCli,
@@ -1102,6 +1131,7 @@ async function enviarToquePresu(seg, numToque) {
   if (!plantilla) return { ok: false, motivo: "sin_plantilla_configurada" };
 
   const clave = seg.clave;
+  if (!telefonoValido(clave)) return { ok: false, motivo: "telefono_invalido_en_zoho" };
   let memberId  = conversaciones[clave]?.memberId  || actividad[clave]?.memberId;
   let channelId = conversaciones[clave]?.channelId || actividad[clave]?.canalId;
   // Si una persona está atendiendo el chat, no molestar: se reintenta luego
@@ -1127,7 +1157,7 @@ async function enviarToquePresu(seg, numToque) {
   estado.presu = { ref: seg.ref, caseId: seg.caseId };
 
   const nombreCorto = seg.nombre ? String(seg.nombre).trim().split(/\s+/)[0] : "de nuevo";
-  const r = await enviarPlantillaWoztell(clave, plantilla, [nombreCorto], process.env.PRESU_TEMPLATE_LANG || "es");
+  const r = await enviarPlantillaConRespaldo(clave, plantilla, [nombreCorto], process.env.PRESU_TEMPLATE_LANG || "es", seg.nombre);
   if (!r.ok) {
     estado.step = "menu_principal";
     alertarPlantillaRota(plantilla, r.detalle);
