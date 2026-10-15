@@ -1068,26 +1068,68 @@ function tipoClientePresu(caso, contacto = {}) {
   return "particular";
 }
 
-// Importe del presupuesto, si Zoho lo tiene. PRESU_CAMPO_IMPORTE = nombre
-// técnico del campo; si no, el primer campo con "importe", "amount",
-// "total" o "precio" en el nombre que traiga un número.
-function importePresu(caso) {
-  const leer = (v) => {
-    const t = String(v).replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
-    const n = parseFloat(t);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  };
+// Importe del presupuesto. El campo "Importe" del parte NO sirve (ahí va lo
+// facturado para el informe diario), así que se lee, por este orden:
+//   1. PRESU_CAMPO_IMPORTE, si algún día hay un campo propio
+//   2. la nota más reciente de la oficina con el importe ("Presupuesto: 850 €")
+//   3. la descripción del parte, solo si pone "presupuesto/importe/total: X"
+// En una nota manda la cantidad que va tras "presupuesto", "importe" o
+// "total"; si no hay, la mayor cantidad en euros.
+function leerCantidad(v) {
+  const t = String(v).replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
+  const n = parseFloat(t);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function cantidadEnTexto(texto, soloConClave = false) {
+  const txt = String(texto || "");
+  const num = String.raw`(\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?`;
+  const conClave = [...txt.matchAll(new RegExp(String.raw`(?:presupuesto|importe|total)[^\d\n]{0,20}?` + num, "gi"))]
+    .map((m) => leerCantidad(m[0].replace(/^\D+/, ""))).filter(Boolean);
+  if (conClave.length) return conClave.at(-1);
+  if (soloConClave) return null;
+  const euros = [...txt.matchAll(new RegExp(num + String.raw`\s?(?:€|eur(?:os)?\b)`, "gi"))].map((m) => leerCantidad(m[0])).filter(Boolean);
+  return euros.length ? Math.max(...euros) : null;
+}
+
+function importePresu(caso, notas = []) {
   const campo = process.env.PRESU_CAMPO_IMPORTE;
-  if (campo) return caso?.[campo] != null ? leer(caso[campo]) : null;
-  for (const [k, v] of Object.entries(caso || {})) {
-    if (v == null || typeof v === "object") continue;
-    if (/importe|amount|total|precio/i.test(k)) { const n = leer(v); if (n) return n; }
+  if (campo && caso?.[campo] != null) { const n = leerCantidad(caso[campo]); if (n) return n; }
+  const deOficina = (notas || [])
+    .filter((n) => !/\(Marta\)/.test(n.Note_Title || "") && !/^(Seguimiento presupuesto|Encuesta postventa)/.test(n.Note_Content || ""))
+    .sort((x, y) => String(y.Created_Time || "").localeCompare(String(x.Created_Time || "")));
+  for (const n of deOficina) {
+    const texto = `${n.Note_Title || ""} ${n.Note_Content || ""}`;
+    if (!/presupuesto|importe|total|€|eur/i.test(texto)) continue;
+    const c = cantidadEnTexto(texto);
+    if (c) return c;
   }
-  // Si no hay campo, la cantidad en euros que ponga la descripción del parte
-  // ("Importe: 1.250 €", "presupuesto 800€"); con varias, la mayor (el total).
-  const desc = String(caso?.Description || "");
-  const cantidades = [...desc.matchAll(/(\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?\s?(?:€|eur(?:os)?\b)/gi)].map((m) => leer(m[0])).filter(Boolean);
-  return cantidades.length ? Math.max(...cantidades) : null;
+  // En la descripción suele haber otros precios: solo con "presupuesto/importe/total"
+  return cantidadEnTexto(caso?.Description, true);
+}
+
+async function notasDelParte(caseId, token) {
+  if (!caseId) return [];
+  try {
+    const r = await axios.get(`https://www.zohoapis.eu/crm/v2/Cases/${caseId}/Notes`, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+    return r.data?.data || [];
+  } catch (e) {
+    if (e.response?.status !== 204) console.error("[Presupuestos] Notas del parte:", e.message);
+    return [];
+  }
+}
+
+// Si el importe no estaba al registrar el seguimiento (la oficina pone la
+// nota después), se vuelve a mirar antes de decidir la llamada del día 7.
+async function refrescarImportePresu(seg) {
+  try {
+    const token = await obtenerTokenZoho();
+    const r = await axios.get(`https://www.zohoapis.eu/crm/v2/Cases/${seg.caseId}`, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+    const caso = r.data?.data?.[0];
+    if (!caso) return;
+    const importe = importePresu(caso, await notasDelParte(seg.caseId, token));
+    if (importe) { seg.importe = importe; guardarSeguimientosPresu(); }
+  } catch (e) { console.error("[Presupuestos] Refrescar importe:", e.message); }
 }
 
 // Seguimientos creados con el protocolo anterior (toques 1-2-3) → modelo
@@ -1207,7 +1249,7 @@ async function sondearPresupuestosEnviados() {
       const ref = caso.ref_Parte || caso.id;
       const base = {
         version: 2, caseId: caso.id, ref, nombre: nombreCli, enviadoTs,
-        tipo: tipoClientePresu(caso, contacto), importe: importePresu(caso),
+        tipo: tipoClientePresu(caso, contacto), importe: importePresu(caso, await notasDelParte(caso.id, token)),
         enviados: 0, avisos: {},
       };
       // Compañía: sin Marta (no se escribe nunca al asegurado). Solo agenda
@@ -1446,6 +1488,10 @@ async function agendaPresupuestos({ forzar = false } = {}) {
       const emails = plan.emails.filter((d) => dias >= d);
       if (emails.length) add(emails.map((d) => `email${d}`), "email", `día ${emails.at(-1)}`);
       const sinRespuesta = ["en_curso", "fin_marta", "no_enviable"].includes(seg.estado);
+      if (plan.llamada7 && sinRespuesta && dias >= 7 && !seg.importe && !seg.avisos.llamada7 && !seg.importeRevisado) {
+        seg.importeRevisado = true;
+        await refrescarImportePresu(seg);
+      }
       if (plan.llamada7 && sinRespuesta && seg.importe > PRESU_IMPORTE_LLAMADA && dias >= 7) {
         add("llamada7", "llamar", `día 7, ${Math.round(seg.importe)} €`);
       }
@@ -4261,7 +4307,7 @@ app.get("/admin/api/presupuestos-tipos", authAdmin, async (req, res) => {
       salida.push({
         ref: caso.ref_Parte || caso.id, cliente: caso.Related_To?.name || null,
         estado: `${caso.Status || "?"} / ${caso.Subestado || "—"}`,
-        tipoDeducido: tipoClientePresu(caso, contacto), importeDeducido: importePresu(caso),
+        tipoDeducido: tipoClientePresu(caso, contacto), importeDeducido: importePresu(caso, await notasDelParte(caso.id, token)),
         empresaDelContacto: contacto.Account_Name?.name || null,
         camposPosibles,
       });

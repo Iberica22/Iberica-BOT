@@ -34,9 +34,13 @@ Fuentes: [Sandler, prospects que no devuelven la llamada](https://go.sandler.com
    Si el origen está vacío (-None-), el bot lo deduce del nombre (comunidad,
    empresa con S.L./S.A., o particular).
 
-   **Importe**: del campo **Importe** del parte si existe y está relleno; si
-   no, de la cantidad en euros que ponga la descripción del parte (si hay
-   varias, la mayor). Para comprobarlo: `/admin/api/presupuestos-tipos`.
+   **Importe**: el campo Importe del parte NO se usa (ahí va lo facturado).
+   La oficina pone una **nota en el parte**, por ejemplo «Presupuesto:
+   850 €». Si hay varias cantidades, manda la que va tras «presupuesto»,
+   «importe» o «total». Las notas de Marta no cuentan. Si no hay nota, se
+   mira la descripción, pero solo si pone «Presupuesto: X €». La nota puede
+   ponerse después: el día 7 se vuelve a mirar antes de decidir la llamada.
+   Para comprobarlo: `/admin/api/presupuestos-tipos`.
 3. **Plan por tipo** (días desde el envío). Los WhatsApp salen solo L-V de
    9:30 a 19:00 y nunca en festivo:
 
