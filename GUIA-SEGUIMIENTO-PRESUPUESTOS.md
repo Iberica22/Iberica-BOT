@@ -105,6 +105,7 @@ sobre el presupuesto: ¿has decidido aparcarlo? Si es así, con un simple
 | Variable | Valor | Notas |
 |---|---|---|
 | `PRESU_AUTO` | `on` | Interruptor general |
+| `PRESU_RESPONSABLE` | `mari` | Quién recibe TODOS los avisos de presupuestos (respuestas, sin respuesta, no enviables, plantilla rota): `mari`, `nieves` o `guardia`. Por defecto, Mari |
 | `PRESU_TEMPLATE` | `seguimiento_presupuesto` | Mensaje 1 (o `seguimiento_presupuesto_v2` cuando esté aprobada) |
 | `PRESU_TEMPLATE2` | `seguimiento_presupuesto_3` | Mensaje 2 (si falta, reutiliza la 1) |
 | `PRESU_TEMPLATE3` | `seguimiento_presupuesto_aparcado` | Mensaje 3 «¿has aparcado...?». Sin definir = no hay mensaje 3 |

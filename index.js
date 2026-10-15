@@ -684,7 +684,7 @@ async function alertarPlantillaRota(nombre, detalle) {
   alertasPlantilla[nombre] = Date.now();
   console.error(`[Plantilla] 🚨 ${nombre} rota — aviso al equipo`);
   try {
-    const dest = determinarDestinatarioNotificacion();
+    const dest = String(nombre).startsWith("seguimiento_presupuesto") ? destinatarioPresupuestos() : determinarDestinatarioNotificacion();
     const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
     await enviarNotificacionAgente(dest, {
       nombre: "AVISO DEL BOT",
@@ -1197,7 +1197,7 @@ async function barridoToquesPresupuesto(forzarVentana) {
         resumen.cierres++;
         registrarResultadoPresu(seg.ref, "sin_respuesta_aviso_al_equipo");
         try {
-          const dest = determinarDestinatarioNotificacion();
+          const dest = destinatarioPresupuestos();
           const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
           await enviarNotificacionAgente(dest, {
             nombre: seg.nombre || `Cliente ${String(seg.clave).slice(-9)}`,
@@ -1247,7 +1247,7 @@ async function barridoToquesPresupuesto(forzarVentana) {
         resumen.cierres++;
         registrarResultadoPresu(seg.ref, `no_enviable_aviso_al_equipo (${ultimoMotivo})`);
         try {
-          const dest = determinarDestinatarioNotificacion();
+          const dest = destinatarioPresupuestos();
           const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
           await enviarNotificacionAgente(dest, {
             nombre: seg.nombre || `Cliente ${String(seg.clave).slice(-9)}`,
@@ -1283,6 +1283,15 @@ async function barridoToquesPresupuesto(forzarVentana) {
   } finally {
     barridoPresuEnCurso = false;
   }
+}
+
+// Los avisos del seguimiento de presupuestos (respuestas, sin respuesta,
+// no se pudo enviar, plantilla rota) van a la persona responsable del
+// seguimiento, no a quien esté de turno. Hoy: Mari. Se cambia con
+// PRESU_RESPONSABLE (mari / nieves / guardia) sin tocar código.
+function destinatarioPresupuestos() {
+  const quien = (process.env.PRESU_RESPONSABLE || "mari").toLowerCase();
+  return NOTIFICACIONES_CONFIG[quien] || determinarDestinatarioNotificacion();
 }
 
 /**
@@ -2600,7 +2609,7 @@ async function procesarRespuestaPresu(telefono) {
 
   const avisar = async (titulo, texto = msg) => {
     try {
-      const dest = determinarDestinatarioNotificacion();
+      const dest = destinatarioPresupuestos();
       const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
       await enviarNotificacionAgente(dest, {
         nombre: estado.nombre || seg?.nombre || `Cliente ${telefono.slice(-9)}`,
