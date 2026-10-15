@@ -54,7 +54,7 @@ function pausarBot(clave, horas, motivo) {
   // Y si tenía un seguimiento de presupuesto en marcha, también pasa a la
   // persona: se cancela la cadencia para no pisar su conversación.
   for (const seg of Object.values(seguimientosPresu)) {
-    if (seg.clave === tel && ["pendiente", "toque1", "toque2"].includes(seg.estado)) {
+    if (seg.clave === tel && ["pendiente", "toque1", "toque2", "toque3", "aplazado"].includes(seg.estado)) {
       seg.estado = "cancelado";
       guardarSeguimientosPresu();
       registrarResultadoPresu(seg.ref, "cancelado_intervencion_humana");
@@ -1125,9 +1125,12 @@ async function sondearPresupuestosEnviados() {
 // frío de reseñas: si el cliente no tiene chat conocido, se crea su
 // contacto en Woztell en el canal principal (WOZTELL_CHANNEL_ID).
 async function enviarToquePresu(seg, numToque) {
-  const plantilla = numToque === 1
-    ? process.env.PRESU_TEMPLATE
-    : (process.env.PRESU_TEMPLATE2 || process.env.PRESU_TEMPLATE);
+  const plantilla = {
+    1: process.env.PRESU_TEMPLATE,
+    2: process.env.PRESU_TEMPLATE2 || process.env.PRESU_TEMPLATE,
+    3: process.env.PRESU_TEMPLATE3,
+    4: process.env.PRESU_TEMPLATE_RECONTACTO || process.env.PRESU_TEMPLATE2 || process.env.PRESU_TEMPLATE,
+  }[numToque];
   if (!plantilla) return { ok: false, motivo: "sin_plantilla_configurada" };
 
   const clave = seg.clave;
@@ -1154,7 +1157,7 @@ async function enviarToquePresu(seg, numToque) {
   estado.memberId  = memberId;
   estado.channelId = channelId;
   estado.step  = "presu_respuesta";
-  estado.presu = { ref: seg.ref, caseId: seg.caseId };
+  estado.presu = { ref: seg.ref, caseId: seg.caseId, toque: numToque };
 
   const nombreCorto = seg.nombre ? String(seg.nombre).trim().split(/\s+/)[0] : "de nuevo";
   const r = await enviarPlantillaConRespaldo(clave, plantilla, [nombreCorto], process.env.PRESU_TEMPLATE_LANG || "es", seg.nombre);
@@ -1180,10 +1183,15 @@ async function barridoToquesPresupuesto(forzarVentana) {
     const ahora = Date.now();
     const dia = 24 * 3600 * 1000;
     for (const seg of Object.values(seguimientosPresu)) {
-      if (!["pendiente", "toque1", "toque2"].includes(seg.estado)) continue;
+      if (!["pendiente", "toque1", "toque2", "toque3", "aplazado"].includes(seg.estado)) continue;
 
-      // ¿Cierre sin respuesta? (tras el toque 2)
-      if (seg.estado === "toque2" && ahora - (seg.toque2Ts || 0) > (PRESU_DIAS_CIERRE - PRESU_DIAS_TOQUE2) * dia) {
+      // ¿Cierre sin respuesta? Tras el último toque: el 2.º, o el 3.º si
+      // está activado (PRESU_TEMPLATE3) y no venimos de un recontacto acordado.
+      const usaToque3 = !!process.env.PRESU_TEMPLATE3 && !seg.recontactado;
+      const ultimoToqueTs = seg.estado === "toque3" ? seg.toque3Ts : seg.toque2Ts;
+      const cierraYa = (seg.estado === "toque2" && !usaToque3) || seg.estado === "toque3";
+      if (cierraYa && ahora - (ultimoToqueTs || 0) > (PRESU_DIAS_CIERRE - PRESU_DIAS_TOQUE2) * dia) {
+        const nToques = seg.estado === "toque3" ? 3 : 2;
         seg.estado = "cerrado_sin_respuesta";
         guardarSeguimientosPresu();
         resumen.cierres++;
@@ -1195,18 +1203,20 @@ async function barridoToquesPresupuesto(forzarVentana) {
             nombre: seg.nombre || `Cliente ${String(seg.clave).slice(-9)}`,
             telefono: String(seg.clave).slice(-9),
             direccion: "—",
-            descripcion: `Presupuesto ${seg.ref} SIN RESPUESTA tras 2 seguimientos de Marta — conviene llamada comercial`,
+            descripcion: `Presupuesto ${seg.ref} SIN RESPUESTA tras ${nToques} seguimientos de Marta — conviene llamada comercial`,
             apertura: ahoraStr, refParte: seg.ref, agente: "Seguimiento presupuestos",
           });
         } catch (e) { console.error("[Presupuestos] Aviso de cierre falló:", e.message); }
-        crearNotaParte(seg.caseId, "Seguimiento presupuesto (Marta): sin respuesta tras 2 toques por WhatsApp. Avisado el equipo para llamada comercial.");
+        crearNotaParte(seg.caseId, `Seguimiento presupuesto (Marta): sin respuesta tras ${nToques} toques por WhatsApp. Avisado el equipo para llamada comercial.`);
         continue;
       }
 
-      const numToque = seg.estado === "pendiente" ? 1 : (seg.estado === "toque1" ? 2 : null);
+      // Qué toque toca: 1 y 2 (cadencia), 3 = "¿has aparcado el presupuesto?"
+      // (opcional), 4 = recontacto en la fecha que acordó el cliente.
+      const numToque = { pendiente: 1, toque1: 2, aplazado: 4 }[seg.estado] || (seg.estado === "toque2" && usaToque3 ? 3 : null);
       if (!numToque) continue;
-      const desde = numToque === 1 ? seg.enviadoTs : seg.toque1Ts;
-      const dias  = numToque === 1 ? PRESU_DIAS_TOQUE1 : (PRESU_DIAS_TOQUE2 - PRESU_DIAS_TOQUE1);
+      const desde = { 1: seg.enviadoTs, 2: seg.toque1Ts, 3: seg.toque2Ts, 4: seg.recontactoTs }[numToque];
+      const dias  = { 1: PRESU_DIAS_TOQUE1, 2: PRESU_DIAS_TOQUE2 - PRESU_DIAS_TOQUE1, 3: PRESU_DIAS_CIERRE - PRESU_DIAS_TOQUE2, 4: 0 }[numToque];
       if (ahora - (desde || 0) < dias * dia) continue;
 
       // Re-verificar en el CRM que sigue esperando respuesta
@@ -1254,7 +1264,9 @@ async function barridoToquesPresupuesto(forzarVentana) {
       const r = await enviarToquePresu(seg, numToque);
       if (r.ok) {
         if (numToque === 1) { seg.estado = "toque1"; seg.toque1Ts = ahora; }
-        else { seg.estado = "toque2"; seg.toque2Ts = ahora; }
+        else if (numToque === 2) { seg.estado = "toque2"; seg.toque2Ts = ahora; }
+        else if (numToque === 3) { seg.estado = "toque3"; seg.toque3Ts = ahora; }
+        else { seg.estado = "toque2"; seg.toque2Ts = ahora; seg.recontactado = true; } // recontacto: si no contesta, aviso y fin
         guardarSeguimientosPresu();
         registrarResultadoPresu(seg.ref, `toque${numToque}_enviado`);
         console.log(`[Presupuestos] Toque ${numToque} enviado — ${seg.ref} (${seg.clave})`);
@@ -2098,11 +2110,16 @@ const ESQUEMA_CLASIFICACION = {
 };
 
 // Clasifica la respuesta de un cliente al seguimiento de su presupuesto.
-// Devuelve: acepta | precio | aplaza | declina | duda.
-// Primero la IA (entiende "de momento no voy a hacer nada", "lo dejamos
-// para después del verano"…); si falla o tarda, palabras clave.
-const CATEGORIAS_PRESU = ["acepta", "precio", "aplaza", "declina", "duda"];
-async function clasificarRespuestaPresu(mensaje) {
+// Devuelve: acepta | precio | aplaza | consulta | declina | duda.
+// Primero la IA (entiende "de momento no voy a hacer nada", "lo tengo que
+// ver con la comunidad"…); si falla o tarda, palabras clave.
+// `toque` = el mensaje de Marta al que responde: tras el 3.º ("¿has
+// aparcado el presupuesto?") un "sí" significa que NO sigue adelante.
+const CATEGORIAS_PRESU = ["acepta", "precio", "aplaza", "consulta", "declina", "duda"];
+async function clasificarRespuestaPresu(mensaje, toque) {
+  const contexto = toque === 3
+    ? `\nCONTEXTO: Marta le acaba de preguntar si ha decidido aparcar o dejar el presupuesto. Un "sí", "sí, lo dejamos" o similar es "declina"; un "no, sigo interesado" es "aplaza" salvo que pida seguir adelante ya ("acepta").`
+    : "";
   try {
     const res = await Promise.race([
       openai.chat.completions.create({
@@ -2116,9 +2133,10 @@ async function clasificarRespuestaPresu(mensaje) {
 `Un cliente de Ibérica Seguridad (cerrajería y puertas de seguridad) responde al seguimiento de un presupuesto que le enviamos. Clasifica su respuesta con UNA sola palabra:
 - acepta: quiere seguir adelante, acepta, pregunta cuándo podéis venir a hacerlo.
 - precio: le parece caro, pide descuento, lo compara con otro presupuesto.
-- aplaza: no por ahora, de momento no, más adelante, se lo está pensando, tiene que consultarlo, no va a hacer nada por el momento.
+- aplaza: no por ahora, de momento no, más adelante, se lo está pensando, no va a hacer nada por el momento.
+- consulta: la decisión no es solo suya; tiene que verlo o consultarlo con otra persona o grupo (pareja, familia, socio, jefe, la comunidad de vecinos, la junta, el administrador).
 - declina: no lo va a hacer, ya lo hizo con otra empresa, no le interesa.
-- duda: hace una pregunta concreta o pide algo que debe responder una persona.
+- duda: hace una pregunta concreta o pide algo que debe responder una persona.${contexto}
 Responde solo la palabra.`,
           },
           { role: "user", content: mensaje },
@@ -2129,15 +2147,63 @@ Responde solo la palabra.`,
     const cat = normalizaTxt(res.choices?.[0]?.message?.content || "").replace(/[^a-z]/g, "");
     if (CATEGORIAS_PRESU.includes(cat)) return cat;
   } catch (e) { console.error("[Presupuestos] Clasificación IA falló, uso palabras clave:", e.message); }
-  return clasificarRespuestaPresuPorPalabras(mensaje);
+  return clasificarRespuestaPresuPorPalabras(mensaje, toque);
 }
-function clasificarRespuestaPresuPorPalabras(mensaje) {
-  const low = normalizaTxt(mensaje);
+function clasificarRespuestaPresuPorPalabras(mensaje, toque) {
+  const low = normalizaTxt(mensaje).trim();
+  if (toque === 3 && /^(si|sí|vale|ok|efectivamente|asi es)\b/.test(low) && !/adelante|seguir|hacerlo/.test(low)) return "declina";
   if (/(adelante|acepto|acepta(mos)?|de acuerdo|confirmo|hacedlo|cuando (pueden|podeis|puedan)|vale,? si|queremos hacerlo|me lo quedo)/.test(low)) return "acepta";
   if (/(caro|carisimo|precio|coste|cuesta|barato|rebaja|descuento|competencia|otro presupuesto)/.test(low)) return "precio";
+  if (/(consultar|comentar|hablar|ver|decidir) (lo |la |con )?(con )?(mi |la |el |los )?(mujer|marido|pareja|familia|socio|jefe|hijo|hija|comunidad|junta|vecinos|administrador)|(la |una )?junta( de vecinos)?|comunidad de (vecinos|propietarios)|administrador de fincas/.test(low)) return "consulta";
   if (/(pensar|pensando|mas adelante|todavia no|aun no|ahora no|por (el|ahora|lo pronto)|de momento|por ahora|ya (te|os) (dire|digo)|consultar|decidir|dudando|no lo (tengo|tenemos) claro|no (voy|vamos) a hacer nada)/.test(low)) return "aplaza";
   if (/(no (lo )?(quiero|queremos|vamos a hacerlo|va a ser)|no me interesa|descartado|ya lo (hice|hicimos|contrate|contratamos)|otra empresa|dejalo|no,? gracias)/.test(low)) return "declina";
   return "duda";
+}
+
+// Tras un "me lo pienso" o "lo tengo que consultar", Marta pregunta qué
+// falta y cuándo volver a escribir. Esto extrae de la respuesta: cuándo
+// (en días desde hoy), qué información o duda queda pendiente, y si en
+// realidad ya decide (acepta / declina).
+async function extraerSiguientePaso(mensaje) {
+  try {
+    const hoy = diaMadrid(new Date());
+    const res = await Promise.race([
+      openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0,
+        max_tokens: 120,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+`Hoy es ${hoy}. Un cliente responde a: "¿Qué te queda por resolver para decidirte y cuándo te viene bien que te vuelva a escribir?" sobre un presupuesto de cerrajería o puertas. Devuelve SOLO este JSON:
+{"dias": número de días desde hoy hasta cuando quiere que le escriban (null si no da ninguna fecha o plazo), "falta": texto breve con la información, duda o condición que le falta (null si nada), "decision": "acepta" | "declina" | "ninguna"}
+"la semana que viene" = 7, "dentro de un mes" = 30, "después de la junta del día 20" = días hasta ese día + 1. No inventes plazos que no diga.`,
+          },
+          { role: "user", content: mensaje },
+        ],
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
+    ]);
+    const j = JSON.parse(res.choices?.[0]?.message?.content || "{}");
+    return {
+      dias: Number.isFinite(j.dias) ? j.dias : null,
+      falta: j.falta ? String(j.falta).slice(0, 200) : null,
+      decision: ["acepta", "declina"].includes(j.decision) ? j.decision : "ninguna",
+    };
+  } catch (e) {
+    console.error("[Presupuestos] Extracción IA del siguiente paso falló, uso palabras clave:", e.message);
+  }
+  const low = normalizaTxt(mensaje);
+  let dias = null;
+  const m = low.match(/(\d+)\s*(dia|dias|semana|semanas|mes|meses)/);
+  if (m) dias = Number(m[1]) * (m[2].startsWith("semana") ? 7 : m[2].startsWith("mes") ? 30 : 1);
+  else if (/(quince dias|dos semanas)/.test(low)) dias = 14;
+  else if (/semana (que viene|proxima)|proxima semana/.test(low)) dias = 7;
+  else if (/(mes que viene|proximo mes|un mes)/.test(low)) dias = 30;
+  const cat = clasificarRespuestaPresuPorPalabras(mensaje);
+  return { dias, falta: null, decision: ["acepta", "declina"].includes(cat) ? cat : "ninguna" };
 }
 
 async function clasificarConIA(estado, mensaje) {
@@ -2499,83 +2565,137 @@ async function consultarExpediente(telefono, estado) {
 }
 
 // Respuesta de un cliente a un seguimiento de presupuesto (todos los
-// mensajes que mandó seguidos, juntos).
-// Manual de objeciones: una respuesta amable por tipo, sin presionar y
-// sin precios (líneas rojas de marca). Todo queda anotado en el parte y
-// el equipo recibe aviso cuando hay señal de venta o de pérdida.
+// mensajes que mandó seguidos, juntos). Dos pasos:
+//   presu_respuesta  → qué contesta al mensaje de Marta (acepta, precio,
+//                      se lo piensa, lo tiene que consultar, no, duda)
+//   presu_siguiente  → tras "me lo pienso" o "lo tengo que consultar", su
+//                      respuesta a "¿qué te falta y cuándo te escribo?"
+// Técnicas comerciales aplicadas:
+//   - Sandler: dejar claro que un "no" es una respuesta aceptable, para
+//     que el cliente no tenga que dar largas.
+//   - Gong Labs: ante "tengo que pensarlo", preguntar qué falta por
+//     resolver y acordar el siguiente contacto (con fecha).
+//   - Sandler, decisiones en comité: si decide con otros (pareja, socio,
+//     junta de la comunidad), preguntar con quién, para cuándo y qué
+//     información necesita para presentarlo.
+// Líneas rojas de marca: sin precios ni presión. Todo queda anotado en el
+// parte y el equipo recibe aviso cuando hay señal de venta o de pérdida,
+// o cuando el cliente pide información.
 const PRESU_ESPERA_MS = parseInt(process.env.PRESU_ESPERA_MS || "20000");
+const NO_ES_PROBLEMA = "Y si al final no os encaja, me lo dices con total confianza, ¿vale? Un no también nos ayuda 🙂";
+
 async function procesarRespuestaPresu(telefono) {
   const estado = conversaciones[telefono];
-  if (!estado || estado.step !== "presu_respuesta") return;
+  if (!estado || !["presu_respuesta", "presu_siguiente"].includes(estado.step)) return;
   const msg = (estado.presuBuffer || []).join("\n").trim();
   estado.presuBuffer = [];
   if (!msg) return;
+  const paso   = estado.step;
   const ref    = estado.presu?.ref || "—";
   const caseId = estado.presu?.caseId || null;
+  const toque  = estado.presu?.toque || null;
   const seg    = caseId ? seguimientosPresu[caseId] : null;
   if (seg) { seg.estado = "respondido"; guardarSeguimientosPresu(); }
   estado.step = "menu_principal";
 
-  const avisar = async (titulo) => {
+  const avisar = async (titulo, texto = msg) => {
     try {
       const dest = determinarDestinatarioNotificacion();
       const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
       await enviarNotificacionAgente(dest, {
         nombre: estado.nombre || seg?.nombre || `Cliente ${telefono.slice(-9)}`,
         telefono: telefono.slice(-9), direccion: "—",
-        descripcion: `${titulo} (presupuesto ${ref}): "${msg.slice(0, 150)}"`,
+        descripcion: `${titulo} (presupuesto ${ref}): "${String(texto).slice(0, 150)}"`,
         apertura: ahoraStr, refParte: ref, agente: "Seguimiento presupuestos",
       });
     } catch (e) { console.error("[Presupuestos] Aviso falló:", e.message); }
   };
 
-  // Qué quiere decir el cliente: la IA entiende las mil formas de decirlo
-  // ("de momento no voy a hacer nada" es aplazar, no una duda); las
-  // palabras clave quedan solo de respaldo si la IA no responde.
-  const categoria = await clasificarRespuestaPresu(msg);
-  console.log(`[Presupuestos] Respuesta de ${telefono} (${ref}) clasificada como: ${categoria}`);
-
-  // 1) Señal de venta: quiere seguir adelante
-  if (categoria === "acepta") {
+  const acepta = async () => {
     await enviarMensaje(telefono, "¡Genial! 🙌 Le paso ahora mismo tu confirmación al equipo y te llaman para cuadrar fechas. ¡Gracias por confiar en Ibérica!");
     crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente ACEPTA. Respuesta: "${msg.slice(0, 300)}"`);
     registrarResultadoPresu(ref, "respondio_ACEPTA");
     await avisar("🎯 PRESUPUESTO ACEPTADO");
+  };
+  const declina = async () => {
+    await enviarMensaje(telefono, "Entendido, ¡y gracias por decírnoslo! 🙏 Te guardamos el presupuesto por si más adelante lo retomas. Aquí nos tienes para lo que necesites 🔐");
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente DECLINA. Motivo/respuesta: "${msg.slice(0, 300)}"`);
+    registrarResultadoPresu(ref, "respondio_declina");
+    await avisar("❌ Presupuesto declinado");
+  };
+
+  // ── Paso 2: qué falta y cuándo volver a escribir ──
+  if (paso === "presu_siguiente") {
+    const sig = await extraerSiguientePaso(msg);
+    console.log(`[Presupuestos] Siguiente paso de ${telefono} (${ref}):`, JSON.stringify(sig));
+    if (sig.decision === "acepta") return acepta();
+    if (sig.decision === "declina") return declina();
+
+    const partes = [];
+    if (sig.falta) {
+      partes.push(`le falta: ${sig.falta}`);
+      await avisar("📋 El cliente necesita información para decidir", sig.falta);
+    }
+    if (sig.dias !== null) {
+      const dias = Math.min(90, Math.max(3, Math.round(sig.dias)));
+      const cuando = new Date(Date.now() + dias * 24 * 3600 * 1000);
+      if (seg) { seg.estado = "aplazado"; seg.recontactoTs = cuando.getTime(); guardarSeguimientosPresu(); }
+      const fecha = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", weekday: "long", day: "numeric", month: "long" }).format(cuando);
+      await enviarMensaje(telefono, `¡Perfecto! Te vuelvo a escribir hacia el ${fecha}.${sig.falta ? " Y lo que necesitas se lo paso ya a un compañero." : ""} Cualquier cosa antes, aquí estoy 🙂`);
+      partes.push(`volver a escribir el ${fecha}`);
+      registrarResultadoPresu(ref, `recontacto_acordado_en_${dias}_dias`);
+    } else {
+      await enviarMensaje(telefono, `¡Perfecto! Te guardamos el presupuesto.${sig.falta ? " Lo que necesitas se lo paso ya a un compañero." : ""} Cuando lo tengáis claro, me escribes por aquí 🙂`);
+      registrarResultadoPresu(ref, "aplazado_sin_fecha");
+    }
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): siguiente paso — ${partes.join("; ") || "sin fecha ni pendientes"}. Respuesta: "${msg.slice(0, 300)}"`);
     return;
   }
-  // 2) Objeción de precio
+
+  // ── Paso 1: qué contesta al mensaje de Marta ──
+  const categoria = await clasificarRespuestaPresu(msg, toque);
+  console.log(`[Presupuestos] Respuesta de ${telefono} (${ref}) clasificada como: ${categoria}`);
+
+  if (categoria === "acepta") return acepta();
+  if (categoria === "declina") return declina();
+
   if (categoria === "precio") {
     await enviarMensaje(
       telefono,
-      "Te entiendo, es una inversión importante. Ten en cuenta que incluye la instalación por nuestro equipo propio y 3 años de garantía, y tenemos financiación para pagarlo con comodidad. Si quieres, un compañero te llama y ve contigo cómo ajustarlo — sin ningún compromiso 🙂"
+      "Te entiendo, es una inversión importante. Incluye la instalación por nuestro equipo propio y 3 años de garantía, y tenemos financiación para pagarlo con comodidad. Si quieres, un compañero te llama y ve contigo cómo ajustarlo, sin compromiso.\n" + NO_ES_PROBLEMA
     );
     crearNotaParte(caseId, `Seguimiento presupuesto (Marta): objeción de PRECIO. Respuesta: "${msg.slice(0, 300)}"`);
     registrarResultadoPresu(ref, "respondio_objecion_precio");
     await avisar("💶 Objeción de precio");
     return;
   }
-  // 3) Se lo está pensando / de momento no / más adelante
   if (categoria === "aplaza") {
-    await enviarMensaje(telefono, "¡Claro, sin ninguna prisa! 🙂 Te mantenemos el presupuesto, y cualquier duda que te surja mientras lo decides me la escribes por aquí y te la resuelvo.");
-    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): APLAZA / se lo piensa (no por ahora). Respuesta: "${msg.slice(0, 300)}"`);
+    await enviarMensaje(
+      telefono,
+      "¡Claro, sin ninguna prisa! 🙂 ¿Hay algo concreto que te quede por resolver para decidirte? Y dime hacia cuándo te viene bien que te vuelva a escribir.\n" + NO_ES_PROBLEMA
+    );
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): APLAZA / se lo piensa. Respuesta: "${msg.slice(0, 300)}"`);
     registrarResultadoPresu(ref, "respondio_aplaza");
+    estado.step = "presu_siguiente";
     return;
   }
-  // 4) Lo rechaza / lo hizo con otro
-  if (categoria === "declina") {
-    await enviarMensaje(telefono, "Entendido, ¡y gracias por decírnoslo! 🙏 Te guardamos el presupuesto por si más adelante lo retomas. Aquí nos tienes para lo que necesites 🔐");
-    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente DECLINA. Motivo/respuesta: "${msg.slice(0, 300)}"`);
-    registrarResultadoPresu(ref, "respondio_declina");
-    await avisar("❌ Presupuesto declinado");
+  if (categoria === "consulta") {
+    await enviarMensaje(
+      telefono,
+      "¡Claro, es normal decidirlo juntos! 🙂 ¿Con quién lo vais a ver y para cuándo, más o menos? Si para presentarlo te viene bien alguna información (opciones, fotos, garantía, financiación…), dímelo y un compañero te la prepara.\n" + NO_ES_PROBLEMA
+    );
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): lo tiene que CONSULTAR con otros. Respuesta: "${msg.slice(0, 300)}"`);
+    registrarResultadoPresu(ref, "respondio_consulta");
+    estado.step = "presu_siguiente";
     return;
   }
-  // 5) Cualquier otra cosa (dudas técnicas, cambios...) → persona
+
+  // Cualquier otra cosa (dudas técnicas, cambios...) → persona
   await enviarMensaje(telefono, "¡Buena pregunta! Se la paso ahora mismo a un compañero del equipo para que te conteste por aquí en breve 🙂");
   crearNotaParte(caseId, `Seguimiento presupuesto (Marta): duda/consulta del cliente: "${msg.slice(0, 300)}"`);
   registrarResultadoPresu(ref, "respondio_duda_derivada");
   await avisar("❓ Duda sobre presupuesto");
   pausarBot(`${estado.channelId}_${telefono}`, PAUSA_AGENTE_H, "duda de presupuesto derivada al equipo");
-  return;
 }
 
 // ============================================================
@@ -2713,7 +2833,7 @@ async function procesarMensaje(telefono, texto) {
   }
 
   // ── Respuesta a un seguimiento de presupuesto ───────────
-  if (estado.step === "presu_respuesta") {
+  if (estado.step === "presu_respuesta" || estado.step === "presu_siguiente") {
     // El cliente a veces escribe en varios mensajes ("Hola" + "vale,
     // adelante"): se juntan los que lleguen en PRESU_ESPERA_MS y se
     // clasifican como una sola respuesta.
@@ -4231,8 +4351,8 @@ app.post("/webhook", async (req, res) => {
     // respuesta: se reconstruye el paso presu_respuesta tras un redeploy.
     if (channelId === CANAL_SOPORTE && !(conversaciones[telefono]?.step || "").match(/^(resena_|presu_)/)) {
       const segAbierto = Object.values(seguimientosPresu).find(
-        (s) => s.clave === telefono && ["toque1", "toque2"].includes(s.estado) &&
-               Date.now() - (s.toque2Ts || s.toque1Ts || 0) < 7 * 24 * 3600 * 1000
+        (s) => s.clave === telefono && ["toque1", "toque2", "toque3"].includes(s.estado) &&
+               Date.now() - (s.toque3Ts || s.toque2Ts || s.toque1Ts || 0) < 7 * 24 * 3600 * 1000
       );
       if (segAbierto) {
         if (!conversaciones[telefono]) resetearConversacion(telefono);
@@ -4240,7 +4360,7 @@ app.post("/webhook", async (req, res) => {
         est.memberId  = memberId;
         est.channelId = channelId;
         est.step      = "presu_respuesta";
-        est.presu     = { ref: segAbierto.ref, caseId: segAbierto.caseId };
+        est.presu     = { ref: segAbierto.ref, caseId: segAbierto.caseId, toque: segAbierto.estado === "toque3" ? 3 : null };
         console.log(`[Presupuestos] Seguimiento reconstruido para ${telefono} (${segAbierto.ref})`);
       }
     }
