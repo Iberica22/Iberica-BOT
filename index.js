@@ -1889,7 +1889,7 @@ HORARIO DE LA TIENDA Y EXPOSICIÓN (atención al público en C/ San Leonardo 34:
 - En agosto: lunes a viernes, solo de mañana, de 9:30 a 13:30.
 - Sábados y domingos: CERRADA, todo el año.
 URGENCIAS DE CERRAJERÍA: 24 horas, todos los días.
-FESTIVOS: no figuran aquí; si preguntan por un festivo concreto, no lo supongas: di que te lo confirma un compañero.
+FESTIVOS: la tienda y exposición CIERRAN todos los festivos (nacionales, de Andalucía y locales de Almería). Las urgencias de cerrajería siguen atendiéndose 24 horas. Si alguien quiere venir un día concreto y no sabes si es festivo, recuérdale que los festivos está cerrada; no afirmes que un día es o no es festivo.
 EXPERIENCIA: Más de 20 años en el sector. Fabricación, instalación y asesoramiento propio, sin depender de terceros.
 
 SERVICIOS:
