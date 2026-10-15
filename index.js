@@ -649,6 +649,30 @@ async function buscarOCrearMiembroWoztell(channelId, telefono, nombre) {
 
 // Envío genérico de una plantilla aprobada de Meta al chat de un cliente
 // (requiere conversaciones[telefono] con memberId/channelId ya puestos).
+// Si Meta rechaza una plantilla (borrada, editada, en revisión...), avisa
+// al equipo en el momento: una vez por plantilla cada 24 h. Antes, una
+// plantilla rota pasaba días sin que nadie se enterara.
+const alertasPlantilla = {}; // { nombre: ts del último aviso }
+async function alertarPlantillaRota(nombre, detalle) {
+  // Solo errores de la PLANTILLA (códigos 132xxx de Meta: no existe, pausada,
+  // desactivada, parámetros...). Un fallo de un cliente concreto (número sin
+  // WhatsApp, etc.) no es una plantilla rota.
+  if (!/\b132\d{3}\b/.test(String(detalle || ""))) return;
+  if (Date.now() - (alertasPlantilla[nombre] || 0) < 24 * 3600 * 1000) return;
+  alertasPlantilla[nombre] = Date.now();
+  console.error(`[Plantilla] 🚨 ${nombre} rota — aviso al equipo`);
+  try {
+    const dest = determinarDestinatarioNotificacion();
+    const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+    await enviarNotificacionAgente(dest, {
+      nombre: "AVISO DEL BOT",
+      telefono: "—",
+      direccion: "—",
+      descripcion: `La plantilla de WhatsApp "${nombre}" ha dejado de funcionar y Marta no puede enviar esos mensajes. Revisarla en WhatsApp Manager. Error: ${String(detalle || "").slice(0, 120)}`,
+      apertura: ahoraStr, refParte: "—", agente: "Bot (plantillas)",
+    });
+  } catch (e) { console.error("[Plantilla] No se pudo avisar de la plantilla rota:", e.message); }
+}
 async function enviarPlantillaWoztell(telefono, elementName, parametros, idioma = "es") {
   const estado = conversaciones[telefono];
   try {
@@ -763,6 +787,7 @@ async function pedirResena({ telefono, nombre, refParte, caseId }) {
     const tpl = await enviarPlantillaResena(clave, nombreCorto);
     if (!tpl.ok) {
       estado.step = "menu_principal";
+      alertarPlantillaRota(process.env.RESENA_TEMPLATE, tpl.detalle);
       return { ok: false, motivo: "plantilla_fallida", detalle: tpl.detalle, reintentable: true };
     }
   } else {
@@ -1105,6 +1130,7 @@ async function enviarToquePresu(seg, numToque) {
   const r = await enviarPlantillaWoztell(clave, plantilla, [nombreCorto], process.env.PRESU_TEMPLATE_LANG || "es");
   if (!r.ok) {
     estado.step = "menu_principal";
+    alertarPlantillaRota(plantilla, r.detalle);
     return { ok: false, motivo: "plantilla_fallida", detalle: r.detalle, reintentar: true };
   }
   return { ok: true };
@@ -2442,6 +2468,86 @@ async function consultarExpediente(telefono, estado) {
       }
 }
 
+// Respuesta de un cliente a un seguimiento de presupuesto (todos los
+// mensajes que mandó seguidos, juntos).
+// Manual de objeciones: una respuesta amable por tipo, sin presionar y
+// sin precios (líneas rojas de marca). Todo queda anotado en el parte y
+// el equipo recibe aviso cuando hay señal de venta o de pérdida.
+const PRESU_ESPERA_MS = parseInt(process.env.PRESU_ESPERA_MS || "20000");
+async function procesarRespuestaPresu(telefono) {
+  const estado = conversaciones[telefono];
+  if (!estado || estado.step !== "presu_respuesta") return;
+  const msg = (estado.presuBuffer || []).join("\n").trim();
+  estado.presuBuffer = [];
+  if (!msg) return;
+  const ref    = estado.presu?.ref || "—";
+  const caseId = estado.presu?.caseId || null;
+  const seg    = caseId ? seguimientosPresu[caseId] : null;
+  if (seg) { seg.estado = "respondido"; guardarSeguimientosPresu(); }
+  estado.step = "menu_principal";
+
+  const avisar = async (titulo) => {
+    try {
+      const dest = determinarDestinatarioNotificacion();
+      const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+      await enviarNotificacionAgente(dest, {
+        nombre: estado.nombre || seg?.nombre || `Cliente ${telefono.slice(-9)}`,
+        telefono: telefono.slice(-9), direccion: "—",
+        descripcion: `${titulo} (presupuesto ${ref}): "${msg.slice(0, 150)}"`,
+        apertura: ahoraStr, refParte: ref, agente: "Seguimiento presupuestos",
+      });
+    } catch (e) { console.error("[Presupuestos] Aviso falló:", e.message); }
+  };
+
+  // Qué quiere decir el cliente: la IA entiende las mil formas de decirlo
+  // ("de momento no voy a hacer nada" es aplazar, no una duda); las
+  // palabras clave quedan solo de respaldo si la IA no responde.
+  const categoria = await clasificarRespuestaPresu(msg);
+  console.log(`[Presupuestos] Respuesta de ${telefono} (${ref}) clasificada como: ${categoria}`);
+
+  // 1) Señal de venta: quiere seguir adelante
+  if (categoria === "acepta") {
+    await enviarMensaje(telefono, "¡Genial! 🙌 Le paso ahora mismo tu confirmación al equipo y te llaman para cuadrar fechas. ¡Gracias por confiar en Ibérica!");
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente ACEPTA. Respuesta: "${msg.slice(0, 300)}"`);
+    registrarResultadoPresu(ref, "respondio_ACEPTA");
+    await avisar("🎯 PRESUPUESTO ACEPTADO");
+    return;
+  }
+  // 2) Objeción de precio
+  if (categoria === "precio") {
+    await enviarMensaje(
+      telefono,
+      "Te entiendo, es una inversión importante. Ten en cuenta que incluye la instalación por nuestro equipo propio y 3 años de garantía, y tenemos financiación para pagarlo con comodidad. Si quieres, un compañero te llama y ve contigo cómo ajustarlo — sin ningún compromiso 🙂"
+    );
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): objeción de PRECIO. Respuesta: "${msg.slice(0, 300)}"`);
+    registrarResultadoPresu(ref, "respondio_objecion_precio");
+    await avisar("💶 Objeción de precio");
+    return;
+  }
+  // 3) Se lo está pensando / de momento no / más adelante
+  if (categoria === "aplaza") {
+    await enviarMensaje(telefono, "¡Claro, sin ninguna prisa! 🙂 Te mantenemos el presupuesto, y cualquier duda que te surja mientras lo decides me la escribes por aquí y te la resuelvo.");
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): APLAZA / se lo piensa (no por ahora). Respuesta: "${msg.slice(0, 300)}"`);
+    registrarResultadoPresu(ref, "respondio_aplaza");
+    return;
+  }
+  // 4) Lo rechaza / lo hizo con otro
+  if (categoria === "declina") {
+    await enviarMensaje(telefono, "Entendido, ¡y gracias por decírnoslo! 🙏 Te guardamos el presupuesto por si más adelante lo retomas. Aquí nos tienes para lo que necesites 🔐");
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente DECLINA. Motivo/respuesta: "${msg.slice(0, 300)}"`);
+    registrarResultadoPresu(ref, "respondio_declina");
+    await avisar("❌ Presupuesto declinado");
+    return;
+  }
+  // 5) Cualquier otra cosa (dudas técnicas, cambios...) → persona
+  await enviarMensaje(telefono, "¡Buena pregunta! Se la paso ahora mismo a un compañero del equipo para que te conteste por aquí en breve 🙂");
+  crearNotaParte(caseId, `Seguimiento presupuesto (Marta): duda/consulta del cliente: "${msg.slice(0, 300)}"`);
+  registrarResultadoPresu(ref, "respondio_duda_derivada");
+  await avisar("❓ Duda sobre presupuesto");
+  pausarBot(`${estado.channelId}_${telefono}`, PAUSA_AGENTE_H, "duda de presupuesto derivada al equipo");
+  return;
+}
+
 // ============================================================
 // PROCESADOR DE MENSAJES - Lógica principal del bot
 // ============================================================
@@ -2577,75 +2683,15 @@ async function procesarMensaje(telefono, texto) {
   }
 
   // ── Respuesta a un seguimiento de presupuesto ───────────
-  // Manual de objeciones: una respuesta amable por tipo, sin presionar y
-  // sin precios (líneas rojas de marca). Todo queda anotado en el parte y
-  // el equipo recibe aviso cuando hay señal de venta o de pérdida.
   if (estado.step === "presu_respuesta") {
-    const ref    = estado.presu?.ref || "—";
-    const caseId = estado.presu?.caseId || null;
-    const seg    = caseId ? seguimientosPresu[caseId] : null;
-    if (seg) { seg.estado = "respondido"; guardarSeguimientosPresu(); }
-    estado.step = "menu_principal";
-
-    const avisar = async (titulo) => {
-      try {
-        const dest = determinarDestinatarioNotificacion();
-        const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
-        await enviarNotificacionAgente(dest, {
-          nombre: estado.nombre || seg?.nombre || `Cliente ${telefono.slice(-9)}`,
-          telefono: telefono.slice(-9), direccion: "—",
-          descripcion: `${titulo} (presupuesto ${ref}): "${msg.slice(0, 150)}"`,
-          apertura: ahoraStr, refParte: ref, agente: "Seguimiento presupuestos",
-        });
-      } catch (e) { console.error("[Presupuestos] Aviso falló:", e.message); }
-    };
-
-    // Qué quiere decir el cliente: la IA entiende las mil formas de decirlo
-    // ("de momento no voy a hacer nada" es aplazar, no una duda); las
-    // palabras clave quedan solo de respaldo si la IA no responde.
-    const categoria = await clasificarRespuestaPresu(msg);
-    console.log(`[Presupuestos] Respuesta de ${telefono} (${ref}) clasificada como: ${categoria}`);
-
-    // 1) Señal de venta: quiere seguir adelante
-    if (categoria === "acepta") {
-      await enviarMensaje(telefono, "¡Genial! 🙌 Le paso ahora mismo tu confirmación al equipo y te llaman para cuadrar fechas. ¡Gracias por confiar en Ibérica!");
-      crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente ACEPTA. Respuesta: "${msg.slice(0, 300)}"`);
-      registrarResultadoPresu(ref, "respondio_ACEPTA");
-      await avisar("🎯 PRESUPUESTO ACEPTADO");
-      return;
-    }
-    // 2) Objeción de precio
-    if (categoria === "precio") {
-      await enviarMensaje(
-        telefono,
-        "Te entiendo, es una inversión importante. Ten en cuenta que incluye la instalación por nuestro equipo propio y 3 años de garantía, y tenemos financiación para pagarlo con comodidad. Si quieres, un compañero te llama y ve contigo cómo ajustarlo — sin ningún compromiso 🙂"
-      );
-      crearNotaParte(caseId, `Seguimiento presupuesto (Marta): objeción de PRECIO. Respuesta: "${msg.slice(0, 300)}"`);
-      registrarResultadoPresu(ref, "respondio_objecion_precio");
-      await avisar("💶 Objeción de precio");
-      return;
-    }
-    // 3) Se lo está pensando / de momento no / más adelante
-    if (categoria === "aplaza") {
-      await enviarMensaje(telefono, "¡Claro, sin ninguna prisa! 🙂 Te mantenemos el presupuesto, y cualquier duda que te surja mientras lo decides me la escribes por aquí y te la resuelvo.");
-      crearNotaParte(caseId, `Seguimiento presupuesto (Marta): APLAZA / se lo piensa (no por ahora). Respuesta: "${msg.slice(0, 300)}"`);
-      registrarResultadoPresu(ref, "respondio_aplaza");
-      return;
-    }
-    // 4) Lo rechaza / lo hizo con otro
-    if (categoria === "declina") {
-      await enviarMensaje(telefono, "Entendido, ¡y gracias por decírnoslo! 🙏 Te guardamos el presupuesto por si más adelante lo retomas. Aquí nos tienes para lo que necesites 🔐");
-      crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente DECLINA. Motivo/respuesta: "${msg.slice(0, 300)}"`);
-      registrarResultadoPresu(ref, "respondio_declina");
-      await avisar("❌ Presupuesto declinado");
-      return;
-    }
-    // 5) Cualquier otra cosa (dudas técnicas, cambios...) → persona
-    await enviarMensaje(telefono, "¡Buena pregunta! Se la paso ahora mismo a un compañero del equipo para que te conteste por aquí en breve 🙂");
-    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): duda/consulta del cliente: "${msg.slice(0, 300)}"`);
-    registrarResultadoPresu(ref, "respondio_duda_derivada");
-    await avisar("❓ Duda sobre presupuesto");
-    pausarBot(`${estado.channelId}_${telefono}`, PAUSA_AGENTE_H, "duda de presupuesto derivada al equipo");
+    // El cliente a veces escribe en varios mensajes ("Hola" + "vale,
+    // adelante"): se juntan los que lleguen en PRESU_ESPERA_MS y se
+    // clasifican como una sola respuesta.
+    estado.presuBuffer = [...(estado.presuBuffer || []), msg];
+    clearTimeout(estado.presuTimer);
+    estado.presuTimer = setTimeout(() => {
+      procesarRespuestaPresu(telefono).catch((e) => console.error("[Presupuestos] Error procesando respuesta:", e.message));
+    }, PRESU_ESPERA_MS);
     return;
   }
 
