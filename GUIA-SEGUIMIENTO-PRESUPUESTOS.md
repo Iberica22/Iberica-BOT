@@ -1,9 +1,10 @@
 # Seguimiento de presupuestos — Marta comercial
 
-Marta hace el seguimiento de los presupuestos enviados que se quedan sin
-respuesta: mensajes suaves por WhatsApp, conversación según lo que conteste
-el cliente y, si no hay señal, aviso al equipo para una llamada comercial.
-Vive dentro del mismo bot de Railway.
+Sigue el protocolo de seguimiento de presupuestos (15/10/2026): **Marta
+escribe, María llama y la oficina cierra en Zoho y FactuSOL**. Marta manda
+los WhatsApp del plan y responde a lo que conteste el cliente. Cada día
+laborable a las 10:00, María recibe una **agenda** con las llamadas, los
+emails y los cierres R6 del día. Vive dentro del mismo bot de Railway.
 
 ## Técnicas comerciales que aplica
 
@@ -22,40 +23,64 @@ Fuentes: [Sandler, prospects que no devuelven la llamada](https://go.sandler.com
 ## Cómo funciona
 
 1. **Detección**: cada 5 min el bot sondea Zoho. Un parte con Estado
-   "Presupuesto" y Subestado "enviado" entra en seguimiento. Solo los que
-   pasan a ese estado después de activar el circuito. Teléfonos de relleno
-   (000000000…) se descartan.
-2. **Cadencia** (los mensajes salen solo **L-V de 10:00 a 19:00**, hora
-   de Madrid):
-   - **Día 3** → mensaje 1: "¿pudiste verlo? ¿dudas?".
-   - **Día 8** → mensaje 2: recordatorio con salida fácil.
-   - **Día 11** → con `PRESU_TEMPLATE3`: mensaje 3, "¿has aparcado el
-     presupuesto?". Sin ella: aviso al equipo para llamar, y fin.
-   - **Día 14** (si hubo mensaje 3) → sin respuesta: aviso al equipo para
-     llamar, y fin.
-3. **Respuestas** (la IA entiende lo que dice el cliente; Marta nunca da
-   precios ni presiona; todo queda como nota en el parte):
-   - **Acepta** → "te llaman para cuadrar fechas" + 🎯 aviso al equipo.
+   "Presupuesto" y Subestado "enviado" entra en seguimiento. Solo entran los
+   que pasan a ese estado después de activar el circuito. Los teléfonos de
+   relleno (000000000…) se descartan.
+2. **Tipo de cliente**, deducido del parte:
+   - **compañía**: el parte es de aseguradora;
+   - **comunidad**: el nombre lleva "comunidad", "propietarios", "CP"…;
+   - **empresa**: S.L., S.A., la empresa del contacto…;
+   - **particular**: el resto.
+
+   Si en Zoho hay un campo con el tipo, se indica en `PRESU_CAMPO_TIPO`. El
+   **importe** se lee del campo `PRESU_CAMPO_IMPORTE`, o si no, del primer
+   campo que se llame importe/total/precio. Para comprobarlo:
+   `/admin/api/presupuestos-tipos`.
+3. **Plan por tipo** (días desde el envío). Los WhatsApp salen solo L-V de
+   9:30 a 19:00 y nunca en festivo:
+
+   | Tipo | Marta escribe | María | Cierre R6 |
+   |---|---|---|---|
+   | Particular | días 2, 5 y 10 | llama el día 7 si pasa de 500 € · llama 2 días después del último mensaje sin respuesta | día 45 |
+   | Empresa | días 2, 7, 14 y 21 | igual que particular | día 45 |
+   | Comunidad | días 3, 10, 30, 45 y 60 | llama al administrador el día siguiente a la junta | día 90 |
+   | Compañía | **nunca** (no se escribe al asegurado) | email al tramitador los días 3, 10 y 20 | día 45 |
+
+   Último mensaje del particular y la empresa: «¿has aparcado el
+   presupuesto?» (`PRESU_TEMPLATE3`).
+4. **Respuestas**: la IA entiende lo que dice el cliente. Marta nunca da
+   precios ni presiona, y todo queda como nota en el parte.
+   - **Acepta** → "te llaman para cuadrar fechas" + 🎯 aviso a María.
    - **Le parece caro** → valor (equipo propio, 3 años de garantía,
      financiación), ofrece llamada + "un no también nos ayuda" + 💶 aviso.
-   - **Me lo pienso / ahora no** → qué le falta y cuándo volver a
-     escribir + "un no también nos ayuda". Con su respuesta: si da fecha,
-     recontacto ese día; si pide información, 📋 aviso al equipo.
-   - **Lo tengo que consultar** → con quién, para cuándo y qué información
-     necesitan + "un no también nos ayuda". Con su respuesta, igual que
-     arriba.
-   - **No lo va a hacer** → agradecer, guardar presupuesto + ❌ aviso.
+   - **Me lo pienso / ahora no** → qué le falta y cuándo le viene bien +
+     "un no también nos ayuda". Si da fecha: «¡Perfecto! Te llamamos hacia
+     el…» y nota «Volver a llamar dd/mm». Marta deja de escribir y ese día
+     sale en la agenda de María. Si pide información: 📋 aviso.
+   - **Lo tengo que consultar / lo vemos en la junta** → con quién, para
+     cuándo y qué información necesitan. Con la fecha de la junta: «Después
+     de la junta un compañero os llama» y, el día siguiente, María llama al
+     administrador.
+   - **No lo va a hacer** → agradecer, guardar el presupuesto + ❌ aviso.
    - **Pregunta concreta** → a la oficina (pausa a Marta en ese chat) + ❓.
-   Si escribe varios mensajes seguidos, Marta espera 20 s y responde a
-   todo junto.
-4. **Recontacto acordado**: en la fecha que dio el cliente, Marta le
-   escribe con la plantilla del recontacto. Si no contesta en 3 días,
-   aviso al equipo para llamar, y fin (sin mensaje 3).
-5. **Cancelaciones automáticas**: si el parte cambia de estado en el CRM o
-   si una persona de la oficina escribe en el chat, el seguimiento se
-   cancela en silencio. Si un mensaje no puede salir en 3 días, se avisa
-   al equipo para llamar.
-6. **Desde qué número sale**: desde el número donde el cliente ya tiene
+
+   Si el cliente escribe varios mensajes seguidos, Marta espera 20 s y
+   responde a todo junto. Las fechas que caen en fin de semana o festivo
+   pasan al siguiente día laborable.
+5. **Agenda de María**: cada día laborable desde las 10:00, un solo mensaje
+   con los grupos:
+   - 📞 Llamar;
+   - ✉️ Email al tramitador (nunca al asegurado);
+   - 🔒 Cerrar con R6 en Zoho y FactuSOL.
+
+   Cada tarea se avisa una sola vez, y antes de mandarla el bot comprueba en
+   Zoho que el presupuesto sigue "enviado".
+6. **Cancelaciones automáticas**: el seguimiento se cancela en silencio si
+   el parte cambia de estado en el CRM (R1-R7, aceptado…) o si una persona
+   de la oficina escribe en el chat. Si un mensaje no puede salir en 3 días,
+   se avisa a María para llamar. Los seguimientos del sistema anterior se
+   pasan al nuevo plan.
+7. **Desde qué número sale**: desde el número donde el cliente ya tiene
    chat; si allí no existe la plantilla, desde el número del BOT. Las
    plantillas hay que crearlas en la cuenta de WhatsApp del número del BOT.
 
@@ -82,7 +107,7 @@ cualquier duda, respóndeme por aquí y lo vemos. Y si al final no te
 encaja, dímelo con total confianza: un no también nos ayuda 🙂
 ```
 
-**`seguimiento_presupuesto_3`** (mensaje 2 y recontacto acordado, en uso):
+**`seguimiento_presupuesto_3`** (mensajes intermedios, en uso):
 
 ```
 Hola {{1}}, soy Marta de Ibérica Seguridad 🙂 No quiero resultar pesada,
@@ -91,8 +116,8 @@ la resuelvo por aquí. Y si prefieres dejarlo, dímelo y no te escribimos
 más por este tema 🙏
 ```
 
-**`seguimiento_presupuesto_aparcado`** (mensaje 3, técnica de Voss,
-opcional: activarlo con `PRESU_TEMPLATE3`):
+**`seguimiento_presupuesto_aparcado`** (último mensaje, técnica de Voss,
+activarlo con `PRESU_TEMPLATE3`):
 
 ```
 Hola {{1}}, soy Marta de Ibérica Seguridad. No he vuelto a saber de ti
@@ -105,14 +130,16 @@ sobre el presupuesto: ¿has decidido aparcarlo? Si es así, con un simple
 | Variable | Valor | Notas |
 |---|---|---|
 | `PRESU_AUTO` | `on` | Interruptor general |
-| `PRESU_RESPONSABLE` | `mari` | Quién recibe TODOS los avisos de presupuestos (respuestas, sin respuesta, no enviables, plantilla rota): `mari`, `nieves` o `guardia`. Por defecto, Mari |
-| `PRESU_TEMPLATE` | `seguimiento_presupuesto` | Mensaje 1 (o `seguimiento_presupuesto_v2` cuando esté aprobada) |
-| `PRESU_TEMPLATE2` | `seguimiento_presupuesto_3` | Mensaje 2 (si falta, reutiliza la 1) |
-| `PRESU_TEMPLATE3` | `seguimiento_presupuesto_aparcado` | Mensaje 3 «¿has aparcado...?». Sin definir = no hay mensaje 3 |
-| `PRESU_TEMPLATE_RECONTACTO` | — | Recontacto en la fecha acordada. Sin definir = usa `PRESU_TEMPLATE2` |
-| `PRESU_DIAS_TOQUE1/2/CIERRE` | 3 / 8 / 11 | Opcional, para ajustar la cadencia |
+| `PRESU_RESPONSABLE` | `mari` | Quién recibe la agenda y TODOS los avisos: `mari`, `nieves` o `guardia`. Por defecto, Mari |
+| `PRESU_TEMPLATE` | `seguimiento_presupuesto` | Primer mensaje (o `seguimiento_presupuesto_v2` cuando esté aprobada) |
+| `PRESU_TEMPLATE2` | `seguimiento_presupuesto_3` | Mensajes intermedios |
+| `PRESU_TEMPLATE3` | `seguimiento_presupuesto_aparcado` | Último mensaje «¿has aparcado...?». Sin definir = usa la 2 |
+| `PRESU_TEMPLATE_COMUNIDAD` | — | Opcional, mensajes 2 a 5 de comunidades. Sin definir = usa la 2 |
+| `PRESU_PLAN_PARTICULAR` / `_EMPRESA` / `_COMUNIDAD` | `2,5,10` / `2,7,14,21` / `3,10,30,45,60` | Opcional, días en que escribe Marta |
+| `PRESU_IMPORTE_LLAMADA` | `500` | A partir de este importe, María llama el día 7 |
+| `PRESU_CAMPO_TIPO` / `PRESU_CAMPO_IMPORTE` | — | Opcional, nombre API del campo de Zoho con el tipo de cliente / el importe |
 | `PRESU_TEMPLATE_LANG` | `es` | Idioma de las plantillas en Meta. Si aparecen como "Español (España)", poner `es_ES` |
-| `PRESU_DIAS_RETRASO_MAX` | 3 | Días que un mensaje puede llevar sin poder salir antes de pasárselo al equipo (estado `no_enviable`) |
+| `PRESU_DIAS_RETRASO_MAX` | 3 | Días que un mensaje puede llevar sin poder salir antes de pasárselo a María (estado `no_enviable`) |
 | `PRESU_ESPERA_MS` | 20000 | Espera para juntar varios mensajes seguidos del cliente |
 
 ## Panel
@@ -122,5 +149,8 @@ sobre el presupuesto: ¿has decidido aparcarlo? Si es así, con un simple
   recontactos acordados...).
 - `GET /admin/api/presupuestos-resultados` — estado actual en Zoho de cada
   presupuesto en el que Marta escribió al cliente.
+- `GET /admin/api/presupuestos-tipos` — qué tipo de cliente e importe
+  deduce de cada presupuesto vivo, y qué campos de Zoho podrían servir.
 - `GET /admin/api/test-presupuestos?forzar=1` — lanza sondeo + barrido a
-  mano (forzar=1 se salta la ventana comercial; PRESU_AUTO debe estar on).
+  mano (forzar=1 se salta la ventana comercial; `&agenda=1` manda la agenda
+  de María aunque ya haya salido hoy; PRESU_AUTO debe estar on).

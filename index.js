@@ -51,14 +51,14 @@ function pausarBot(clave, horas, motivo) {
     guardarCaptacionLeads();
     console.log(`[Captación] Lead ${tel} cerrado — lo atiende una persona`);
   }
-  // Y si tenía un seguimiento de presupuesto en marcha, también pasa a la
-  // persona: se cancela la cadencia para no pisar su conversación.
+  // Y si tenía un seguimiento de presupuesto en marcha, Marta deja de
+  // escribirle para no pisar la conversación (María sigue con su agenda).
   for (const seg of Object.values(seguimientosPresu)) {
-    if (seg.clave === tel && ["pendiente", "toque1", "toque2", "toque3", "aplazado"].includes(seg.estado)) {
-      seg.estado = "cancelado";
+    if (seg.clave === tel && ["pendiente", "toque1", "toque2", "toque3", "en_curso"].includes(seg.estado)) {
+      seg.estado = "atendido_persona";
       guardarSeguimientosPresu();
-      registrarResultadoPresu(seg.ref, "cancelado_intervencion_humana");
-      console.log(`[Presupuestos] Seguimiento ${seg.ref} cancelado — lo atiende una persona`);
+      registrarResultadoPresu(seg.ref, "marta_para_lo_atiende_una_persona");
+      console.log(`[Presupuestos] Marta deja de escribir en ${seg.ref} — lo atiende una persona`);
     }
   }
 }
@@ -978,7 +978,7 @@ async function sondearPartesCerrados() {
 // oficina interviene en el chat, el seguimiento se cancela.
 // Interruptor: PRESU_AUTO=on + plantillas PRESU_TEMPLATE / PRESU_TEMPLATE2.
 
-const seguimientosPresu = {}; // { caseId: { telefono, clave, nombre, ref, caseId, enviadoTs, toque1Ts, toque2Ts, estado } }
+const seguimientosPresu = {}; // { caseId: { ref, clave, nombre, tipo, importe, enviadoTs, enviados, ultimoMensajeTs, estado, avisos, ... } }
 function guardarSeguimientosPresu() { redisSet("iberica:seguimientosPresu", seguimientosPresu); }
 
 let presuHistorial = []; // [{ ts, ref, resultado, veces? }] — diagnóstico persistente
@@ -996,36 +996,139 @@ function registrarResultadoPresu(ref, resultado) {
   redisSet("iberica:presuHistorial", presuHistorial);
 }
 
-const PRESU_DIAS_TOQUE1 = parseInt(process.env.PRESU_DIAS_TOQUE1 || "3");
-const PRESU_DIAS_TOQUE2 = parseInt(process.env.PRESU_DIAS_TOQUE2 || "8");
-const PRESU_DIAS_CIERRE = parseInt(process.env.PRESU_DIAS_CIERRE || "11");
-// Días de retraso máximo de un toque que no se ha podido enviar (chat en
+// ── Protocolo de seguimiento de presupuestos (versión del 15/10/2026) ──
+// "Marta escribe, María llama y la oficina cierra en Zoho y FactuSOL."
+// Calendario por tipo de cliente, en días desde que el presupuesto pasa a
+// Presupuesto / Enviado. `marta` = días en que Marta escribe por WhatsApp
+// (a partir de las 9:30, L-V). Lo demás lo hace María (llamadas, emails a
+// tramitadores, cierre con R6) y Marta se lo recuerda en una agenda diaria
+// a las 10:00.
+const diasDe = (txt, porDefecto) => String(txt || porDefecto).split(",").map((x) => parseInt(x)).filter((x) => x >= 0);
+const PLANES_PRESU = {
+  particular: { marta: diasDe(process.env.PRESU_PLAN_PARTICULAR, "2,5,10"), emails: [], llamada7: true, cierre: 45 },
+  empresa:    { marta: diasDe(process.env.PRESU_PLAN_EMPRESA, "2,7,14,21"), emails: [], llamada7: true, cierre: 45 },
+  comunidad:  { marta: diasDe(process.env.PRESU_PLAN_COMUNIDAD, "3,10,30,45,60"), emails: [], llamada7: false, cierre: 90 },
+  // Compañías: sin Marta. Email de María al TRAMITADOR, nunca al asegurado.
+  compania:   { marta: [], emails: [3, 10, 20], llamada7: false, cierre: 45 },
+};
+const PRESU_IMPORTE_LLAMADA = parseFloat(process.env.PRESU_IMPORTE_LLAMADA || "500"); // > 500 € → María llama también el día 7
+const PRESU_DIAS_LLAMADA_FIN = 2; // María llama 2 días después del último mensaje de Marta
+// Días de retraso máximo de un mensaje que no se ha podido enviar (chat en
 // pausa, plantilla rechazada…) antes de pasárselo a una persona.
 const PRESU_DIAS_RETRASO_MAX = parseInt(process.env.PRESU_DIAS_RETRASO_MAX || "3");
 const presuActivo = () => (process.env.PRESU_AUTO || "off").toLowerCase() === "on";
+
+// Estados de un seguimiento que siguen vivos (la agenda los revisa):
+//   en_curso         → Marta escribe según el calendario
+//   fin_marta        → Marta mandó todos sus mensajes sin respuesta
+//   respondido       → el cliente contestó; María sigue
+//   volver_a_llamar  → "me lo pienso" con fecha: María llama ese día
+//   atendido_persona → alguien de la oficina escribió en el chat
+//   no_enviable      → un mensaje de Marta no pudo salir en 3 días
+//   compania         → presupuesto de compañía: sin Marta
+// Finales: cancelado (cambió de estado en Zoho, o sin teléfono válido) y
+// cerrado_r6 (la agenda pidió cerrarlo con R6 al llegar al día 45 o 90).
+const PRESU_ESTADOS_VIVOS = ["en_curso", "fin_marta", "respondido", "volver_a_llamar", "atendido_persona", "no_enviable", "compania"];
 
 function esCasoPresupuestoEnviado(caso) {
   return normalizaTxt(caso?.Status || "").includes("presupuesto") &&
          normalizaTxt(caso?.Subestado || "").includes("enviado");
 }
 
-// Los toques comerciales solo salen L-V de 10:00 a 19:00 (hora de Madrid)
+// Tipo de cliente del presupuesto. PRESU_CAMPO_TIPO = nombre técnico de un
+// campo de Zoho que lo diga, si existe; si no, se deduce: compañía de
+// seguros (mismo criterio que reseñas), comunidad o empresa por el nombre,
+// y particular en el resto. Comprobable en /admin/api/presupuestos-tipos.
+function tipoClientePresu(caso, contacto = {}) {
+  const campo = process.env.PRESU_CAMPO_TIPO;
+  if (campo && caso?.[campo]) {
+    const v = normalizaTxt(typeof caso[campo] === "object" ? (caso[campo].name || "") : String(caso[campo]));
+    if (v.includes("compa") || v.includes("segur")) return "compania";
+    if (v.includes("comunidad")) return "comunidad";
+    if (v.includes("empresa")) return "empresa";
+    if (v.includes("particular")) return "particular";
+  }
+  if (parteDeAseguradora(caso)) return "compania";
+  const nombres = normalizaTxt([caso?.Related_To?.name, caso?.Account_Name?.name, contacto.Account_Name?.name, contacto.Full_Name]
+    .filter(Boolean).join(" | "));
+  if (/(comunidad|\bcdad\b|\bc\.\s?p\.|\bccpp\b|propietarios|administracion de fincas|administrador)/.test(nombres)) return "comunidad";
+  if (/(\bs\.?\s?l\.?u?\b|\bs\.\s?a\.?\b|\bsociedad\b|\binvestments?\b|real estate|\bgrupo\b|\bhotel\b)/.test(nombres)) return "empresa";
+  return "particular";
+}
+
+// Importe del presupuesto, si Zoho lo tiene. PRESU_CAMPO_IMPORTE = nombre
+// técnico del campo; si no, el primer campo con "importe", "amount",
+// "total" o "precio" en el nombre que traiga un número.
+function importePresu(caso) {
+  const leer = (v) => {
+    const t = String(v).replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
+    const n = parseFloat(t);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const campo = process.env.PRESU_CAMPO_IMPORTE;
+  if (campo) return caso?.[campo] != null ? leer(caso[campo]) : null;
+  for (const [k, v] of Object.entries(caso || {})) {
+    if (v == null || typeof v === "object") continue;
+    if (/importe|amount|total|precio/i.test(k)) { const n = leer(v); if (n) return n; }
+  }
+  return null;
+}
+
+// Seguimientos creados con el protocolo anterior (toques 1-2-3) → modelo
+// actual. Los que ya iban por la mitad no reciben más mensajes atrasados:
+// si su siguiente mensaje ya pasó, terminan en fin_marta (llamada de María).
+function normalizarSegPresu(seg) {
+  if (seg.version === 2) return seg;
+  seg.version = 2;
+  seg.tipo = seg.tipo || "particular";
+  seg.avisos = seg.avisos || {};
+  const previos = { toque1: 1, toque2: 2, toque3: 3 };
+  if (previos[seg.estado]) {
+    seg.enviados = previos[seg.estado];
+    seg.ultimoMensajeTs = seg.toque3Ts || seg.toque2Ts || seg.toque1Ts;
+    seg.estado = "en_curso";
+    seg.migrado = true;
+  } else if (seg.estado === "pendiente") {
+    seg.estado = "en_curso";
+  } else if (seg.estado === "aplazado") {
+    seg.estado = "volver_a_llamar";
+    seg.volverLlamarTs = seg.recontactoTs;
+  } else if (seg.estado === "cerrado_sin_respuesta") {
+    seg.estado = "fin_marta";
+    seg.avisos.llamada_fin = true; // ya se avisó con el protocolo anterior
+  }
+  seg.enviados = seg.enviados || (seg.toque1Ts ? 1 : 0);
+  return seg;
+}
+
+// Marta escribe L-V de 9:30 a 19:00 (hora de Madrid)
+// Laborable en Almería: ni fin de semana ni festivo
+function esLaborable(fecha) {
+  const dia = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Madrid", weekday: "short" }).format(fecha);
+  return dia !== "Sat" && dia !== "Sun" && !FESTIVOS_ALMERIA[diaMadrid(fecha)];
+}
+
+// Si la fecha cae en fin de semana o festivo, la pasa al siguiente laborable
+function laborableDesde(fecha) {
+  let f = new Date(fecha.getTime());
+  for (let i = 0; i < 10 && !esLaborable(f); i++) f = new Date(f.getTime() + 24 * 3600 * 1000);
+  return f;
+}
+
 function dentroVentanaComercial() {
   const ahora = new Date();
-  const dia = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Madrid", weekday: "short" }).format(ahora);
-  if (dia === "Sat" || dia === "Sun") return false;
+  if (!esLaborable(ahora)) return false;
   const m = minutosActualesMadrid();
-  return m >= 10 * 60 && m <= 19 * 60;
+  return m >= 9 * 60 + 30 && m <= 19 * 60;
 }
 
 // Sondeo: detectar partes recién pasados a Presupuesto/enviado y registrar
-// el seguimiento. También cancela los que cambiaron de estado en el CRM.
+// el seguimiento. También cierra los que cambiaron de estado en el CRM.
 //
 // "A PARTIR DE HOY": en su primera ejecución el circuito graba su fecha de
 // arranque (Redis) y solo sigue presupuestos modificados DESPUÉS de ese
 // momento. El histórico anterior no se toca — nada de escribir de golpe a
-// clientes con presupuestos del mes pasado. En ese primer arranque también
-// se cancela cualquier seguimiento pendiente registrado antes de la regla.
+// clientes con presupuestos del mes pasado.
 let presuArranque = null;
 let sondeoPresuEnCurso = false;
 async function sondearPresupuestosEnviados() {
@@ -1039,12 +1142,7 @@ async function sondearPresupuestosEnviados() {
       if (!presuArranque) {
         presuArranque = Date.now();
         redisSet("iberica:presuArranque", presuArranque);
-        let limpiados = 0;
-        for (const seg of Object.values(seguimientosPresu)) {
-          if (seg.estado === "pendiente") { seg.estado = "cancelado"; limpiados++; }
-        }
-        if (limpiados) guardarSeguimientosPresu();
-        console.log(`[Presupuestos] Arranque del circuito registrado — solo se siguen presupuestos desde ahora (${limpiados} antiguos cancelados)`);
+        console.log("[Presupuestos] Arranque del circuito registrado — solo se siguen presupuestos desde ahora");
       }
     }
     const token = await obtenerTokenZoho();
@@ -1059,10 +1157,11 @@ async function sondearPresupuestosEnviados() {
     }));
     for (const caso of casos) {
       const seg = seguimientosPresu[caso.id];
+      if (seg) normalizarSegPresu(seg);
       if (!esCasoPresupuestoEnviado(caso)) {
         // Si estaba en seguimiento y el CRM ya cambió de estado (aceptado,
-        // cerrado, rechazado...), la cadencia se cancela en silencio.
-        if (seg && !["respondido", "cancelado", "cerrado_sin_respuesta", "no_enviable"].includes(seg.estado)) {
+        // rechazado, cerrado...), se cierra en silencio y se guarda a qué pasó.
+        if (seg && PRESU_ESTADOS_VIVOS.includes(seg.estado)) {
           seg.estado = "cancelado";
           seg.estadoFinalCrm = `${caso.Status || "?"} / ${caso.Subestado || "—"}`;
           resumen.cancelados++;
@@ -1075,42 +1174,54 @@ async function sondearPresupuestosEnviados() {
       const enviadoTs = new Date(caso.Modified_Time || 0).getTime() || Date.now();
       if (enviadoTs < presuArranque) continue;                      // anterior al arranque: no se toca
       if (Date.now() - enviadoTs > 14 * 24 * 3600 * 1000) continue; // demasiado antiguo
-      // Teléfono y nombre del contacto vinculado
+      // Contacto vinculado: teléfono, nombre y empresa
       let telefonoCli = null;
       let nombreCli   = caso.Related_To?.name || null;
+      let contacto    = {};
       try {
         if (caso.Related_To?.id) {
           const c = await axios.get(`https://www.zohoapis.eu/crm/v2/Contacts/${caso.Related_To.id}`, {
             headers: { Authorization: `Zoho-oauthtoken ${token}` },
           });
-          const contacto = c.data?.data?.[0] || {};
+          contacto    = c.data?.data?.[0] || {};
           telefonoCli = contacto.Mobile || contacto.Phone || null;
           nombreCli   = contacto.First_Name || contacto.Full_Name || nombreCli;
         }
       } catch (e) { console.error("[Presupuestos] Contacto:", e.message); }
+      const ref = caso.ref_Parte || caso.id;
+      const base = {
+        version: 2, caseId: caso.id, ref, nombre: nombreCli, enviadoTs,
+        tipo: tipoClientePresu(caso, contacto), importe: importePresu(caso),
+        enviados: 0, avisos: {},
+      };
+      // Compañía: sin Marta (no se escribe nunca al asegurado). Solo agenda
+      // de María: emails al tramitador y cierre con R6.
+      if (base.tipo === "compania") {
+        seguimientosPresu[caso.id] = { ...base, estado: "compania" };
+        resumen.nuevos++;
+        registrarResultadoPresu(ref, "seguimiento_programado_compania_sin_marta");
+        guardarSeguimientosPresu();
+        continue;
+      }
       if (!telefonoCli) {
-        seguimientosPresu[caso.id] = { caseId: caso.id, ref: caso.ref_Parte || caso.id, estado: "cancelado", enviadoTs };
-        registrarResultadoPresu(caso.ref_Parte || caso.id, "sin_telefono_en_zoho");
+        seguimientosPresu[caso.id] = { ...base, estado: "cancelado" };
+        registrarResultadoPresu(ref, "sin_telefono_en_zoho");
         guardarSeguimientosPresu();
         continue;
       }
       const d = String(telefonoCli).replace(/\D/g, "");
       const clave = claveClientePorTelefono(telefonoCli) || (d.length === 9 ? `34${d}` : d);
       if (!telefonoValido(clave)) {
-        seguimientosPresu[caso.id] = { caseId: caso.id, ref: caso.ref_Parte || caso.id, estado: "cancelado", enviadoTs };
-        registrarResultadoPresu(caso.ref_Parte || caso.id, `telefono_invalido_en_zoho: ${telefonoCli}`);
+        seguimientosPresu[caso.id] = { ...base, estado: "cancelado" };
+        registrarResultadoPresu(ref, `telefono_invalido_en_zoho: ${telefonoCli}`);
         guardarSeguimientosPresu();
         continue;
       }
-      seguimientosPresu[caso.id] = {
-        caseId: caso.id, ref: caso.ref_Parte || caso.id,
-        telefono: telefonoCli, clave, nombre: nombreCli,
-        enviadoTs, toque1Ts: null, toque2Ts: null, estado: "pendiente",
-      };
+      seguimientosPresu[caso.id] = { ...base, telefono: telefonoCli, clave, estado: "en_curso" };
       resumen.nuevos++;
-      registrarResultadoPresu(caso.ref_Parte || caso.id, "seguimiento_programado");
+      registrarResultadoPresu(ref, `seguimiento_programado_${base.tipo}`);
       guardarSeguimientosPresu();
-      console.log(`[Presupuestos] Seguimiento programado: ${caso.ref_Parte || caso.id} (${clave})`);
+      console.log(`[Presupuestos] Seguimiento programado: ${ref} (${clave}, ${base.tipo}${base.importe ? `, ${base.importe} €` : ""})`);
     }
     return { ok: true, ...resumen };
   } catch (e) {
@@ -1121,18 +1232,23 @@ async function sondearPresupuestosEnviados() {
   }
 }
 
-// Envía un toque (1 o 2) por plantilla aprobada. Reutiliza el envío en
-// frío de reseñas: si el cliente no tiene chat conocido, se crea su
-// contacto en Woztell en el canal principal (WOZTELL_CHANNEL_ID).
-async function enviarToquePresu(seg, numToque) {
-  const plantilla = {
-    1: process.env.PRESU_TEMPLATE,
-    2: process.env.PRESU_TEMPLATE2 || process.env.PRESU_TEMPLATE,
-    3: process.env.PRESU_TEMPLATE3,
-    4: process.env.PRESU_TEMPLATE_RECONTACTO || process.env.PRESU_TEMPLATE2 || process.env.PRESU_TEMPLATE,
-  }[numToque];
-  if (!plantilla) return { ok: false, motivo: "sin_plantilla_configurada" };
+// Plantilla de cada mensaje de Marta según su posición en el calendario:
+// el primero, PRESU_TEMPLATE; el último (si hay 3 o más), la de "¿has
+// aparcado el presupuesto?" (PRESU_TEMPLATE3) si está activada; los de en
+// medio, PRESU_TEMPLATE2 (en comunidades, PRESU_TEMPLATE_COMUNIDAD si existe).
+function plantillaPresu(tipo, indice, total) {
+  const t1 = process.env.PRESU_TEMPLATE;
+  const t2 = process.env.PRESU_TEMPLATE2 || t1;
+  if (indice === 0) return t1;
+  if (indice === total - 1 && total >= 3 && process.env.PRESU_TEMPLATE3) return process.env.PRESU_TEMPLATE3;
+  if (tipo === "comunidad" && process.env.PRESU_TEMPLATE_COMUNIDAD) return process.env.PRESU_TEMPLATE_COMUNIDAD;
+  return t2;
+}
 
+// Envía un mensaje de Marta por plantilla aprobada. Si el cliente no tiene
+// chat conocido, se crea su contacto en Woztell en el canal principal.
+async function enviarToquePresu(seg, plantilla, numToque) {
+  if (!plantilla) return { ok: false, motivo: "sin_plantilla_configurada" };
   const clave = seg.clave;
   if (!telefonoValido(clave)) return { ok: false, motivo: "telefono_invalido_en_zoho" };
   let memberId  = conversaciones[clave]?.memberId  || actividad[clave]?.memberId;
@@ -1157,7 +1273,10 @@ async function enviarToquePresu(seg, numToque) {
   estado.memberId  = memberId;
   estado.channelId = channelId;
   estado.step  = "presu_respuesta";
-  estado.presu = { ref: seg.ref, caseId: seg.caseId, toque: numToque };
+  // toque 3 = "¿has aparcado el presupuesto?": el clasificador lo necesita
+  // para entender que un "sí" es que lo deja
+  const esAparcado = plantilla === process.env.PRESU_TEMPLATE3;
+  estado.presu = { ref: seg.ref, caseId: seg.caseId, toque: esAparcado ? 3 : numToque };
 
   const nombreCorto = seg.nombre ? String(seg.nombre).trim().split(/\s+/)[0] : "de nuevo";
   const r = await enviarPlantillaConRespaldo(clave, plantilla, [nombreCorto], process.env.PRESU_TEMPLATE_LANG || "es", seg.nombre);
@@ -1166,12 +1285,47 @@ async function enviarToquePresu(seg, numToque) {
     alertarPlantillaRota(plantilla, r.detalle);
     return { ok: false, motivo: "plantilla_fallida", detalle: r.detalle, reintentar: true };
   }
+  seg.ultimaPlantilla = plantilla;
   return { ok: true };
 }
 
-// Barrido de cadencia: cada 30 min mira qué toques tocan (solo en ventana
-// comercial). Antes de cada toque re-verifica en Zoho que el parte sigue
-// en Presupuesto/enviado (si ya se aceptó o cerró, cancela).
+// ¿Sigue el parte en Presupuesto / Enviado en Zoho? Si no, se cierra el
+// seguimiento con el estado al que pasó. null = no se pudo comprobar.
+async function presupuestoSigueEnviado(seg) {
+  try {
+    const token = await obtenerTokenZoho();
+    const c = await axios.get(`https://www.zohoapis.eu/crm/v2/Cases/${seg.caseId}`, {
+      headers: { Authorization: `Zoho-oauthtoken ${token}` },
+    });
+    const caso = c.data?.data?.[0];
+    if (caso && !esCasoPresupuestoEnviado(caso)) {
+      seg.estado = "cancelado";
+      seg.estadoFinalCrm = `${caso.Status || "?"} / ${caso.Subestado || "—"}`;
+      guardarSeguimientosPresu();
+      registrarResultadoPresu(seg.ref, `cancelado_cambio_de_estado_en_crm: ${seg.estadoFinalCrm}`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("[Presupuestos] Re-verificación falló:", e.message);
+    return null;
+  }
+}
+
+async function avisarPresu(seg, descripcion) {
+  try {
+    const dest = destinatarioPresupuestos();
+    const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+    await enviarNotificacionAgente(dest, {
+      nombre: seg.nombre || `Cliente ${String(seg.clave || "").slice(-9)}`,
+      telefono: String(seg.clave || "—").slice(-9),
+      direccion: "—", descripcion, apertura: ahoraStr, refParte: seg.ref, agente: "Seguimiento presupuestos",
+    });
+  } catch (e) { console.error("[Presupuestos] Aviso falló:", e.message); }
+}
+
+// Barrido de los mensajes de Marta: cada 30 min, en ventana comercial.
+// Después, si ya son las 10:00 y no se ha enviado hoy, la agenda de María.
 let barridoPresuEnCurso = false;
 async function barridoToquesPresupuesto(forzarVentana) {
   if (!presuActivo()) return { ok: false, motivo: "desactivado_por_PRESU_AUTO" };
@@ -1183,99 +1337,52 @@ async function barridoToquesPresupuesto(forzarVentana) {
     const ahora = Date.now();
     const dia = 24 * 3600 * 1000;
     for (const seg of Object.values(seguimientosPresu)) {
-      if (!["pendiente", "toque1", "toque2", "toque3", "aplazado"].includes(seg.estado)) continue;
+      normalizarSegPresu(seg);
+      if (seg.estado !== "en_curso") continue;
+      const plan = PLANES_PRESU[seg.tipo] || PLANES_PRESU.particular;
+      const n = seg.enviados || 0;
+      if (n >= plan.marta.length) { seg.estado = "fin_marta"; guardarSeguimientosPresu(); continue; }
+      const tocaTs = seg.enviadoTs + plan.marta.at(n) * dia;
+      if (ahora < tocaTs) continue;
 
-      // ¿Cierre sin respuesta? Tras el último toque: el 2.º, o el 3.º si
-      // está activado (PRESU_TEMPLATE3) y no venimos de un recontacto acordado.
-      const usaToque3 = !!process.env.PRESU_TEMPLATE3 && !seg.recontactado;
-      const ultimoToqueTs = seg.estado === "toque3" ? seg.toque3Ts : seg.toque2Ts;
-      const cierraYa = (seg.estado === "toque2" && !usaToque3) || seg.estado === "toque3";
-      if (cierraYa && ahora - (ultimoToqueTs || 0) > (PRESU_DIAS_CIERRE - PRESU_DIAS_TOQUE2) * dia) {
-        const nToques = seg.estado === "toque3" ? 3 : 2;
-        seg.estado = "cerrado_sin_respuesta";
-        guardarSeguimientosPresu();
-        resumen.cierres++;
-        registrarResultadoPresu(seg.ref, "sin_respuesta_aviso_al_equipo");
-        try {
-          const dest = destinatarioPresupuestos();
-          const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
-          await enviarNotificacionAgente(dest, {
-            nombre: seg.nombre || `Cliente ${String(seg.clave).slice(-9)}`,
-            telefono: String(seg.clave).slice(-9),
-            direccion: "—",
-            descripcion: `Presupuesto ${seg.ref} SIN RESPUESTA tras ${nToques} seguimientos de Marta — conviene llamada comercial`,
-            apertura: ahoraStr, refParte: seg.ref, agente: "Seguimiento presupuestos",
-          });
-        } catch (e) { console.error("[Presupuestos] Aviso de cierre falló:", e.message); }
-        crearNotaParte(seg.caseId, `Seguimiento presupuesto (Marta): sin respuesta tras ${nToques} toques por WhatsApp. Avisado el equipo para llamada comercial.`);
-        continue;
-      }
+      if ((await presupuestoSigueEnviado(seg)) === false) continue;
 
-      // Qué toque toca: 1 y 2 (cadencia), 3 = "¿has aparcado el presupuesto?"
-      // (opcional), 4 = recontacto en la fecha que acordó el cliente.
-      const numToque = { pendiente: 1, toque1: 2, aplazado: 4 }[seg.estado] || (seg.estado === "toque2" && usaToque3 ? 3 : null);
-      if (!numToque) continue;
-      const desde = { 1: seg.enviadoTs, 2: seg.toque1Ts, 3: seg.toque2Ts, 4: seg.recontactoTs }[numToque];
-      const dias  = { 1: PRESU_DIAS_TOQUE1, 2: PRESU_DIAS_TOQUE2 - PRESU_DIAS_TOQUE1, 3: PRESU_DIAS_CIERRE - PRESU_DIAS_TOQUE2, 4: 0 }[numToque];
-      if (ahora - (desde || 0) < dias * dia) continue;
-
-      // Re-verificar en el CRM que sigue esperando respuesta
-      try {
-        const token = await obtenerTokenZoho();
-        const c = await axios.get(`https://www.zohoapis.eu/crm/v2/Cases/${seg.caseId}`, {
-          headers: { Authorization: `Zoho-oauthtoken ${token}` },
-        });
-        const caso = c.data?.data?.[0];
-        if (caso && !esCasoPresupuestoEnviado(caso)) {
-          seg.estado = "cancelado";
-          seg.estadoFinalCrm = `${caso.Status || "?"} / ${caso.Subestado || "—"}`;
+      // Mensaje con varios días de retraso: Marta no lo manda tarde.
+      if (ahora - tocaTs > PRESU_DIAS_RETRASO_MAX * dia) {
+        if (seg.migrado) {
+          // Venía del protocolo anterior: termina aquí y pasa a la llamada de María
+          seg.estado = "fin_marta";
           guardarSeguimientosPresu();
-          registrarResultadoPresu(seg.ref, `cancelado_cambio_de_estado_en_crm: ${seg.estadoFinalCrm}`);
+          registrarResultadoPresu(seg.ref, "fin_marta_tras_cambio_de_protocolo");
           continue;
         }
-      } catch (e) { console.error("[Presupuestos] Re-verificación falló:", e.message); }
-
-      // Si el toque lleva ya varios días de retraso (chat en pausa, plantilla
-      // rechazada…), Marta deja de intentarlo: un "¿pudiste verlo?" 3 semanas
-      // tarde queda raro y reintentar cada 30 min no sirve. Se pasa a una
-      // persona con el motivo, para que llame.
-      const retraso = ahora - ((desde || 0) + dias * dia);
-      if (retraso > PRESU_DIAS_RETRASO_MAX * dia) {
         const ultimoMotivo = (presuHistorial.find((h) => h.ref === seg.ref)?.resultado || "desconocido").split(":")[0];
         seg.estado = "no_enviable";
         guardarSeguimientosPresu();
         resumen.cierres++;
         registrarResultadoPresu(seg.ref, `no_enviable_aviso_al_equipo (${ultimoMotivo})`);
-        try {
-          const dest = destinatarioPresupuestos();
-          const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
-          await enviarNotificacionAgente(dest, {
-            nombre: seg.nombre || `Cliente ${String(seg.clave).slice(-9)}`,
-            telefono: String(seg.clave).slice(-9),
-            direccion: "—",
-            descripcion: `Presupuesto ${seg.ref}: Marta no pudo hacer el seguimiento ${numToque} por WhatsApp (${ultimoMotivo}) — conviene llamada comercial`,
-            apertura: ahoraStr, refParte: seg.ref, agente: "Seguimiento presupuestos",
-          });
-        } catch (e) { console.error("[Presupuestos] Aviso de no enviable falló:", e.message); }
-        crearNotaParte(seg.caseId, `Seguimiento presupuesto (Marta): no se pudo enviar el seguimiento ${numToque} por WhatsApp (${ultimoMotivo}). Avisado el equipo para llamada comercial.`);
+        await avisarPresu(seg, `Presupuesto ${seg.ref}: Marta no pudo enviar su mensaje ${n + 1} por WhatsApp (${ultimoMotivo}) — conviene llamar`);
+        crearNotaParte(seg.caseId, `Seguimiento presupuesto (Marta): no se pudo enviar el mensaje ${n + 1} por WhatsApp (${ultimoMotivo}). Avisada la responsable para llamar.`);
         continue;
       }
 
-      const r = await enviarToquePresu(seg, numToque);
+      const plantilla = plantillaPresu(seg.tipo, n, plan.marta.length);
+      const r = await enviarToquePresu(seg, plantilla, n + 1);
       if (r.ok) {
-        if (numToque === 1) { seg.estado = "toque1"; seg.toque1Ts = ahora; }
-        else if (numToque === 2) { seg.estado = "toque2"; seg.toque2Ts = ahora; }
-        else if (numToque === 3) { seg.estado = "toque3"; seg.toque3Ts = ahora; }
-        else { seg.estado = "toque2"; seg.toque2Ts = ahora; seg.recontactado = true; } // recontacto: si no contesta, aviso y fin
+        seg.enviados = n + 1;
+        seg.ultimoMensajeTs = ahora;
+        if (n === 0) seg.toque1Ts = ahora;
+        if (seg.enviados >= plan.marta.length) seg.estado = "fin_marta";
         guardarSeguimientosPresu();
-        registrarResultadoPresu(seg.ref, `toque${numToque}_enviado`);
-        console.log(`[Presupuestos] Toque ${numToque} enviado — ${seg.ref} (${seg.clave})`);
+        registrarResultadoPresu(seg.ref, `toque${n + 1}_enviado`);
+        console.log(`[Presupuestos] Mensaje ${n + 1}/${plan.marta.length} enviado — ${seg.ref} (${seg.clave}, ${seg.tipo})`);
       } else {
         registrarResultadoPresu(seg.ref, r.detalle ? `${r.motivo}: ${r.detalle}` : r.motivo);
         if (!r.reintentar) { seg.estado = "cancelado"; guardarSeguimientosPresu(); }
       }
-      resumen.toques.push({ ref: seg.ref, toque: numToque, resultado: r.ok ? "enviado" : r.motivo });
+      resumen.toques.push({ ref: seg.ref, toque: n + 1, resultado: r.ok ? "enviado" : r.motivo });
     }
+    resumen.agenda = await agendaPresupuestos({ forzar: false });
     return { ok: true, ...resumen };
   } catch (e) {
     console.error("[Presupuestos] Barrido falló:", e.message);
@@ -1283,6 +1390,92 @@ async function barridoToquesPresupuesto(forzarVentana) {
   } finally {
     barridoPresuEnCurso = false;
   }
+}
+
+// ── Agenda diaria de María (10:00, L-V) ──────────────────────
+// Un solo mensaje con lo que toca hoy, en vez de avisos sueltos:
+//   📞 llamar: 2 días después del último mensaje de Marta sin respuesta;
+//      el día 7 si el presupuesto pasa de 500 € (particular y empresa);
+//      "volver a llamar" en la fecha acordada; al administrador el día
+//      siguiente a la junta (comunidades)
+//   ✉️ email al tramitador (compañías): días 3, 10 y 20
+//   🔒 cerrar con R6: día 45 (comunidades, 90) si sigue abierto
+// Cada tarea se avisa una sola vez. Antes de incluirla se comprueba en
+// Zoho que el presupuesto sigue en Enviado.
+let agendaPresuDia = null; // último día (YYYY-MM-DD) en que se envió
+async function agendaPresupuestos({ forzar = false } = {}) {
+  const hoy = diaMadrid(new Date());
+  if (!forzar) {
+    if (!esLaborable(new Date())) return { ok: false, motivo: "no_laborable" };
+    if (minutosActualesMadrid() < 10 * 60) return { ok: false, motivo: "antes_de_las_10" };
+    if (!agendaPresuDia) agendaPresuDia = await redisGet("iberica:presuAgendaDia");
+    if (agendaPresuDia === hoy) return { ok: false, motivo: "ya_enviada_hoy" };
+  }
+  const ahora = Date.now(), dia = 24 * 3600 * 1000;
+  const tareas = []; // { seg, claves, grupo, texto }
+  for (const seg of Object.values(seguimientosPresu)) {
+    normalizarSegPresu(seg);
+    if (!PRESU_ESTADOS_VIVOS.includes(seg.estado)) continue;
+    const plan = PLANES_PRESU[seg.tipo] || PLANES_PRESU.particular;
+    const dias = (ahora - seg.enviadoTs) / dia;
+    const quien = `${seg.nombre || "Cliente"} ${seg.ref}`;
+    const nuevas = [];
+    const add = (claves, grupo, detalle) => {
+      const pendientes = [].concat(claves).filter((k) => !seg.avisos[k]);
+      if (pendientes.length) nuevas.push({ seg, claves: pendientes, grupo, texto: `${quien} (${detalle})` });
+    };
+    if (dias >= plan.cierre) {
+      add("r6", "cerrar", `${Math.floor(dias)} días abierto${seg.tipo === "comunidad" ? ", comunidad" : ""}`);
+    } else {
+      const emails = plan.emails.filter((d) => dias >= d);
+      if (emails.length) add(emails.map((d) => `email${d}`), "email", `día ${emails.at(-1)}`);
+      const sinRespuesta = ["en_curso", "fin_marta", "no_enviable"].includes(seg.estado);
+      if (plan.llamada7 && sinRespuesta && seg.importe > PRESU_IMPORTE_LLAMADA && dias >= 7) {
+        add("llamada7", "llamar", `día 7, ${Math.round(seg.importe)} €`);
+      }
+      if (seg.estado === "fin_marta" && ahora >= (seg.ultimoMensajeTs || seg.enviadoTs) + PRESU_DIAS_LLAMADA_FIN * dia) {
+        add("llamada_fin", "llamar", `no contestó a ${seg.enviados || 0} mensajes de Marta`);
+      }
+      if (seg.volverLlamarTs && ahora >= seg.volverLlamarTs) add("volver", "llamar", "volver a llamar, lo acordó con Marta");
+      if (seg.juntaTs && ahora >= seg.juntaTs + dia) add("junta", "llamar", "al administrador, tras la junta");
+    }
+    if (!nuevas.length) continue;
+    if ((await presupuestoSigueEnviado(seg)) === false) continue;
+    tareas.push(...nuevas);
+  }
+
+  const grupos = [
+    ["llamar", "📞 Llamar"],
+    ["email", "✉️ Email al tramitador (nunca al asegurado)"],
+    ["cerrar", "🔒 Cerrar con R6 en Zoho y FactuSOL"],
+  ];
+  const partes = grupos
+    .map(([g, titulo]) => [titulo, tareas.filter((t) => t.grupo === g).map((t) => t.texto)])
+    .filter(([, lista]) => lista.length)
+    .map(([titulo, lista]) => `${titulo}: ${lista.join("; ")}.`);
+
+  if (tareas.length) {
+    // Los parámetros de plantilla no admiten saltos de línea: todo en una
+    // línea, y troceado si es largo.
+    const texto = partes.join(" ");
+    const trozos = texto.match(/.{1,900}(\s|$)/g) || [texto];
+    for (const [i, trozo] of trozos.entries()) {
+      await avisarPresu(
+        { nombre: `AGENDA DE PRESUPUESTOS ${hoy}${trozos.length > 1 ? ` (${i + 1}/${trozos.length})` : ""}`, ref: `${tareas.length} tareas`, clave: "—" },
+        trozo.trim()
+      );
+    }
+    for (const t of tareas) {
+      for (const k of t.claves) t.seg.avisos[k] = ahora;
+      if (t.grupo === "cerrar") { t.seg.estado = "cerrado_r6"; registrarResultadoPresu(t.seg.ref, "agenda_cerrar_con_R6"); }
+      else registrarResultadoPresu(t.seg.ref, `agenda_${t.claves.at(-1)}`);
+    }
+    guardarSeguimientosPresu();
+  }
+  agendaPresuDia = hoy;
+  redisSet("iberica:presuAgendaDia", hoy);
+  console.log(`[Presupuestos] Agenda de ${hoy}: ${tareas.length} tareas`);
+  return { ok: true, tareas: tareas.length, texto: partes };
 }
 
 // Los avisos del seguimiento de presupuestos (respuestas, sin respuesta,
@@ -1334,6 +1527,10 @@ async function enviarNotificacionAgente(destinatario, datos) {
     console.warn(`[Notificación] ⚠️ Sin memberId para ${destinatario.nombre}`);
     return;
   }
+  // Meta rechaza parámetros de plantilla con saltos de línea, tabuladores o
+  // más de 4 espacios seguidos (p. ej. una respuesta de cliente citada).
+  datos = Object.fromEntries(Object.entries(datos).map(([k, v]) =>
+    [k, String(v ?? "—").replace(/[\r\n\t]+/g, " · ").replace(/ {4,}/g, " ").trim() || "—"]));
   const body = {
     channelId: destinatario.channelId,
     memberId:  destinatario.memberId,
@@ -2187,8 +2384,8 @@ async function extraerSiguientePaso(mensaje) {
             role: "system",
             content:
 `Hoy es ${hoy}. Un cliente responde a: "¿Qué te queda por resolver para decidirte y cuándo te viene bien que te vuelva a escribir?" sobre un presupuesto de cerrajería o puertas. Devuelve SOLO este JSON:
-{"dias": número de días desde hoy hasta cuando quiere que le escriban (null si no da ninguna fecha o plazo), "falta": texto breve con la información, duda o condición que le falta (null si nada), "decision": "acepta" | "declina" | "ninguna"}
-"la semana que viene" = 7, "dentro de un mes" = 30, "después de la junta del día 20" = días hasta ese día + 1. No inventes plazos que no diga.`,
+{"dias": número de días desde hoy hasta la fecha que da (cuando quiere que le contacten, o la de la reunión en la que lo decidirán; null si no da ninguna), "junta": true si esa fecha es una junta o reunión (de vecinos, de la comunidad, de socios) en la que se decidirá, false si no, "falta": texto breve con la información, duda o condición que le falta (null si nada), "decision": "acepta" | "declina" | "ninguna"}
+"la semana que viene" = 7, "dentro de un mes" = 30, "la junta es el día 20" = días hasta el día 20 y junta = true. No inventes plazos que no diga.`,
           },
           { role: "user", content: mensaje },
         ],
@@ -2198,6 +2395,7 @@ async function extraerSiguientePaso(mensaje) {
     const j = JSON.parse(res.choices?.[0]?.message?.content || "{}");
     return {
       dias: Number.isFinite(j.dias) ? j.dias : null,
+      junta: j.junta === true || /\bjunta\b|reuni[oó]n de (vecinos|la comunidad|socios)/i.test(String(mensaje || "")),
       falta: j.falta ? String(j.falta).slice(0, 200) : null,
       decision: ["acepta", "declina"].includes(j.decision) ? j.decision : "ninguna",
     };
@@ -2212,7 +2410,13 @@ async function extraerSiguientePaso(mensaje) {
   else if (/semana (que viene|proxima)|proxima semana/.test(low)) dias = 7;
   else if (/(mes que viene|proximo mes|un mes)/.test(low)) dias = 30;
   const cat = clasificarRespuestaPresuPorPalabras(mensaje);
-  return { dias, falta: null, decision: ["acepta", "declina"].includes(cat) ? cat : "ninguna" };
+  const diaJunta = low.match(/junta[^0-9]{0,30}(\d{1,2})/);
+  if (dias === null && diaJunta) {
+    const hoyD = Number(diaMadrid(new Date()).slice(8));
+    const objetivo = Number(diaJunta[1]);
+    dias = objetivo >= hoyD ? objetivo - hoyD : objetivo + 30 - hoyD;
+  }
+  return { dias, junta: /junta|reunion de (vecinos|la comunidad|socios)/.test(low), falta: null, decision: ["acepta", "declina"].includes(cat) ? cat : "ninguna" };
 }
 
 async function clasificarConIA(estado, mensaje) {
@@ -2646,13 +2850,25 @@ async function procesarRespuestaPresu(telefono) {
       await avisar("📋 El cliente necesita información para decidir", sig.falta);
     }
     if (sig.dias !== null) {
-      const dias = Math.min(90, Math.max(3, Math.round(sig.dias)));
-      const cuando = new Date(Date.now() + dias * 24 * 3600 * 1000);
-      if (seg) { seg.estado = "aplazado"; seg.recontactoTs = cuando.getTime(); guardarSeguimientosPresu(); }
+      const dias = Math.min(90, Math.max(1, Math.round(sig.dias)));
+      const cuando = laborableDesde(new Date(Date.now() + dias * 24 * 3600 * 1000));
       const fecha = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", weekday: "long", day: "numeric", month: "long" }).format(cuando);
-      await enviarMensaje(telefono, `¡Perfecto! Te vuelvo a escribir hacia el ${fecha}.${sig.falta ? " Y lo que necesitas se lo paso ya a un compañero." : ""} Cualquier cosa antes, aquí estoy 🙂`);
-      partes.push(`volver a escribir el ${fecha}`);
-      registrarResultadoPresu(ref, `recontacto_acordado_en_${dias}_dias`);
+      const ddmm = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", day: "2-digit", month: "2-digit" }).format(cuando);
+      const otroDia = new Date(cuando.getTime() + 24 * 3600 * 1000);
+      const ddmmJunta = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", day: "2-digit", month: "2-digit" }).format(otroDia);
+      if (sig.junta) {
+        // Comunidades: María llama al administrador al día siguiente de la junta
+        if (seg) { seg.estado = "respondido"; seg.juntaTs = cuando.getTime(); guardarSeguimientosPresu(); }
+        await enviarMensaje(telefono, `¡Perfecto! Después de la junta un compañero os llama para ver cómo ha ido.${sig.falta ? " Y lo que necesitáis para presentarlo se lo paso ya." : ""} Cualquier cosa antes, aquí estoy 🙂`);
+        partes.push(`junta el ${fecha}: llamar al administrador el ${ddmmJunta}`);
+        registrarResultadoPresu(ref, `junta_en_${dias}_dias`);
+      } else {
+        // "Me lo pienso" con fecha: «Volver a llamar dd/mm» (llama María)
+        if (seg) { seg.estado = "volver_a_llamar"; seg.volverLlamarTs = cuando.getTime(); guardarSeguimientosPresu(); }
+        await enviarMensaje(telefono, `¡Perfecto! Te llamamos hacia el ${fecha}.${sig.falta ? " Y lo que necesitas se lo paso ya a un compañero." : ""} Cualquier cosa antes, aquí estoy 🙂`);
+        partes.push(`Volver a llamar ${ddmm}`);
+        registrarResultadoPresu(ref, `volver_a_llamar_en_${dias}_dias`);
+      }
     } else {
       await enviarMensaje(telefono, `¡Perfecto! Te guardamos el presupuesto.${sig.falta ? " Lo que necesitas se lo paso ya a un compañero." : ""} Cuando lo tengáis claro, me escribes por aquí 🙂`);
       registrarResultadoPresu(ref, "aplazado_sin_fecha");
@@ -3933,11 +4149,21 @@ app.get("/admin/api/presupuestos-stats", authAdmin, (req, res) => {
   const ahora = Date.now();
   res.json({
     activo: presuActivo(),
-    plantillas: { toque1: process.env.PRESU_TEMPLATE || null, toque2: process.env.PRESU_TEMPLATE2 || process.env.PRESU_TEMPLATE || null },
-    cadenciaDias: { toque1: PRESU_DIAS_TOQUE1, toque2: PRESU_DIAS_TOQUE2, cierre: PRESU_DIAS_CIERRE },
-    seguimientos: Object.values(seguimientosPresu).map((s) => ({
-      ref: s.ref, telefono: s.clave, nombre: s.nombre, estado: s.estado,
+    responsable: destinatarioPresupuestos().nombre,
+    plantillas: {
+      primera: process.env.PRESU_TEMPLATE || null,
+      intermedias: process.env.PRESU_TEMPLATE2 || process.env.PRESU_TEMPLATE || null,
+      ultimaAparcado: process.env.PRESU_TEMPLATE3 || null,
+      comunidad: process.env.PRESU_TEMPLATE_COMUNIDAD || null,
+    },
+    calendario: Object.fromEntries(Object.entries(PLANES_PRESU).map(([t, p]) => [t, { martaEscribeDias: p.marta, emailsTramitadorDias: p.emails, llamadaDia7SiMasDe: p.llamada7 ? PRESU_IMPORTE_LLAMADA : null, cierreR6Dia: p.cierre }])),
+    agendaEnviadaHoy: agendaPresuDia === diaMadrid(new Date()),
+    seguimientos: Object.values(seguimientosPresu).map((s) => normalizarSegPresu(s)).map((s) => ({
+      ref: s.ref, telefono: s.clave, nombre: s.nombre, tipo: s.tipo, importe: s.importe ?? null,
+      estado: s.estado, mensajesMarta: s.enviados || 0,
       diasDesdeEnvio: s.enviadoTs ? Math.round((ahora - s.enviadoTs) / 86400000) : null,
+      volverALlamar: s.volverLlamarTs ? diaMadrid(new Date(s.volverLlamarTs)) : undefined,
+      junta: s.juntaTs ? diaMadrid(new Date(s.juntaTs)) : undefined,
     })),
     historial: presuHistorial.slice(0, 30),
     motivos: presuHistorial.reduce((acc, h) => {
@@ -3973,7 +4199,7 @@ app.get("/admin/api/presupuestos-resultados", authAdmin, async (req, res) => {
       ref: seg.ref, nombre: seg.nombre || null,
       seguimientoMarta: seg.estado,
       respondioAMarta: seg.estado === "respondido",
-      toques: seg.toque2Ts ? 2 : 1,
+      toques: seg.enviados || (seg.toque2Ts ? 2 : 1),
       estadoActualZoho: estadoActual,
     });
   }
@@ -3987,7 +4213,47 @@ app.get("/admin/api/presupuestos-resultados", authAdmin, async (req, res) => {
 app.get("/admin/api/test-presupuestos", authAdmin, async (req, res) => {
   const sondeo  = await sondearPresupuestosEnviados();
   const barrido = await barridoToquesPresupuesto(req.query.forzar === "1");
-  res.json({ sondeo, barrido });
+  const agenda  = req.query.agenda === "1" ? await agendaPresupuestos({ forzar: true }) : undefined;
+  res.json({ sondeo, barrido, agenda });
+});
+
+// ── Qué tipo de cliente e importe deduce Marta (diagnóstico) ──
+// Para comprobar la clasificación particular / empresa / comunidad /
+// compañía y si encuentra el importe, sobre los últimos presupuestos de
+// Zoho. `camposPosibles` = campos del parte que podrían decirlo, para
+// fijarlos con PRESU_CAMPO_TIPO / PRESU_CAMPO_IMPORTE si hace falta.
+app.get("/admin/api/presupuestos-tipos", authAdmin, async (req, res) => {
+  try {
+    const token = await obtenerTokenZoho();
+    const r = await axios.get("https://www.zohoapis.eu/crm/v2/Cases", {
+      params: { sort_by: "Modified_Time", sort_order: "desc", per_page: 50 },
+      headers: { Authorization: `Zoho-oauthtoken ${token}` },
+    });
+    const casos = (r.data?.data || []).filter((c) => normalizaTxt(c.Status || "").includes("presupuesto")).slice(0, 15);
+    const salida = [];
+    for (const caso of casos) {
+      let contacto = {};
+      try {
+        if (caso.Related_To?.id) {
+          const c = await axios.get(`https://www.zohoapis.eu/crm/v2/Contacts/${caso.Related_To.id}`, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+          contacto = c.data?.data?.[0] || {};
+        }
+      } catch (_) {}
+      const camposPosibles = Object.fromEntries(Object.entries(caso)
+        .filter(([k, v]) => v != null && v !== "" && /tipo|cliente|segur|compa|importe|amount|total|precio|anotac|cuenta|account/i.test(k))
+        .map(([k, v]) => [k, typeof v === "object" ? (v.name || JSON.stringify(v).slice(0, 60)) : String(v).slice(0, 60)]));
+      salida.push({
+        ref: caso.ref_Parte || caso.id, cliente: caso.Related_To?.name || null,
+        estado: `${caso.Status || "?"} / ${caso.Subestado || "—"}`,
+        tipoDeducido: tipoClientePresu(caso, contacto), importeDeducido: importePresu(caso),
+        empresaDelContacto: contacto.Account_Name?.name || null,
+        camposPosibles,
+      });
+    }
+    res.json({ ok: true, campoTipo: process.env.PRESU_CAMPO_TIPO || null, campoImporte: process.env.PRESU_CAMPO_IMPORTE || null, presupuestos: salida });
+  } catch (e) {
+    res.json({ ok: false, error: String(e.message).slice(0, 200) });
+  }
 });
 
 // ── Canales visibles en Woztell (diagnóstico) ────────────────
@@ -4360,8 +4626,9 @@ app.post("/webhook", async (req, res) => {
     // respuesta: se reconstruye el paso presu_respuesta tras un redeploy.
     if (channelId === CANAL_SOPORTE && !(conversaciones[telefono]?.step || "").match(/^(resena_|presu_)/)) {
       const segAbierto = Object.values(seguimientosPresu).find(
-        (s) => s.clave === telefono && ["toque1", "toque2", "toque3"].includes(s.estado) &&
-               Date.now() - (s.toque3Ts || s.toque2Ts || s.toque1Ts || 0) < 7 * 24 * 3600 * 1000
+        (s) => s.clave === telefono && ["en_curso", "fin_marta", "toque1", "toque2", "toque3"].includes(s.estado) &&
+               (s.enviados || s.toque1Ts) &&
+               Date.now() - (s.ultimoMensajeTs || s.toque3Ts || s.toque2Ts || s.toque1Ts || 0) < 7 * 24 * 3600 * 1000
       );
       if (segAbierto) {
         if (!conversaciones[telefono]) resetearConversacion(telefono);
@@ -4369,7 +4636,7 @@ app.post("/webhook", async (req, res) => {
         est.memberId  = memberId;
         est.channelId = channelId;
         est.step      = "presu_respuesta";
-        est.presu     = { ref: segAbierto.ref, caseId: segAbierto.caseId, toque: segAbierto.estado === "toque3" ? 3 : null };
+        est.presu     = { ref: segAbierto.ref, caseId: segAbierto.caseId, toque: (segAbierto.estado === "toque3" || (segAbierto.ultimaPlantilla && segAbierto.ultimaPlantilla === process.env.PRESU_TEMPLATE3)) ? 3 : null };
         console.log(`[Presupuestos] Seguimiento reconstruido para ${telefono} (${segAbierto.ref})`);
       }
     }
