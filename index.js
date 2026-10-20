@@ -4593,6 +4593,9 @@ app.post("/webhook", async (req, res) => {
         // (Se maneja aquí a propósito: un comentario trae texto del CLIENTE y
         // no debe pasar por la detección de intervención humana.)
         try { await manejarComentarioIG(req.body); } catch (e) { console.error("[Comentarios] Error:", e.message); }
+      } else if (tipo === "SMB_CONTACTS") {
+        // Sincronización de la agenda de la app de WhatsApp Business: llegan
+        // cientos seguidos, sin texto. Ni son respuestas ni llenan los logs.
       } else {
         console.log(`[Webhook] Evento ignorado (type: ${tipo}, eventType: ${eventType})`);
         // Los tipos que no conocemos pueden ser el eco de una respuesta manual
