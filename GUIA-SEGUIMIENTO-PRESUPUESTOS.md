@@ -138,7 +138,7 @@ sobre el presupuesto: ¿has decidido aparcarlo? Si es así, con un simple
 | `PRESU_RESPONSABLE` | `mari` | Quién recibe la agenda y TODOS los avisos: `mari`, `nieves` o `guardia`. Por defecto, Mari |
 | `PRESU_TEMPLATE` | `seguimiento_presupuesto` | Primer mensaje (o `seguimiento_presupuesto_v2` cuando esté aprobada) |
 | `PRESU_TEMPLATE2` | `seguimiento_presupuesto_3` | Mensajes intermedios |
-| `PRESU_TEMPLATE3` | `seguimiento_presupuesto_aparcado` | Último mensaje «¿has aparcado...?». Sin definir = usa la 2 |
+| `PRESU_TEMPLATE3` | `seguimiento_presupuesto_aparcado` | Último mensaje «¿has aparcado...?». Activada por defecto (aprobada en Meta); `off` = usa la 2 |
 | `PRESU_TEMPLATE_COMUNIDAD` | — | Opcional, mensajes 2 a 5 de comunidades. Sin definir = usa la 2 |
 | `PRESU_PLAN_PARTICULAR` / `_EMPRESA` / `_COMUNIDAD` | `2,5,10` / `2,7,14,21` / `3,10,30,45,60` | Opcional, días en que escribe Marta |
 | `PRESU_IMPORTE_LLAMADA` | `500` | A partir de este importe, María llama el día 7 |

@@ -1294,11 +1294,16 @@ async function sondearPresupuestosEnviados() {
 // el primero, PRESU_TEMPLATE; el último (si hay 3 o más), la de "¿has
 // aparcado el presupuesto?" (PRESU_TEMPLATE3) si está activada; los de en
 // medio, PRESU_TEMPLATE2 (en comunidades, PRESU_TEMPLATE_COMUNIDAD si existe).
+// Plantilla «¿has aparcado el presupuesto?», aprobada en Meta. Por defecto,
+// activada; PRESU_TEMPLATE3=off la desactiva (el último mensaje usa la 2).
+const PRESU_PLANTILLA_APARCADO = (process.env.PRESU_TEMPLATE3 || "seguimiento_presupuesto_aparcado").trim() === "off"
+  ? null : (process.env.PRESU_TEMPLATE3 || "seguimiento_presupuesto_aparcado").trim();
+
 function plantillaPresu(tipo, indice, total) {
   const t1 = process.env.PRESU_TEMPLATE;
   const t2 = process.env.PRESU_TEMPLATE2 || t1;
   if (indice === 0) return t1;
-  if (indice === total - 1 && total >= 3 && process.env.PRESU_TEMPLATE3) return process.env.PRESU_TEMPLATE3;
+  if (indice === total - 1 && total >= 3 && PRESU_PLANTILLA_APARCADO) return PRESU_PLANTILLA_APARCADO;
   if (tipo === "comunidad" && process.env.PRESU_TEMPLATE_COMUNIDAD) return process.env.PRESU_TEMPLATE_COMUNIDAD;
   return t2;
 }
@@ -1333,7 +1338,7 @@ async function enviarToquePresu(seg, plantilla, numToque) {
   estado.step  = "presu_respuesta";
   // toque 3 = "¿has aparcado el presupuesto?": el clasificador lo necesita
   // para entender que un "sí" es que lo deja
-  const esAparcado = plantilla === process.env.PRESU_TEMPLATE3;
+  const esAparcado = !!PRESU_PLANTILLA_APARCADO && plantilla === PRESU_PLANTILLA_APARCADO;
   estado.presu = { ref: seg.ref, caseId: seg.caseId, toque: esAparcado ? 3 : numToque };
 
   const nombreCorto = seg.nombre ? String(seg.nombre).trim().split(/\s+/)[0] : "de nuevo";
@@ -4215,7 +4220,7 @@ app.get("/admin/api/presupuestos-stats", authAdmin, (req, res) => {
     plantillas: {
       primera: process.env.PRESU_TEMPLATE || null,
       intermedias: process.env.PRESU_TEMPLATE2 || process.env.PRESU_TEMPLATE || null,
-      ultimaAparcado: process.env.PRESU_TEMPLATE3 || null,
+      ultimaAparcado: PRESU_PLANTILLA_APARCADO,
       comunidad: process.env.PRESU_TEMPLATE_COMUNIDAD || null,
     },
     calendario: Object.fromEntries(Object.entries(PLANES_PRESU).map(([t, p]) => [t, { martaEscribeDias: p.marta, emailsTramitadorDias: p.emails, llamadaDia7SiMasDe: p.llamada7 ? PRESU_IMPORTE_LLAMADA : null, cierreR6Dia: p.cierre }])),
@@ -4698,7 +4703,7 @@ app.post("/webhook", async (req, res) => {
         est.memberId  = memberId;
         est.channelId = channelId;
         est.step      = "presu_respuesta";
-        est.presu     = { ref: segAbierto.ref, caseId: segAbierto.caseId, toque: (segAbierto.estado === "toque3" || (segAbierto.ultimaPlantilla && segAbierto.ultimaPlantilla === process.env.PRESU_TEMPLATE3)) ? 3 : null };
+        est.presu     = { ref: segAbierto.ref, caseId: segAbierto.caseId, toque: (segAbierto.estado === "toque3" || (segAbierto.ultimaPlantilla && segAbierto.ultimaPlantilla === PRESU_PLANTILLA_APARCADO)) ? 3 : null };
         console.log(`[Presupuestos] Seguimiento reconstruido para ${telefono} (${segAbierto.ref})`);
       }
     }
