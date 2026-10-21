@@ -89,6 +89,32 @@ Fuentes: [Sandler, prospects que no devuelven la llamada](https://go.sandler.com
    chat; si allí no existe la plantilla, desde el número del BOT. Las
    plantillas hay que crearlas en la cuenta de WhatsApp del número del BOT.
 
+## Bajas
+
+Si un cliente escribe **BAJA**, o lo pide con otras palabras («no me
+escribáis más», «quitadme de la lista», «stop»…), Marta:
+
+1. le confirma que no le volveremos a escribir;
+2. cancela sus seguimientos de presupuesto y su encuesta pendiente;
+3. deja una nota en el parte;
+4. avisa a Mari para poner `[NOCOM]` en FactuSOL.
+
+Cuando contesta a un mensaje nuestro, también cuenta como baja un enfado
+(«spam», «os denuncio», «qué pesados») o la noticia de un fallecimiento:
+Marta se disculpa o da el pésame. En una conversación normal no, porque
+«tengo la denuncia del robo» es una petición de servicio.
+
+La baja es para siempre y bloquea **todo** lo que enviamos nosotros:
+seguimientos, encuestas y campañas. Si el cliente nos escribe, se le
+atiende con normalidad. Si una persona de la oficina lleva el chat, la
+baja se apunta en silencio.
+
+- `GET /admin/api/bajas` — lista de bajas.
+- `GET /admin/api/bajas?anadir=611222333&motivo=telefono` — dar de baja a
+  mano (por ejemplo, si lo pidió por teléfono).
+- `GET /admin/api/bajas?quitar=611222333` — quitarla (solo si el cliente
+  lo pide).
+
 ## Plantillas en Meta (categoría Utility, español, variable {{1}} = nombre)
 
 Todas se crean en la cuenta de WhatsApp del **número del BOT**.

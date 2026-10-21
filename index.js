@@ -632,6 +632,10 @@ async function buscarOCrearMiembroWoztell(channelId, telefono, nombre) {
 // plantilla no existe (error 132001), se reenvía desde el número del BOT.
 // Las respuestas del cliente por ese número las recoge Marta igualmente.
 async function enviarPlantillaConRespaldo(clave, elementName, parametros, idioma, nombre) {
+  if (esBaja(clave)) {
+    console.log(`[Bajas] ${elementName} NO enviada a ${clave}: pidió la baja`);
+    return { ok: false, motivo: "baja", detalle: "cliente_dado_de_baja" };
+  }
   const estado = conversaciones[clave];
   let r = await enviarPlantillaWoztell(clave, elementName, parametros, idioma);
   const canalBot = process.env.WOZTELL_CHANNEL_ID;
@@ -668,6 +672,85 @@ function telefonoValido(clave) {
   }
   return d.length >= 10 && !/^(\d)\1+$/.test(d);
 }
+
+// ══════════════════════════════════════════════════════════════════
+// BAJAS — clientes que no quieren más mensajes nuestros
+// Quien escribe "BAJA" (o lo pide con otras palabras) no vuelve a recibir
+// NINGÚN mensaje iniciado por nosotros: seguimientos de presupuesto,
+// encuestas ni campañas. Si él nos escribe, se le atiende con normalidad.
+// Es para siempre; solo se quita desde el panel (/admin/api/bajas).
+// ══════════════════════════════════════════════════════════════════
+const bajas = {}; // { "611222333": { ts, motivo, texto } } — clave: últimos 9 dígitos
+const claveBaja = (t) => String(t || "").replace(/\D/g, "").slice(-9);
+function esBaja(telefono) { const k = claveBaja(telefono); return k.length === 9 && !!bajas[k]; }
+function guardarBajas() { redisSet("iberica:bajas", bajas); }
+
+// ¿Pide la baja? Devuelve el motivo o null.
+// · "baja": lo pide expresamente (vale en cualquier conversación)
+// · "enfado" / "fallecimiento": solo si contesta a un mensaje que le
+//   mandamos nosotros (en una conversación normal, "tengo la denuncia del
+//   robo" o "mi padre falleció y cambio la cerradura" son peticiones de
+//   servicio, no bajas). Ante la duda, baja.
+function detectarBaja(texto, respondeAMensajeNuestro) {
+  const t = normalizaTxt(texto).replace(/[¡!¿?.,;:"'()*_~]/g, " ").replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  if (/^(baja|de baja|stop|unsubscribe|darme de baja|dame de baja|dadme de baja)( por favor| porfa| gracias)?$/.test(t)) return "baja";
+  if (/\b(dar(me|nos)? de baja|da(me|nos) de baja|dad(me|nos) de baja|quiero (la |darme de )?baja|me doy de baja)\b/.test(t)) return "baja";
+  if (/\bno (me |nos )?(escribas|escribais|escriban|escriba|mandes|mandeis|manden|mande|envies|envieis|envien|envie|(volvais|vuelvas|vuelvan|vuelva) a (escribir|mandar|enviar)(me|nos)?)( (mas|nada|ningun|mensajes|whatsapps?|publicidad)|$)/.test(t)) return "baja";
+  if (/\bno quiero (recibir )?(mas |ningun |ningunos )?(mensajes|whatsapps|publicidad|promociones)/.test(t)) return "baja";
+  if (/\b(dejad|deja|dejen|deje) de (escribir|mandar|enviar)/.test(t)) return "baja";
+  if (/\b(quita|quitad|quiten|quite|borra|borrad|borren|elimina|eliminad)(me|nos)? de (la|vuestra|vuestras|su|sus|esta) (lista|base|listas)/.test(t)) return "baja";
+  if (/^(quitadme|quitame|borradme|borrame)$/.test(t)) return "baja";
+  if (!respondeAMensajeNuestro) return null;
+  if (/\b(falleci|ha muerto|murio|en paz descanse|q e p d|qepd|ya no vive|no esta con nosotros)/.test(t)) return "fallecimiento";
+  if (/\b(denunci|spam|acoso|acosando|pesad[oa]s|cansin[oa]s|que asco|no me molest|dejadme en paz|dejame en paz|como habeis conseguido mi numero|quien os ha dado mi numero)/.test(t)) return "enfado";
+  return null;
+}
+
+async function registrarBaja(telefono, motivo, texto, { origen = "whatsapp" } = {}) {
+  const k = claveBaja(telefono);
+  if (k.length !== 9) return false;
+  const nueva = !bajas[k];
+  bajas[k] = { ts: Date.now(), motivo, origen, texto: String(texto || "").slice(0, 200) };
+  guardarBajas();
+  // Cancelar sus seguimientos de presupuesto vivos
+  const casos = [];
+  for (const seg of Object.values(seguimientosPresu)) {
+    if (claveBaja(seg.clave || seg.telefono) !== k) continue;
+    if (seg.caseId) casos.push(seg.caseId);
+    if (!["cancelado", "cerrado_r6", "baja"].includes(seg.estado)) {
+      seg.estado = "baja";
+      registrarResultadoPresu(seg.ref, `baja_cliente (${motivo})`);
+    }
+  }
+  guardarSeguimientosPresu();
+  // Encuesta pendiente: no se le vuelve a preguntar
+  for (const c of Object.keys(resenasEnCurso)) if (claveBaja(c) === k) delete resenasEnCurso[c];
+  redisSet("iberica:resenasEnCurso", resenasEnCurso);
+  for (const caseId of new Set(casos)) {
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente pide la BAJA (${motivo}). No se le vuelve a escribir. Respuesta: "${String(texto || "").slice(0, 200)}". Poner [NOCOM] en FactuSOL.`);
+  }
+  if (nueva) {
+    console.log(`[Bajas] ${k} dado de baja (${motivo}, ${origen})`);
+    const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+    await enviarNotificacionAgente(destinatarioPresupuestos(), {
+      nombre: conversaciones[telefono]?.nombre || k,
+      telefono: k,
+      direccion: "—",
+      descripcion: `🚫 BAJA de mensajes (${motivo}): "${String(texto || "").slice(0, 120)}". No escribirle más y poner [NOCOM] en FactuSOL.`,
+      apertura: ahoraStr,
+      refParte: "—",
+      agente: "Marta · Bajas",
+    }).catch((e) => console.error("[Bajas] Aviso:", e.message));
+  }
+  return nueva;
+}
+
+const RESPUESTA_BAJA = {
+  baja: "Hecho 🙏 No te volveremos a escribir con seguimientos ni avisos. Si algún día nos necesitas, escríbenos por aquí y te atendemos encantados.",
+  enfado: "Perdona las molestias. Te hemos dado de baja y no volverás a recibir mensajes nuestros.",
+  fallecimiento: "Lo sentimos mucho, y perdona la molestia. No volveremos a escribir a este número.",
+};
 
 // Envío genérico de una plantilla aprobada de Meta al chat de un cliente
 // (requiere conversaciones[telefono] con memberId/channelId ya puestos).
@@ -758,6 +841,7 @@ async function pedirResena({ telefono, nombre, refParte, caseId }) {
     clave = d.length === 9 ? `34${d}` : d;
   }
   if (!telefonoValido(clave)) return { ok: false, motivo: "telefono_invalido_en_zoho" };
+  if (esBaja(clave)) return { ok: false, motivo: "cliente_dado_de_baja" };
   // No interrumpir si una persona de la oficina está atendiendo el chat AHORA.
   // Ojo: con el auto-takeover casi todos los clientes activos acaban con una
   // pausa de 6h (la oficina remata el trabajo por WhatsApp justo antes de
@@ -1275,6 +1359,12 @@ async function sondearPresupuestosEnviados() {
         guardarSeguimientosPresu();
         continue;
       }
+      if (esBaja(clave)) {
+        seguimientosPresu[caso.id] = { ...base, telefono: telefonoCli, clave, estado: "baja" };
+        registrarResultadoPresu(ref, "cliente_dado_de_baja_sin_marta");
+        guardarSeguimientosPresu();
+        continue;
+      }
       seguimientosPresu[caso.id] = { ...base, telefono: telefonoCli, clave, estado: "en_curso" };
       resumen.nuevos++;
       registrarResultadoPresu(ref, `seguimiento_programado_${base.tipo}`);
@@ -1402,6 +1492,12 @@ async function barridoToquesPresupuesto(forzarVentana) {
     for (const seg of Object.values(seguimientosPresu)) {
       normalizarSegPresu(seg);
       if (seg.estado !== "en_curso") continue;
+      if (esBaja(seg.clave || seg.telefono)) {
+        seg.estado = "baja";
+        registrarResultadoPresu(seg.ref, "baja_cliente (sin más mensajes)");
+        guardarSeguimientosPresu();
+        continue;
+      }
       const plan = PLANES_PRESU[seg.tipo] || PLANES_PRESU.particular;
       const n = seg.enviados || 0;
       if (n >= plan.marta.length) { seg.estado = "fin_marta"; guardarSeguimientosPresu(); continue; }
@@ -1722,6 +1818,8 @@ async function cargarEstadoDesdeRedis() {
   if (Array.isArray(historialGuardado)) resenasHistorial = historialGuardado;
   const enCursoGuardadas = await redisGet("iberica:resenasEnCurso");
   if (enCursoGuardadas) Object.assign(resenasEnCurso, enCursoGuardadas);
+  const bajasGuardadas = await redisGet("iberica:bajas");
+  if (bajasGuardadas) Object.assign(bajas, bajasGuardadas);
   const seguimientosGuardados = await redisGet("iberica:seguimientosPresu");
   if (seguimientosGuardados) Object.assign(seguimientosPresu, seguimientosGuardados);
   const presuHistGuardado = await redisGet("iberica:presuHistorial");
@@ -4212,6 +4310,26 @@ cargar();
 });
 
 // ── Seguimiento de presupuestos: estado y pruebas ────────────
+// Bajas: lista, y alta/quitar a mano (p. ej. lo pidió por teléfono)
+//   /admin/api/bajas · ?anadir=611222333&motivo=telefono · ?quitar=611222333
+app.get("/admin/api/bajas", authAdmin, async (req, res) => {
+  if (req.query.anadir) {
+    const k = claveBaja(req.query.anadir);
+    if (k.length !== 9) return res.json({ ok: false, error: "teléfono no válido" });
+    await registrarBaja(k, String(req.query.motivo || "a_mano").slice(0, 40), "", { origen: "panel" });
+  }
+  if (req.query.quitar) {
+    const k = claveBaja(req.query.quitar);
+    delete bajas[k];
+    guardarBajas();
+    console.log(`[Bajas] ${k} quitado de la lista desde el panel`);
+  }
+  const lista = Object.entries(bajas)
+    .map(([telefono, b]) => ({ telefono, fecha: new Date(b.ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }), motivo: b.motivo, origen: b.origen, texto: b.texto }))
+    .sort((a, b) => (bajas[b.telefono].ts - bajas[a.telefono].ts));
+  res.json({ ok: true, total: lista.length, bajas: lista });
+});
+
 app.get("/admin/api/presupuestos-stats", authAdmin, (req, res) => {
   const ahora = Date.now();
   res.json({
@@ -4715,6 +4833,25 @@ app.post("/webhook", async (req, res) => {
     // presupuesto se procesa siempre, aunque el canal esté en pausa o
     // fuera de horario (son intercambios puntuales).
     const enFlujoResena = /^(resena_|presu_)/.test(conversaciones[telefono]?.step || "");
+
+    // ── BAJA: a cualquier hora y en cualquier chat ──────────────────
+    // Si una persona de la oficina lleva el chat, se registra en silencio
+    // (la persona ve el mensaje); si no, Marta lo confirma.
+    const motivoBaja = detectarBaja(texto, enFlujoResena);
+    if (motivoBaja) {
+      await registrarBaja(telefono, motivoBaja, texto);
+      if (!conversaciones[telefono]) resetearConversacion(telefono);
+      const est = conversaciones[telefono];
+      est.memberId  = memberId;
+      est.channelId = channelId;
+      if (/^(resena_|presu_)/.test(est.step || "")) est.step = "menu_principal";
+      delete est.presu;
+      delete est.resena;
+      if (!botPausado(`${channelId}_${telefono}`) || enFlujoResena) {
+        await enviarMensaje(telefono, RESPUESTA_BAJA[motivoBaja]);
+      }
+      return res.sendStatus(200);
+    }
 
     // ── Comprobar si el bot está pausado para este cliente en este canal ──
     const claveBot = `${channelId}_${telefono}`;
