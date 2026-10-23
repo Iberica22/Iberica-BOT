@@ -713,6 +713,10 @@ async function registrarBaja(telefono, motivo, texto, { origen = "whatsapp" } = 
   const nueva = !bajas[k];
   bajas[k] = { ts: Date.now(), motivo, origen, texto: String(texto || "").slice(0, 200) };
   guardarBajas();
+  if (consentimientos[k]?.respuesta === "si") {
+    consentimientos[k] = { ...consentimientos[k], respuesta: "revocado", revocadoTs: Date.now() };
+    guardarConsentimientos();
+  }
   // Cancelar sus seguimientos de presupuesto vivos
   const casos = [];
   for (const seg of Object.values(seguimientosPresu)) {
@@ -744,6 +748,38 @@ async function registrarBaja(telefono, motivo, texto, { origen = "whatsapp" } = 
     }).catch((e) => console.error("[Bajas] Aviso:", e.message));
   }
   return nueva;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// CONSENTIMIENTO para mensajes comerciales por WhatsApp
+// Se pide en la encuesta postventa, tras una buena nota. Se guarda la
+// fecha, la pregunta exacta y lo que contestó: es la prueba ante
+// protección de datos. La BAJA manda siempre sobre el consentimiento.
+// ══════════════════════════════════════════════════════════════════
+const CONSENT_ESPERA_MS = parseInt(process.env.CONSENT_ESPERA_MS || "4000", 10);
+const consentimientos = {}; // { "611222333": { ts, respuesta: "si"|"no", texto, pregunta, origen, refParte } }
+function guardarConsentimientos() { redisSet("iberica:consentimientos", consentimientos); }
+function tieneConsentimiento(telefono) {
+  const k = claveBaja(telefono);
+  return consentimientos[k]?.respuesta === "si" && !esBaja(k);
+}
+const PREGUNTA_CONSENTIMIENTO = "Una última cosa: ¿te parece bien que te escribamos por aquí de vez en cuando, como mucho 4 veces al año, con revisiones y avisos de temporada? Responde SÍ o NO. Puedes darte de baja cuando quieras escribiendo BAJA.";
+
+// SÍ / NO claros; cualquier otra cosa no cuenta como respuesta
+function respuestaConsentimiento(texto) {
+  const t = normalizaTxt(texto).replace(/[¡!¿?.,;:"'()*_~]/g, " ").replace(/\s+/g, " ").trim();
+  if (/^(si|sii+|si si|vale|ok|okey|claro|por supuesto|de acuerdo|perfecto|adelante|sin problema|bueno|venga|👍|👌)( (claro|vale|gracias|perfecto|sin problema|por supuesto|me parece bien|porfa|por favor))*( 👍| 🙂| 😊)?$/.test(t) ||
+      /^(si|vale|ok|claro)\b.{0,40}\b(me parece bien|podeis|escribid|sin problema)/.test(t)) return "si";
+  if (/^(no|nop|no gracias|no no|mejor no|prefiero que no|no hace falta|no me interesa|para nada)( gracias| por ahora| de momento)?( 🙏| 🙂)?$/.test(t)) return "no";
+  return null;
+}
+
+function registrarConsentimiento(telefono, respuesta, texto, { origen = "encuesta", refParte = null } = {}) {
+  const k = claveBaja(telefono);
+  if (k.length !== 9) return;
+  consentimientos[k] = { ts: Date.now(), respuesta, texto: String(texto || "").slice(0, 200), pregunta: PREGUNTA_CONSENTIMIENTO, origen, refParte };
+  guardarConsentimientos();
+  console.log(`[Consentimiento] ${k}: ${respuesta} (${origen})`);
 }
 
 const RESPUESTA_BAJA = {
@@ -1820,6 +1856,8 @@ async function cargarEstadoDesdeRedis() {
   if (enCursoGuardadas) Object.assign(resenasEnCurso, enCursoGuardadas);
   const bajasGuardadas = await redisGet("iberica:bajas");
   if (bajasGuardadas) Object.assign(bajas, bajasGuardadas);
+  const consentGuardados = await redisGet("iberica:consentimientos");
+  if (consentGuardados) Object.assign(consentimientos, consentGuardados);
   const seguimientosGuardados = await redisGet("iberica:seguimientosPresu");
   if (seguimientosGuardados) Object.assign(seguimientosPresu, seguimientosGuardados);
   const presuHistGuardado = await redisGet("iberica:presuHistorial");
@@ -3170,6 +3208,13 @@ async function procesarMensaje(telefono, texto) {
       crearNotaParte(estado.resena?.caseId, `Nota del cliente: ${n !== null ? n + "/10" : `positiva ("${msg.slice(0, 80)}")`}. Se le envió el enlace de reseña de Google.`);
       registrarResultadoResena(estado.resena?.refParte || telefono, `respondio_${n !== null ? n : "positivo"}_enlace_enviado`);
       cerrarResenaEnCurso(telefono);
+      // Permiso para escribirle (solo si aún no lo ha contestado)
+      const kc = claveBaja(telefono);
+      if (!consentimientos[kc] && !esBaja(kc)) {
+        await new Promise((r) => setTimeout(r, CONSENT_ESPERA_MS));
+        estado.step = "resena_consentimiento";
+        await enviarMensaje(telefono, PREGUNTA_CONSENTIMIENTO);
+      }
       return;
     }
     if (n !== null || negativo) {
@@ -3190,6 +3235,20 @@ async function procesarMensaje(telefono, texto) {
     estado.resena.intentos = 1;
     await enviarMensaje(telefono, "¿Me lo dices con una nota del 0 al 10? 🙂");
     return;
+  }
+  if (estado.step === "resena_consentimiento") {
+    estado.step = "menu_principal";
+    const r = respuestaConsentimiento(msg);
+    if (r) {
+      registrarConsentimiento(telefono, r, msg, { origen: "encuesta", refParte: estado.resena?.refParte || null });
+      crearNotaParte(estado.resena?.caseId, `Encuesta postventa (Marta): ${r === "si" ? "ACEPTA" : "NO acepta"} recibir mensajes comerciales por WhatsApp (máx. 4 al año). Respuesta: "${msg.slice(0, 100)}"`);
+      await enviarMensaje(telefono, r === "si"
+        ? "¡Genial, apuntado! 🙌 Como mucho 4 mensajes al año, y si en algún momento prefieres que no, escribe BAJA."
+        : "¡Entendido, sin problema! No te escribiremos con eso. Aquí nos tienes para lo que necesites 🙂");
+      return;
+    }
+    // No contesta a la pregunta (p. ej. "ya la he puesto"): no se apunta
+    // nada y el mensaje sigue el flujo normal.
   }
   if (estado.step === "resena_feedback") {
     estado.step = "menu_principal";
@@ -4330,6 +4389,16 @@ app.get("/admin/api/bajas", authAdmin, async (req, res) => {
   res.json({ ok: true, total: lista.length, bajas: lista });
 });
 
+// Consentimientos para mensajes comerciales (prueba ante protección de datos)
+app.get("/admin/api/consentimientos", authAdmin, (req, res) => {
+  const lista = Object.entries(consentimientos)
+    .map(([telefono, c]) => ({ telefono, respuesta: esBaja(telefono) && c.respuesta === "si" ? "revocado" : c.respuesta,
+      fecha: new Date(c.ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }), origen: c.origen, refParte: c.refParte, texto: c.texto }))
+    .sort((a, b) => consentimientos[b.telefono].ts - consentimientos[a.telefono].ts);
+  const cuenta = (r) => lista.filter((x) => x.respuesta === r).length;
+  res.json({ ok: true, si: cuenta("si"), no: cuenta("no"), revocados: cuenta("revocado"), pregunta: PREGUNTA_CONSENTIMIENTO, consentimientos: lista });
+});
+
 app.get("/admin/api/presupuestos-stats", authAdmin, (req, res) => {
   const ahora = Date.now();
   res.json({
@@ -4629,6 +4698,7 @@ app.post("/zoho/parte-cerrado", async (req, res) => {
     telefono: d.telefono || d.movil || d.phone || null,
     nombre:   d.nombre || d.cliente || null,
     refParte: d.refParte || d.ref || d.numero || null,
+    caseId:   d.caseId || d.id || null,
   });
   console.log("[Reseñas] Resultado:", JSON.stringify(resultado));
   res.json(resultado);

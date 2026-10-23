@@ -115,6 +115,23 @@ baja se apunta en silencio.
 - `GET /admin/api/bajas?quitar=611222333` — quitarla (solo si el cliente
   lo pide).
 
+## Permiso para mensajes comerciales (consentimiento)
+
+En la encuesta postventa, cuando el cliente da una buena nota (9-10), Marta
+le manda el enlace de Google y, unos segundos después, le pregunta:
+
+> «Una última cosa: ¿te parece bien que te escribamos por aquí de vez en
+> cuando, como mucho 4 veces al año, con revisiones y avisos de temporada?
+> Responde SÍ o NO. Puedes darte de baja cuando quieras escribiendo BAJA.»
+
+- Se pregunta una sola vez por cliente, nunca tras una nota baja ni a
+  quien pidió la baja.
+- Marta apunta la fecha, la pregunta y la respuesta exacta (la prueba ante
+  protección de datos) y deja una nota en el parte.
+- Si contesta otra cosa («ya la he puesto»), no se apunta nada.
+- Una BAJA posterior revoca el permiso.
+- `GET /admin/api/consentimientos` — cuántos han dicho sí y no, y quiénes.
+
 ## Plantillas en Meta (categoría Utility, español, variable {{1}} = nombre)
 
 Todas se crean en la cuenta de WhatsApp del **número del BOT**.
