@@ -2408,24 +2408,55 @@ const ULTIMO_FESTIVO_CONOCIDO = Object.keys(FESTIVOS_ALMERIA).sort().at(-1);
 // ══════════════════════════════════════════════════════════════════
 const TARIFA_APERTURAS = [
   // Zona 1: hasta unos 20 km (capital, Roquetas, Retamar, Benahadux)
-  { zona: "Zona 1", pueblos: "Almería capital y sus barrios cercanos (La Cañada, El Alquián, Costacabana, Los Molinos), Huércal de Almería, Viator, Benahadux, Retamar, El Toyo, Aguadulce, El Parador y Roquetas de Mar",
+  { zona: "Zona 1", pueblos: "Almería capital y sus barrios cercanos (La Cañada, El Alquián, Costacabana, Los Molinos), Huércal de Almería, Viator, Benahadux, Retamar, El Toyo, Aguadulce, El Parador y Roquetas de Mar (con La Gangosa)",
     normal: 80, guardia: 140, especialNormal: 110, especialGuardia: 160 },
   // Zona 2: hasta unos 40 km (Cabo de Gata, San José, El Ejido, Campohermoso)
-  { zona: "Zona 2", pueblos: "Pechina, Rioja, Gádor, Santa Fe de Mondújar, Alhama de Almería, Vícar (con La Gangosa), La Mojonera, El Ejido (con Santa María del Águila, Las Norias, Almerimar y San Agustín), Cabo de Gata (con Pujaire y Ruescas), San José, Los Escullos y Campohermoso (con San Isidro)",
+  { zona: "Zona 2", pueblos: "Pechina, Rioja, Gádor, Santa Fe de Mondújar, Alhama de Almería, Vícar, La Mojonera, El Ejido (con Santa María del Águila, Las Norias, Almerimar, San Agustín y Balerma), Cabo de Gata (con Pujaire y Ruescas), San José, Los Escullos y Campohermoso (con San Isidro)",
     normal: 110, guardia: 140, especialNormal: 130, especialGuardia: 160 },
   // Zona 3: hasta unos 60 km (Berja, Adra, Níjar, Tabernas, Las Negras, Sorbas, Lucainena)
-  { zona: "Zona 3", pueblos: "Berja, Dalías, Adra, Balerma, Níjar pueblo, Fernán Pérez, Rodalquilar, Las Negras, Tabernas, Gérgal, Canjáyar, Sorbas y Lucainena de las Torres",
+  { zona: "Zona 3", pueblos: "Berja, Dalías, Adra, Níjar pueblo, Fernán Pérez, Rodalquilar, Las Negras, Tabernas, Gérgal, Canjáyar, Sorbas y Lucainena de las Torres",
     normal: 120, guardia: 160, especialNormal: 140, especialGuardia: 170 },
   // Zona 4: más de 60 km (Abla, Agua Amarga, Abrucena)
   { zona: "Zona 4", pueblos: "Abla, Abrucena, Fiñana y Agua Amarga",
     normal: 140, guardia: 170, especialNormal: 160, especialGuardia: 180 },
 ];
 const INSTALACIONES_TARIFA = { toy: 80, cerrojo: 60 };
-// Cifras que Marta puede escribir; cualquier otra en euros se bloquea
-const CIFRAS_TARIFA = new Set([
-  ...TARIFA_APERTURAS.flatMap((z) => [z.normal, z.guardia, z.especialNormal, z.especialGuardia]),
-  ...Object.values(INSTALACIONES_TARIFA),
-]);
+
+// Bombines y escudos (hoja de la furgoneta): precio cerrado, IVA incluido,
+// instalado y con 5 llaves nuevas. "enCasa": si el técnico ya está en la
+// casa (p. ej. tras una apertura); "soloEsto": si va solo para esto (+30 €
+// de viaje; esta columna es la de la zona 1, fuera la confirma la oficina).
+const BOMBINES_TARIFA = [
+  { nombre: "Bombín de seguridad antibumping (ABUS o AMIG)", enCasa: 69, soloEsto: 99, pack: true },
+  { nombre: "Bombín + escudo de seguridad Basset", enCasa: 169, soloEsto: 199, pack: true },
+  { nombre: "Escudo de seguridad Basset (protege el bombín por fuera)", enCasa: 109, soloEsto: 139, pack: false },
+  { nombre: "Gama alta: bombín M&C Minos, con tarjeta de propiedad para las copias", enCasa: 179, soloEsto: 209, pack: true },
+  { nombre: "Minos + escudo Basset", enCasa: 289, soloEsto: 319, pack: true },
+];
+// Subida del 1 de enero de 2027 (apertura de la zona 1: 89 € / 149 €)
+const SUBIDA_2027 = "2027-01-01";
+
+// Precio de apertura de una zona en una fecha
+function aperturaZona(z, fecha = new Date()) {
+  if (z.zona === "Zona 1" && diaMadrid(fecha) >= SUBIDA_2027) return { normal: 89, guardia: 149 };
+  return { normal: z.normal, guardia: z.guardia };
+}
+// Pack apertura + producto: suma redondeada a la cifra acabada en 9 más cercana
+const redondea9 = (n) => Math.round((n - 9) / 10) * 10 + 9;
+
+// Cifras que Marta puede escribir hoy; cualquier otra en euros se bloquea
+function cifrasPermitidas(fecha = new Date()) {
+  const c = new Set([...Object.values(INSTALACIONES_TARIFA), 30]);
+  for (const z of TARIFA_APERTURAS) {
+    const a = aperturaZona(z, fecha);
+    [a.normal, a.guardia, z.especialNormal, z.especialGuardia].forEach((n) => c.add(n));
+    for (const b of BOMBINES_TARIFA) {
+      c.add(b.enCasa); c.add(b.soloEsto);
+      if (b.pack) { c.add(redondea9(a.normal + b.enCasa)); c.add(redondea9(a.guardia + b.enCasa)); }
+    }
+  }
+  return c;
+}
 
 // ¿Ahora es tarifa normal o de guardia? Guardia: de lunes a viernes desde
 // las 20:30, fines de semana y festivos.
@@ -2440,18 +2471,40 @@ function franjaTarifaAhora(ahora = new Date()) {
   return { guardia: false, texto: `son las ${hm} de un día laborable: AHORA es tarifa NORMAL (hasta las 20:30)` };
 }
 
-function bloqueTarifa() {
-  const filas = TARIFA_APERTURAS.map((z) =>
-    `- ${z.zona} (${z.pueblos}): ${z.normal} € normal / ${z.guardia} € guardia. Cerradura especial: ${z.especialNormal} € normal / ${z.especialGuardia} € guardia.`).join("\n");
+function bloqueTarifa(fecha = new Date()) {
+  const filas = TARIFA_APERTURAS.map((z) => {
+    const a = aperturaZona(z, fecha);
+    return `- ${z.zona} (${z.pueblos}): ${a.normal} € normal / ${a.guardia} € guardia. Cerradura especial: ${z.especialNormal} € normal / ${z.especialGuardia} € guardia.`;
+  }).join("\n");
+  const bombines = BOMBINES_TARIFA.map((b) => `- ${b.nombre}: ${b.soloEsto} € si vamos solo para esto (zona 1) · ${b.enCasa} € si el técnico ya está en la casa`).join("\n");
+  const packs = TARIFA_APERTURAS.map((z) => {
+    const a = aperturaZona(z, fecha);
+    return `- ${z.zona}: apertura + bombín ${redondea9(a.normal + 69)} € de día / ${redondea9(a.guardia + 69)} € noche y festivos · apertura + bombín + escudo ${redondea9(a.normal + 169)} € / ${redondea9(a.guardia + 169)} € · apertura + Minos ${redondea9(a.normal + 179)} € / ${redondea9(a.guardia + 179)} €`;
+  }).join("\n");
   return `
 TARIFA DE APERTURAS DE PUERTA (precio final, IVA incluido):
 ${filas}
-- "Normal": de lunes a viernes hasta las 20:30. "Guardia": a partir de las 20:30, fines de semana y festivos. ${franjaTarifaAhora().texto}.
+- "Normal": de lunes a viernes hasta las 20:30. "Guardia": a partir de las 20:30, fines de semana y festivos. ${franjaTarifaAhora(fecha).texto}.
 - "Cerradura especial": cerraduras de alta seguridad (tipo Fichet) en las que hay que taladrar. El cliente no suele saberlo: da el precio normal y añade que si la cerradura es especial sube a la otra cifra.
 - Las zonas van por kilómetros desde Almería capital. Si el pueblo no aparece en la lista, NO lo adivines: pregunta o di que la oficina le confirma el precio de su zona.
 - NO cubrimos la zona de levante (Carboneras, Mojácar, Vera, Garrucha, Turre, Cuevas del Almanzora, Pulpí, Huércal-Overa, Antas, Los Gallardos, Bédar…): dilo con amabilidad.
+BOMBINES Y ESCUDOS (precio cerrado, IVA incluido, instalado y con 5 llaves nuevas):
+${bombines}
+- Si vamos solo para esto fuera de la zona 1, el precio cerrado se lo confirma la oficina.
+- Los 30 € de diferencia entre columnas son el viaje: si ya estamos en la casa, la furgoneta no tiene que volver. No es un descuento.
+PACK APERTURA + BOMBÍN (si se lo cambiamos en la misma visita de la apertura; la apertura no se cobra dos veces):
+${packs}
+- Si deja el bombín para otro día, paga la apertura hoy y el bombín "solo para esto" ese día.
+PUERTAS DE LLAVE LARGA (gorjas): NUNCA una cifra. "Es otro trabajo: te damos el precio cerrado por teléfono antes de hacer nada" (lo da Nieves). Pregunta si la llave es plana (bombín) o larga (gorjas) antes de dar precio de bombín.
 INSTALACIONES CON PRECIO FIJO (IVA incluido, mano de obra): instalar un Toy, ${INSTALACIONES_TARIFA.toy} €; instalar un cerrojo nuevo (FAC, SAG…), ${INSTALACIONES_TARIFA.cerrojo} €. El material va aparte.
-CÓMO DAR UN PRECIO: solo estas cifras. Si no sabes la zona, pregúntala antes. Di siempre que el técnico le confirma el precio antes de empezar. Productos (bombines, cerraduras, puertas…), automatismos, fabricación y cualquier otro trabajo: SIN cifras, depende del caso y se prepara presupuesto sin compromiso.`;
+CÓMO DAR UN PRECIO:
+- Solo estas cifras, enteras y de una vez ("Son 99 € con IVA, instalado y con 5 llaves nuevas"). NUNCA "desde", "solo", "nada más", "más o menos" ni "este precio es solo para hoy".
+- Si no sabes la zona o el tipo de llave, pregúntalo antes. Di que el técnico lo confirma antes de empezar.
+- Recomienda lo sencillo: el bombín antibumping. La gama alta (Minos) solo si el cliente pide más seguridad.
+- Nadie rebaja: si pide descuento, "el precio es el mismo para todo el mundo; lo más sencillo es solo el bombín".
+- Nunca metas miedo ("te van a robar", "en tu calle han entrado"). Si su bombín está bien, no hace falta cambiarlo.
+- "¿Lo cubre el seguro?": "Eso te lo dice mejor tu compañía". Nunca digas lo que nos cuesta a nosotros un producto.
+- Productos que no están aquí (cerraduras, puertas, automatismos, fabricación…): SIN cifras, presupuesto sin compromiso.`;
 }
 
 // Fecha YYYY-MM-DD en hora de Madrid
@@ -2766,7 +2819,8 @@ ${fechaYHorarioDeHoy()}`,
   texto = texto.replace(/\*\*/g, "").replace(/\*/g, "").replace(/^#+\s*/gm, "");
   // Guardarraíl extra en código: solo pueden salir las cifras de la tarifa
   const cifras = [...texto.matchAll(/(\d+(?:[.,]\d+)?)\s*(?:€|euros?)/gi)].map((m) => Number(m[1].replace(",", ".")));
-  if (cifras.some((n) => !CIFRAS_TARIFA.has(n))) {
+  const permitidas = cifrasPermitidas();
+  if (cifras.some((n) => !permitidas.has(n))) {
     texto = "Los precios dependen mucho de cada caso, así que no te quiero dar una cifra a ciegas 😊 Si quieres, te preparamos un *presupuesto sin compromiso*: cuéntame qué necesitas y lo ponemos en marcha.";
   }
   estado.historialIA.push({ role: "assistant", content: texto });
