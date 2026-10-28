@@ -2400,6 +2400,56 @@ const FESTIVOS_ALMERIA = {
 };
 const ULTIMO_FESTIVO_CONOCIDO = Object.keys(FESTIVOS_ALMERIA).sort().at(-1);
 
+// ══════════════════════════════════════════════════════════════════
+// TARIFA QUE MARTA PUEDE DAR (solo por WhatsApp; la Marta del teléfono no)
+// Aperturas por zona (IVA incluido) e instalación de Toy y cerrojo. Nada
+// de productos, puertas, automatismos ni fabricación: eso, presupuesto.
+// Las zonas van por distancia, como en la tarifa de la oficina.
+// ══════════════════════════════════════════════════════════════════
+const TARIFA_APERTURAS = [
+  { zona: "Zona 1", pueblos: "Almería capital y sus barrios (El Alquián, La Cañada, Costacabana, El Toyo, Los Molinos), Huércal de Almería, Viator, Pechina, Benahadux, Rioja, Retamar, Aguadulce, El Parador y Roquetas de Mar",
+    normal: 80, guardia: 140, especialNormal: 110, especialGuardia: 160 },
+  { zona: "Zona 2", pueblos: "Cabo de Gata, San José, El Ejido (con Santa María del Águila, Las Norias, Almerimar y San Agustín) y Campohermoso (con San Isidro)",
+    normal: 110, guardia: 140, especialNormal: 130, especialGuardia: 160 },
+  { zona: "Zona 3", pueblos: "Berja, Adra, Níjar pueblo, Tabernas, Las Negras, Sorbas y Lucainena de las Torres",
+    normal: 120, guardia: 160, especialNormal: 140, especialGuardia: 170 },
+  { zona: "Zona 4", pueblos: "Abla, Agua Amarga y Abrucena",
+    normal: 140, guardia: 170, especialNormal: 160, especialGuardia: 180 },
+];
+const INSTALACIONES_TARIFA = { toy: 80, cerrojo: 60 };
+// Cifras que Marta puede escribir; cualquier otra en euros se bloquea
+const CIFRAS_TARIFA = new Set([
+  ...TARIFA_APERTURAS.flatMap((z) => [z.normal, z.guardia, z.especialNormal, z.especialGuardia]),
+  ...Object.values(INSTALACIONES_TARIFA),
+]);
+
+// ¿Ahora es tarifa normal o de guardia? Guardia: de lunes a viernes desde
+// las 20:30, fines de semana y festivos.
+function franjaTarifaAhora(ahora = new Date()) {
+  const dia = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Madrid", weekday: "short" }).format(ahora);
+  const festivo = FESTIVOS_ALMERIA[diaMadrid(ahora)];
+  const hm = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", hour: "2-digit", minute: "2-digit", hour12: false }).format(ahora);
+  const [h, m] = hm.split(":").map(Number);
+  if (festivo) return { guardia: true, texto: `hoy es festivo (${festivo}): AHORA es tarifa de GUARDIA` };
+  if (dia === "Sat" || dia === "Sun") return { guardia: true, texto: "es fin de semana: AHORA es tarifa de GUARDIA" };
+  if (h * 60 + m >= 20 * 60 + 30) return { guardia: true, texto: `son las ${hm}: AHORA es tarifa de GUARDIA (desde las 20:30)` };
+  return { guardia: false, texto: `son las ${hm} de un día laborable: AHORA es tarifa NORMAL (hasta las 20:30)` };
+}
+
+function bloqueTarifa() {
+  const filas = TARIFA_APERTURAS.map((z) =>
+    `- ${z.zona} (${z.pueblos}): ${z.normal} € normal / ${z.guardia} € guardia. Cerradura especial: ${z.especialNormal} € normal / ${z.especialGuardia} € guardia.`).join("\n");
+  return `
+TARIFA DE APERTURAS DE PUERTA (precio final, IVA incluido):
+${filas}
+- "Normal": de lunes a viernes hasta las 20:30. "Guardia": a partir de las 20:30, fines de semana y festivos. ${franjaTarifaAhora().texto}.
+- "Cerradura especial": cerraduras de alta seguridad (tipo Fichet) en las que hay que taladrar. El cliente no suele saberlo: da el precio normal y añade que si la cerradura es especial sube a la otra cifra.
+- Otros pueblos cercanos van con la zona del pueblo más próximo de la lista, pero si no aparece en la lista, NO lo adivines: pregunta o di que la oficina le confirma el precio de su zona.
+- NO cubrimos la zona de levante (Carboneras, Mojácar, Vera, Garrucha, Turre, Cuevas del Almanzora, Pulpí, Huércal-Overa, Antas, Los Gallardos, Bédar…): dilo con amabilidad.
+INSTALACIONES CON PRECIO FIJO (IVA incluido, mano de obra): instalar un Toy, ${INSTALACIONES_TARIFA.toy} €; instalar un cerrojo nuevo (FAC, SAG…), ${INSTALACIONES_TARIFA.cerrojo} €. El material va aparte.
+CÓMO DAR UN PRECIO: solo estas cifras. Si no sabes la zona, pregúntala antes. Di siempre que el técnico le confirma el precio antes de empezar. Productos (bombines, cerraduras, puertas…), automatismos, fabricación y cualquier otro trabajo: SIN cifras, depende del caso y se prepara presupuesto sin compromiso.`;
+}
+
 // Fecha YYYY-MM-DD en hora de Madrid
 function diaMadrid(fecha) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).format(fecha);
@@ -2691,7 +2741,7 @@ FORMATO WHATSAPP:
 
 REGLAS INQUEBRANTABLES:
 1. Solo puedes afirmar lo que aparece en la FICHA DE LA EMPRESA. Si preguntan algo que no está, dilo con naturalidad ("eso te lo confirma un compañero") y ofrece el teléfono 950 088 086 o pasar con el equipo.
-2. PROHIBIDO dar precios, tarifas o cifras en euros: los presupuestos son siempre a medida. Ofrece preparar un presupuesto sin compromiso.
+2. Precios: SOLO los de la TARIFA DE APERTURAS e INSTALACIONES CON PRECIO FIJO de la ficha, siguiendo sus reglas (zona, normal o guardia, cerradura especial, el técnico lo confirma antes de empezar). Cualquier otra cosa (productos, puertas, automatismos, otros trabajos): sin cifras, ofrece un presupuesto sin compromiso.
 3. PROHIBIDO prometer plazos o fechas que no puedas confirmar.
 4. Si preguntan si eres una persona o un robot: di con simpatía que eres la asistente virtual de Ibérica Seguridad, que puedes gestionarlo todo igualmente, y ofrece pasar con una persona si lo prefiere.
 5. No inventes NADA. Ante la duda, deriva a un compañero.
@@ -2699,6 +2749,7 @@ REGLAS INQUEBRANTABLES:
 
 FICHA DE LA EMPRESA:
 ${BASE_CONOCIMIENTO}
+${bloqueTarifa()}
 ${fechaYHorarioDeHoy()}`,
       },
       ...estado.historialIA,
@@ -2709,8 +2760,9 @@ ${fechaYHorarioDeHoy()}`,
   let texto = res.choices[0].message.content.trim();
   // Sin markdown en WhatsApp: fuera asteriscos y almohadillas
   texto = texto.replace(/\*\*/g, "").replace(/\*/g, "").replace(/^#+\s*/gm, "");
-  // Guardarraíl extra en código: jamás deben salir cifras en euros
-  if (/\d\s*€|\d\s*euros?/i.test(texto)) {
+  // Guardarraíl extra en código: solo pueden salir las cifras de la tarifa
+  const cifras = [...texto.matchAll(/(\d+(?:[.,]\d+)?)\s*(?:€|euros?)/gi)].map((m) => Number(m[1].replace(",", ".")));
+  if (cifras.some((n) => !CIFRAS_TARIFA.has(n))) {
     texto = "Los precios dependen mucho de cada caso, así que no te quiero dar una cifra a ciegas 😊 Si quieres, te preparamos un *presupuesto sin compromiso*: cuéntame qué necesitas y lo ponemos en marcha.";
   }
   estado.historialIA.push({ role: "assistant", content: texto });
@@ -2759,7 +2811,7 @@ async function desvioAtendido(telefono, estado, msg, campo) {
     const contexto =
       `IMPORTANTE: el cliente está en mitad de un registro y la pregunta pendiente es: "${pregunta}". Responde su duda en 1-3 líneas y retoma la pregunta pendiente al final. Además:\n` +
       `- NO repitas frases ni cierres que ya hayas usado en esta conversación: varía la redacción, que suene a persona (mira tus mensajes anteriores).\n` +
-      `- PROHIBIDO dar precios o plazos. Si pregunta por el precio, sin cifras: depende de cada caso y el técnico se lo confirma antes de hacer nada, sin compromiso.\n` +
+      `- Precios: solo los de la TARIFA DE APERTURAS e INSTALACIONES CON PRECIO FIJO de la ficha (con sus reglas: zona, normal o guardia, cerradura especial y que el técnico lo confirma antes de empezar). Para cualquier otra cosa, sin cifras: depende del caso y el técnico se lo confirma antes de hacer nada, sin compromiso. PROHIBIDO prometer plazos.\n` +
       `- Si ofrece mandar fotos: acéptalas con agrado ("mándala y se la paso al técnico para valorarlo mejor"), aclarando que la cifra se la confirmará el técnico.\n` +
       (estado.desviosSeguidos >= 2
         ? `- El cliente ya ha insistido ${estado.desviosSeguidos} veces: reconócelo con empatía (entiende que quiera saber el precio) y ofrécele pasar con un compañero del equipo si lo prefiere.\n`
