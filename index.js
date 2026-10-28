@@ -2407,13 +2407,17 @@ const ULTIMO_FESTIVO_CONOCIDO = Object.keys(FESTIVOS_ALMERIA).sort().at(-1);
 // Las zonas van por distancia, como en la tarifa de la oficina.
 // ══════════════════════════════════════════════════════════════════
 const TARIFA_APERTURAS = [
-  { zona: "Zona 1", pueblos: "Almería capital y sus barrios (El Alquián, La Cañada, Costacabana, El Toyo, Los Molinos), Huércal de Almería, Viator, Pechina, Benahadux, Rioja, Retamar, Aguadulce, El Parador y Roquetas de Mar",
+  // Zona 1: hasta unos 20 km (capital, Roquetas, Retamar, Benahadux)
+  { zona: "Zona 1", pueblos: "Almería capital y sus barrios cercanos (La Cañada, El Alquián, Costacabana, Los Molinos), Huércal de Almería, Viator, Benahadux, Retamar, El Toyo, Aguadulce, El Parador y Roquetas de Mar",
     normal: 80, guardia: 140, especialNormal: 110, especialGuardia: 160 },
-  { zona: "Zona 2", pueblos: "Cabo de Gata, San José, El Ejido (con Santa María del Águila, Las Norias, Almerimar y San Agustín) y Campohermoso (con San Isidro)",
+  // Zona 2: hasta unos 40 km (Cabo de Gata, San José, El Ejido, Campohermoso)
+  { zona: "Zona 2", pueblos: "Pechina, Rioja, Gádor, Santa Fe de Mondújar, Alhama de Almería, Vícar (con La Gangosa), La Mojonera, El Ejido (con Santa María del Águila, Las Norias, Almerimar y San Agustín), Cabo de Gata (con Pujaire y Ruescas), San José, Los Escullos y Campohermoso (con San Isidro)",
     normal: 110, guardia: 140, especialNormal: 130, especialGuardia: 160 },
-  { zona: "Zona 3", pueblos: "Berja, Adra, Níjar pueblo, Tabernas, Las Negras, Sorbas y Lucainena de las Torres",
+  // Zona 3: hasta unos 60 km (Berja, Adra, Níjar, Tabernas, Las Negras, Sorbas, Lucainena)
+  { zona: "Zona 3", pueblos: "Berja, Dalías, Adra, Balerma, Níjar pueblo, Fernán Pérez, Rodalquilar, Las Negras, Tabernas, Gérgal, Canjáyar, Sorbas y Lucainena de las Torres",
     normal: 120, guardia: 160, especialNormal: 140, especialGuardia: 170 },
-  { zona: "Zona 4", pueblos: "Abla, Agua Amarga y Abrucena",
+  // Zona 4: más de 60 km (Abla, Agua Amarga, Abrucena)
+  { zona: "Zona 4", pueblos: "Abla, Abrucena, Fiñana y Agua Amarga",
     normal: 140, guardia: 170, especialNormal: 160, especialGuardia: 180 },
 ];
 const INSTALACIONES_TARIFA = { toy: 80, cerrojo: 60 };
@@ -2444,7 +2448,7 @@ TARIFA DE APERTURAS DE PUERTA (precio final, IVA incluido):
 ${filas}
 - "Normal": de lunes a viernes hasta las 20:30. "Guardia": a partir de las 20:30, fines de semana y festivos. ${franjaTarifaAhora().texto}.
 - "Cerradura especial": cerraduras de alta seguridad (tipo Fichet) en las que hay que taladrar. El cliente no suele saberlo: da el precio normal y añade que si la cerradura es especial sube a la otra cifra.
-- Otros pueblos cercanos van con la zona del pueblo más próximo de la lista, pero si no aparece en la lista, NO lo adivines: pregunta o di que la oficina le confirma el precio de su zona.
+- Las zonas van por kilómetros desde Almería capital. Si el pueblo no aparece en la lista, NO lo adivines: pregunta o di que la oficina le confirma el precio de su zona.
 - NO cubrimos la zona de levante (Carboneras, Mojácar, Vera, Garrucha, Turre, Cuevas del Almanzora, Pulpí, Huércal-Overa, Antas, Los Gallardos, Bédar…): dilo con amabilidad.
 INSTALACIONES CON PRECIO FIJO (IVA incluido, mano de obra): instalar un Toy, ${INSTALACIONES_TARIFA.toy} €; instalar un cerrojo nuevo (FAC, SAG…), ${INSTALACIONES_TARIFA.cerrojo} €. El material va aparte.
 CÓMO DAR UN PRECIO: solo estas cifras. Si no sabes la zona, pregúntala antes. Di siempre que el técnico le confirma el precio antes de empezar. Productos (bombines, cerraduras, puertas…), automatismos, fabricación y cualquier otro trabajo: SIN cifras, depende del caso y se prepara presupuesto sin compromiso.`;
