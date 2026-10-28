@@ -2433,6 +2433,8 @@ const BOMBINES_TARIFA = [
   { nombre: "Gama alta: bombín M&C Minos, con tarjeta de propiedad para las copias", enCasa: 179, soloEsto: 209, pack: true },
   { nombre: "Minos + escudo Basset", enCasa: 289, soloEsto: 319, pack: true },
 ];
+// Fuera de la zona 1, si vamos solo para esto, se suma el desplazamiento
+const PLUS_DESPLAZAMIENTO_FUERA_Z1 = parseInt(process.env.PLUS_DESPLAZAMIENTO || "20", 10);
 // Subida del 1 de enero de 2027 (apertura de la zona 1: 89 € / 149 €)
 const SUBIDA_2027 = "2027-01-01";
 
@@ -2451,7 +2453,7 @@ function cifrasPermitidas(fecha = new Date()) {
     const a = aperturaZona(z, fecha);
     [a.normal, a.guardia, z.especialNormal, z.especialGuardia].forEach((n) => c.add(n));
     for (const b of BOMBINES_TARIFA) {
-      c.add(b.enCasa); c.add(b.soloEsto);
+      c.add(b.enCasa); c.add(b.soloEsto); c.add(b.soloEsto + PLUS_DESPLAZAMIENTO_FUERA_Z1);
       if (b.pack) { c.add(redondea9(a.normal + b.enCasa)); c.add(redondea9(a.guardia + b.enCasa)); }
     }
   }
@@ -2476,7 +2478,7 @@ function bloqueTarifa(fecha = new Date()) {
     const a = aperturaZona(z, fecha);
     return `- ${z.zona} (${z.pueblos}): ${a.normal} € normal / ${a.guardia} € guardia. Cerradura especial: ${z.especialNormal} € normal / ${z.especialGuardia} € guardia.`;
   }).join("\n");
-  const bombines = BOMBINES_TARIFA.map((b) => `- ${b.nombre}: ${b.soloEsto} € si vamos solo para esto (zona 1) · ${b.enCasa} € si el técnico ya está en la casa`).join("\n");
+  const bombines = BOMBINES_TARIFA.map((b) => `- ${b.nombre}: si vamos solo para esto, ${b.soloEsto} € en la zona 1 y ${b.soloEsto + PLUS_DESPLAZAMIENTO_FUERA_Z1} € en las zonas 2, 3 y 4 · ${b.enCasa} € si el técnico ya está en la casa`).join("\n");
   const packs = TARIFA_APERTURAS.map((z) => {
     const a = aperturaZona(z, fecha);
     return `- ${z.zona}: apertura + bombín ${redondea9(a.normal + 69)} € de día / ${redondea9(a.guardia + 69)} € noche y festivos · apertura + bombín + escudo ${redondea9(a.normal + 169)} € / ${redondea9(a.guardia + 169)} € · apertura + Minos ${redondea9(a.normal + 179)} € / ${redondea9(a.guardia + 179)} €`;
@@ -2490,17 +2492,22 @@ ${filas}
 - NO cubrimos la zona de levante (Carboneras, Mojácar, Vera, Garrucha, Turre, Cuevas del Almanzora, Pulpí, Huércal-Overa, Antas, Los Gallardos, Bédar…): dilo con amabilidad.
 BOMBINES Y ESCUDOS (precio cerrado, IVA incluido, instalado y con 5 llaves nuevas):
 ${bombines}
-- Si vamos solo para esto fuera de la zona 1, el precio cerrado se lo confirma la oficina.
+- Fuera de la zona 1 se suman ${PLUS_DESPLAZAMIENTO_FUERA_Z1} € de desplazamiento (ya están en la cifra de las zonas 2, 3 y 4).
 - Los 30 € de diferencia entre columnas son el viaje: si ya estamos en la casa, la furgoneta no tiene que volver. No es un descuento.
 PACK APERTURA + BOMBÍN (si se lo cambiamos en la misma visita de la apertura; la apertura no se cobra dos veces):
 ${packs}
 - Si deja el bombín para otro día, paga la apertura hoy y el bombín "solo para esto" ese día.
 PUERTAS DE LLAVE LARGA (gorjas): NUNCA una cifra. "Es otro trabajo: te damos el precio cerrado por teléfono antes de hacer nada" (lo da Nieves). Pregunta si la llave es plana (bombín) o larga (gorjas) antes de dar precio de bombín.
 INSTALACIONES CON PRECIO FIJO (IVA incluido, mano de obra): instalar un Toy, ${INSTALACIONES_TARIFA.toy} €; instalar un cerrojo nuevo (FAC, SAG…), ${INSTALACIONES_TARIFA.cerrojo} €. El material va aparte.
+CÓMO ASESORAR (tú no ves la puerta: no diagnostiques, orienta y deja que el técnico lo confirme):
+1. Pregunta lo justo, de una en una y en palabras sencillas: ¿en qué pueblo está la casa?, ¿la llave es plana o es larga, de las antiguas?, ¿alrededor de la cerradura hay una pieza metálica que la protege o se ve tal cual? Si no lo tiene claro, que mande una foto de la cerradura por fuera (nunca de la llave por los dientes).
+2. Llave larga (gorjas): sin cifra; un compañero le llama con el precio cerrado.
+3. Llave plana: recomienda UNA opción, la sencilla: el bombín de seguridad antibumping, con su precio. Si no tiene pieza metálica y quiere más protección, ofrece bombín + escudo. No ofrezcas más de dos opciones.
+4. El Minos NO lo ofrezcas tú: solo si el cliente pide lo mejor o que nadie pueda hacer copias sin permiso. Entonces explícalo en una línea (las copias solo se hacen presentando una tarjeta de propiedad) y da su precio.
+5. Si duda, no insistas: una sola recomendación y, si dice que no, perfecto. Si quiere que le asesoren mejor, ofrece que le llame un compañero de la oficina o que el técnico se lo mire allí y le diga el precio antes de tocar nada.
 CÓMO DAR UN PRECIO:
 - Solo estas cifras, enteras y de una vez ("Son 99 € con IVA, instalado y con 5 llaves nuevas"). NUNCA "desde", "solo", "nada más", "más o menos" ni "este precio es solo para hoy".
 - Si no sabes la zona o el tipo de llave, pregúntalo antes. Di que el técnico lo confirma antes de empezar.
-- Recomienda lo sencillo: el bombín antibumping. La gama alta (Minos) solo si el cliente pide más seguridad.
 - Nadie rebaja: si pide descuento, "el precio es el mismo para todo el mundo; lo más sencillo es solo el bombín".
 - Nunca metas miedo ("te van a robar", "en tu calle han entrado"). Si su bombín está bien, no hace falta cambiarlo.
 - "¿Lo cubre el seguro?": "Eso te lo dice mejor tu compañía". Nunca digas lo que nos cuesta a nosotros un producto.
