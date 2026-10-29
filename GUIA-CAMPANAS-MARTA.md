@@ -65,7 +65,7 @@ Manager.
 | El cliente… | Marta |
 |---|---|
 | Escribe por primera vez | Se presenta como asistente automático; las llamadas y los precios los lleva Nieves |
-| «Sí, llamadme» | Te llama Nieves desde el 950 088 086 + ¿mañana o tarde? → después pide la marca de la llave o una foto. Aviso a Nieves en cada paso |
+| «Sí, llamadme» | Te llama Nieves desde el 950 088 086 + ¿mañana o tarde? → después pide la marca de la llave o una foto. A Nieves le llegan dos avisos: uno al «Sí» y otro con la franja y la llave juntas (o a los 10 minutos si no manda la llave) |
 | «Mejor en enero» | Nieves te lo deja con fecha para la 2.ª quincena de enero; si dice que sí, aviso a Nieves |
 | «No, gracias» | No le escribimos más con esto (no es BAJA) |
 | ¿Cuánto cuesta? | Te lo dice Nieves por teléfono con precio cerrado |
@@ -89,7 +89,7 @@ Nieves con su etiqueta (REACT-T3, REACT-T4…).
 **Entradas de Navidad desde fuera** («Hola, vengo de la web / he visto
 vuestro vídeo / he visto vuestro anuncio … puerta lista para las fiestas»):
 Marta las etiqueta **NAV26-WEB / NAV26-ORG / NAV26-ADS**. A estas sí les da
-el precio orientativo (bombín 99 €, con escudo 199 €) y les ofrece la
+el precio orientativo (bombín 99 €, con escudo 179 €) y les ofrece la
 llamada de Nieves.
 
 **Cliente de la casa (T7):** lo que escribe después no lo contesta Marta.

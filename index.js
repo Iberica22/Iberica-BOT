@@ -2444,10 +2444,10 @@ const INSTALACIONES_TARIFA = { toy: 80, cerrojo: 60 };
 // de viaje; esta columna es la de la zona 1, fuera la confirma la oficina).
 const BOMBINES_TARIFA = [
   { nombre: "Bombín de seguridad antibumping (ABUS o AMIG)", enCasa: 69, soloEsto: 99, pack: true },
-  { nombre: "Bombín + escudo de seguridad Basset", enCasa: 169, soloEsto: 199, pack: true },
+  { nombre: "Bombín + escudo de seguridad Basset", enCasa: 159, soloEsto: 179, pack: true },
   { nombre: "Escudo de seguridad Basset (protege el bombín por fuera)", enCasa: 109, soloEsto: 139, pack: false },
   { nombre: "Gama alta: bombín M&C Minos, con tarjeta de propiedad para las copias", enCasa: 179, soloEsto: 209, pack: true },
-  { nombre: "Minos + escudo Basset", enCasa: 289, soloEsto: 319, pack: true },
+  { nombre: "Minos + escudo Basset", enCasa: 279, soloEsto: 299, pack: true },
 ];
 // Fuera de la zona 1, si vamos solo para esto, se suma el desplazamiento
 const PLUS_DESPLAZAMIENTO_FUERA_Z1 = parseInt(process.env.PLUS_DESPLAZAMIENTO || "20", 10);
@@ -2497,7 +2497,7 @@ function bloqueTarifa(fecha = new Date()) {
   const bombines = BOMBINES_TARIFA.map((b) => `- ${b.nombre}: si vamos solo para esto, ${b.soloEsto} € en la zona 1 y ${b.soloEsto + PLUS_DESPLAZAMIENTO_FUERA_Z1} € en las zonas 2, 3 y 4 · ${b.enCasa} € si el técnico ya está en la casa`).join("\n");
   const packs = TARIFA_APERTURAS.map((z) => {
     const a = aperturaZona(z, fecha);
-    return `- ${z.zona}: apertura + bombín ${redondea9(a.normal + 69)} € de día / ${redondea9(a.guardia + 69)} € noche y festivos · apertura + bombín + escudo ${redondea9(a.normal + 169)} € / ${redondea9(a.guardia + 169)} € · apertura + Minos ${redondea9(a.normal + 179)} € / ${redondea9(a.guardia + 179)} €`;
+    return `- ${z.zona}: apertura + bombín ${redondea9(a.normal + 69)} € de día / ${redondea9(a.guardia + 69)} € noche y festivos · apertura + bombín + escudo ${redondea9(a.normal + 159)} € / ${redondea9(a.guardia + 159)} € · apertura + Minos ${redondea9(a.normal + 179)} € / ${redondea9(a.guardia + 179)} €`;
   }).join("\n");
   return `
 TARIFA DE APERTURAS DE PUERTA (precio final, IVA incluido):
@@ -2509,7 +2509,7 @@ ${filas}
 BOMBINES Y ESCUDOS (precio cerrado, IVA incluido, instalado y con 5 llaves nuevas):
 ${bombines}
 - Fuera de la zona 1 se suman ${PLUS_DESPLAZAMIENTO_FUERA_Z1} € de desplazamiento (ya están en la cifra de las zonas 2, 3 y 4).
-- Los 30 € de diferencia entre columnas son el viaje: si ya estamos en la casa, la furgoneta no tiene que volver. No es un descuento.
+- La diferencia entre las dos columnas es el viaje: si ya estamos en la casa, la furgoneta no tiene que volver. No es un descuento.
 PACK APERTURA + BOMBÍN (si se lo cambiamos en la misma visita de la apertura; la apertura no se cobra dos veces):
 ${packs}
 - Si deja el bombín para otro día, paga la apertura hoy y el bombín "solo para esto" ese día.
@@ -5395,7 +5395,7 @@ app.get("/zoho/campos-case", async (req, res) => {
 // ============================================================
 const CAMP_TEXTOS = {
   nav: "Hola, {{1}}. Somos Ibérica Seguridad, cerrajería de Almería; te atendimos {{2}} para {{3}}. Antes de las fiestas queremos saber si a tu puerta le falta algo: en una llamada de tres minutos te orientamos y, si conviene mejorar algo, te damos precio cerrado. Que en Navidad las únicas visitas sorpresa sean las de la familia. ¿Te llamamos? (Para urgencias, llama al 950 088 086.) Si no quieres más mensajes, responde BAJA.",
-  navRecordatorio: "Hola, {{1}}. Te escribimos hace unos días desde Ibérica Seguridad. Si te viene bien, te llamamos tres minutos y te orientamos sobre tu puerta; puedes dejarla lista antes de Navidad o con fecha para enero. Si no, no te volvemos a escribir con esto. ¿Te llamamos?",
+  navRecordatorio: "Hola, {{1}}. Te escribimos hace unos días desde Ibérica Seguridad. Si te viene bien, te llamamos tres minutos y te orientamos sobre tu puerta; puedes dejarla lista antes de Navidad o con fecha para enero. Si no, no te volvemos a escribir con esto. ¿Te llamamos? Si no quieres más mensajes, responde BAJA.",
   t7: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Como has hablado con Nieves, ya eres cliente de la casa. Guarda este número: lo que escribas aquí lo ve la oficina directamente y, si coinciden dos urgencias, la tuya va delante. Te avisaremos cuando el técnico pase por tu zona. Contigo, hasta dejarlo resuelto. Para no recibir más mensajes, responde BAJA.",
   t3: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Nieves te ha llamado un par de veces; no es nada urgente. Queríamos agradecerte la confianza de estos años y ofrecerte una revisión de tu puerta sin coste cuando el técnico pase por tu zona. Si te interesa, responde SÍ. Para no recibir más mensajes, BAJA.",
   t4: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Hace un año te hicimos {{2}}. Un repaso de la cerradura, con engrase y ajuste, ayuda a que siga funcionando como el primer día. Si quieres que te avisemos cuando el técnico pase por tu zona, responde SÍ. Para no recibir más mensajes, BAJA.",
@@ -5700,7 +5700,7 @@ function marcarAcuseCampana(wamid, tipo) {
 const PRESENTACION_CAMPANA = "Soy Marta, el asistente automático de WhatsApp de Ibérica Seguridad. Las llamadas y los precios los lleva Nieves, de la oficina.";
 const TXT_URGENCIA = "Si estás fuera de casa o es urgente, llama ahora al 950 088 086: te atendemos las 24 horas. Si no es urgente, dímelo y seguimos por aquí.";
 const TXT_VIOLENCIA = "Entendido. Le paso tu mensaje a Nieves como prioridad y te llama hoy mismo para cambiar la cerradura cuanto antes. No tienes que contarnos nada más. Si en algún momento estás en peligro, llama al 112; el 016 te atiende las 24 horas y no deja rastro en la factura.";
-const PRECIO_WEB = process.env.CAMP_TEXTO_PRECIO_WEB || "El bombín de seguridad instalado son 99 € y con escudo 199 €, con IVA, desplazamiento y 5 llaves nuevas. Nieves te dice en tres minutos cuál le conviene a tu puerta.";
+const PRECIO_WEB = process.env.CAMP_TEXTO_PRECIO_WEB || "El bombín de seguridad instalado son 99 € y con escudo 179 €, con IVA, desplazamiento y 5 llaves nuevas. Nieves te dice en tres minutos cuál le conviene a tu puerta.";
 const LEVANTE = /(carboneras|mojacar|vera\b|garrucha|turre|cuevas del almanzora|pulpi|huercal.overa|antas|los gallardos|bedar)/;
 
 // ¿Cuándo llama Nieves? Oficina: laborables de 9:00 a 19:00. null = hoy, ya.
@@ -5799,6 +5799,24 @@ async function avisarNoemiCampana(telefono, conv, descripcion) {
   await enviarNotificacionAgente(destino, { nombre: `Cliente ${claveBaja(telefono)}`, telefono: claveBaja(telefono), direccion: "—", descripcion: `⚠️ QUEJA (para Noemí) [${conv.etiqueta}]: ${descripcion}`, apertura: ahoraStr, refParte: "—", agente: "Marta · Campañas" }).catch(() => {});
 }
 
+// Tras la franja se espera un poco por si manda la marca de la llave, y a
+// Nieves le llega un solo aviso con todo (en vez de uno por mensaje).
+const CAMP_ESPERA_RESUMEN_MS = parseInt(process.env.CAMP_ESPERA_RESUMEN_MS || String(10 * 60 * 1000), 10);
+const resumenesPendientes = new Map();
+function programarResumenNieves(telefono, conv) {
+  clearTimeout(resumenesPendientes.get(conv.k));
+  resumenesPendientes.set(conv.k, setTimeout(() => enviarResumenNieves(telefono, conv).catch(() => {}), CAMP_ESPERA_RESUMEN_MS));
+}
+async function enviarResumenNieves(telefono, conv) {
+  clearTimeout(resumenesPendientes.get(conv.k));
+  resumenesPendientes.delete(conv.k);
+  if (conv.resumenEnviado) return;
+  conv.resumenEnviado = Date.now();
+  const d = conv.datos || {};
+  await avisarNievesCampana(telefono, conv, `llamar ${d.franja || "(no ha dicho franja)"} · llave/puerta: ${d.llave ? `"${d.llave}"` : "no lo ha dicho"}`);
+  guardarCampanas();
+}
+
 function marcarRespuestaFila(conv) {
   const l = campanas.listas[conv.listaId];
   const k = conv.k;
@@ -5825,7 +5843,7 @@ async function manejarRespuestaCampana({ telefono, memberId, channelId, texto, t
   est.memberId = memberId; est.channelId = channelId;
   const t = normalizaTxt(texto || "");
   const responder = async (msg) => {
-    const pre = conv.presentado ? "" : PRESENTACION_CAMPANA + "\n\n";
+    const pre = conv.presentado ? "" : (conv.entrada ? PRESENTACION_CAMPANA.replace("Las llamadas y los precios los lleva", "Las llamadas las lleva") : PRESENTACION_CAMPANA) + "\n\n";
     conv.presentado = true;
     await enviarMensaje(telefono, pre + msg);
   };
@@ -5841,7 +5859,9 @@ async function manejarRespuestaCampana({ telefono, memberId, channelId, texto, t
   if (tipoEvento !== "TEXT") {
     if (conv.paso === "llave" || conv.paso === "con_nieves" || conv.paso === "franja") {
       await responder("¡Gracias por la foto! Se la paso a Nieves para que te oriente.");
-      await avisarNievesCampana(telefono, conv, "ha mandado una foto de la cerradura (verla en el chat de Marta)");
+      conv.datos = { ...(conv.datos || {}), llave: "ha mandado una foto de la cerradura (verla en el chat de Marta)" };
+      if (conv.paso === "con_nieves") await avisarNievesCampana(telefono, conv, "ha mandado una foto de la cerradura (verla en el chat de Marta)");
+      else await enviarResumenNieves(telefono, conv);
       conv.paso = "con_nieves";
       guardarCampanas();
       return true;
@@ -5880,15 +5900,15 @@ async function manejarRespuestaCampana({ telefono, memberId, channelId, texto, t
       const franja = /tarde/.test(t) ? "por la tarde" : /manana|primera hora/.test(t) ? "por la mañana" : `«${texto.slice(0, 40)}»`;
       conv.datos = { ...(conv.datos || {}), franja };
       await responder(`Apuntado, ${franja === "por la tarde" || franja === "por la mañana" ? franja : "se lo digo"}. Si quieres ir adelantando, dime qué marca pone en tu llave o mándame una foto.`);
-      await avisarNievesCampana(telefono, conv, `prefiere que le llamen ${franja}`);
       conv.paso = "llave";
+      programarResumenNieves(telefono, conv);
       break;
     }
     case "llave": {
       conv.datos = { ...(conv.datos || {}), llave: texto.slice(0, 80) };
       await responder("¡Gracias! Se lo paso a Nieves para que te oriente en la llamada.");
-      await avisarNievesCampana(telefono, conv, `datos de la puerta/llave: "${texto.slice(0, 100)}"`);
       conv.paso = "con_nieves";
+      await enviarResumenNieves(telefono, conv);
       break;
     }
     case "enero":
