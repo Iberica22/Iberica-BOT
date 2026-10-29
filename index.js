@@ -2509,7 +2509,7 @@ ${filas}
 BOMBINES Y ESCUDOS (precio cerrado, IVA incluido, instalado y con 5 llaves nuevas):
 ${bombines}
 - Fuera de la zona 1 se suman ${PLUS_DESPLAZAMIENTO_FUERA_Z1} € de desplazamiento (ya están en la cifra de las zonas 2, 3 y 4).
-- La diferencia entre las dos columnas es el viaje: si ya estamos en la casa, la furgoneta no tiene que volver. No es un descuento.
+- Si ya estamos en la casa, el cliente se ahorra el viaje (la furgoneta no tiene que volver): por eso esa columna es más barata. No es un descuento. No digas cuánto es el viaje: en los productos sueltos la diferencia es de 30 € y en los combinados de 20 €, porque montar dos productos lleva más tiempo.
 PACK APERTURA + BOMBÍN (si se lo cambiamos en la misma visita de la apertura; la apertura no se cobra dos veces):
 ${packs}
 - Si deja el bombín para otro día, paga la apertura hoy y el bombín "solo para esto" ese día.
