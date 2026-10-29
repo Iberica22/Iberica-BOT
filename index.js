@@ -10,7 +10,7 @@ const OpenAI = require("openai");
 
 const app = express();
 // Parsear JSON con o sin Content-Type correcto (Woztell puede omitirlo)
-app.use(express.json({ type: "*/*" }));
+app.use(express.json({ type: "*/*", limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/static', require('express').static(require('path').join(__dirname, 'public')));
 
@@ -240,6 +240,7 @@ function manejarAcuseEnvio(body, tipo) {
   const wamid    = body?.data?.messageId || body?.messageId;
   const telefono = body?.from;   // en los acuses, from = cliente
   const canal    = body?.channel;
+  if (wamid) marcarAcuseCampana(wamid, tipo);
   if (!wamid || !telefono || !canal) return;
   if (wamidsBot.has(wamid)) return;        // acuse de un envío del propio bot
   if (NOMBRES_AGENTES[telefono]) return;   // notificación interna a un agente
@@ -700,6 +701,7 @@ function detectarBaja(texto, respondeAMensajeNuestro) {
   if (/\bno quiero (recibir )?(mas |ningun |ningunos )?(mensajes|whatsapps|publicidad|promociones)/.test(t)) return "baja";
   if (/\b(dejad|deja|dejen|deje) de (escribir|mandar|enviar)/.test(t)) return "baja";
   if (/\b(quita|quitad|quiten|quite|borra|borrad|borren|elimina|eliminad)(me|nos)? de (la|vuestra|vuestras|su|sus|esta) (lista|base|listas)/.test(t)) return "baja";
+  if (/\b(borr|elimin|suprim)\w* (mis|todos mis|los) datos|derecho de (supresion|olvido)|\brgpd\b|proteccion de datos/.test(t)) return "borrado_datos";
   if (/^(quitadme|quitame|borradme|borrame)$/.test(t)) return "baja";
   if (!respondeAMensajeNuestro) return null;
   if (/\b(falleci|ha muerto|murio|en paz descanse|q e p d|qepd|ya no vive|no esta con nosotros)/.test(t)) return "fallecimiento";
@@ -734,6 +736,9 @@ async function registrarBaja(telefono, motivo, texto, { origen = "whatsapp" } = 
   for (const caseId of new Set(casos)) {
     crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente pide la BAJA (${motivo}). No se le vuelve a escribir. Respuesta: "${String(texto || "").slice(0, 200)}". Poner [NOCOM] en FactuSOL.`);
   }
+  // Campañas: se cierra su conversación y se marca en Zoho (WhatsApp Opt Out)
+  if (campanas.conversaciones[k]) { campanas.conversaciones[k].cerrada = Date.now(); guardarCampanas(); }
+  if (nueva) marcarOptOutZoho(k).then((r) => { if (bajas[k]) { bajas[k].zohoOptOut = r; guardarBajas(); } });
   if (nueva) {
     console.log(`[Bajas] ${k} dado de baja (${motivo}, ${origen})`);
     const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
@@ -741,7 +746,9 @@ async function registrarBaja(telefono, motivo, texto, { origen = "whatsapp" } = 
       nombre: conversaciones[telefono]?.nombre || k,
       telefono: k,
       direccion: "—",
-      descripcion: `🚫 BAJA de mensajes (${motivo}): "${String(texto || "").slice(0, 120)}". No escribirle más y poner [NOCOM] en FactuSOL.`,
+      descripcion: motivo === "borrado_datos"
+        ? `🔒 PROTECCIÓN DE DATOS: pide BORRAR sus datos (plazo legal: 1 mes). Avisar a quien lleve la protección de datos. Ya está de baja. Mensaje: "${String(texto || "").slice(0, 100)}"`
+        : `🚫 BAJA de mensajes (${motivo}): "${String(texto || "").slice(0, 120)}". No escribirle más y poner [NOCOM] en FactuSOL.`,
       apertura: ahoraStr,
       refParte: "—",
       agente: "Marta · Bajas",
@@ -786,6 +793,7 @@ const RESPUESTA_BAJA = {
   baja: "Hecho 🙏 No te volveremos a escribir con seguimientos ni avisos. Si algún día nos necesitas, escríbenos por aquí y te atendemos encantados.",
   enfado: "Perdona las molestias. Te hemos dado de baja y no volverás a recibir mensajes nuestros.",
   fallecimiento: "Lo sentimos mucho, y perdona la molestia. No volveremos a escribir a este número.",
+  borrado_datos: "Entendido. Te damos de baja ahora mismo y pasamos tu petición de borrado de datos a la persona responsable, que te contestará en el plazo legal (un mes como máximo).",
 };
 
 // Envío genérico de una plantilla aprobada de Meta al chat de un cliente
@@ -833,7 +841,8 @@ async function enviarPlantillaWoztell(telefono, elementName, parametros, idioma 
     registrarWamidsEnvio(res.data);
     const ok = res.data?.ok === 1 && res.data?.sendResult?.result?.[0]?.ok !== 0;
     if (!ok) console.error(`[Plantilla] ❌ ${elementName} rechazada:`, JSON.stringify(res.data).slice(0, 300));
-    return { ok, detalle: ok ? null : JSON.stringify(res.data?.sendResult?.result?.[0] || res.data).slice(0, 300) };
+    const wamid = res.data?.sendResult?.result?.[0]?.messageEvent?.messageId || res.data?.sendResult?.result?.[0]?.result?.messages?.[0]?.id || null;
+    return { ok, wamid, detalle: ok ? null : JSON.stringify(res.data?.sendResult?.result?.[0] || res.data).slice(0, 300) };
   } catch (e) {
     console.error(`[Plantilla] ❌ Error enviando ${elementName}:`, e.response?.data || e.message);
     return { ok: false, detalle: JSON.stringify(e.response?.data || e.message).slice(0, 300) };
@@ -1858,6 +1867,13 @@ async function cargarEstadoDesdeRedis() {
   if (bajasGuardadas) Object.assign(bajas, bajasGuardadas);
   const consentGuardados = await redisGet("iberica:consentimientos");
   if (consentGuardados) Object.assign(consentimientos, consentGuardados);
+  const campanasGuardadas = await redisGet("iberica:campanas");
+  if (campanasGuardadas) {
+    Object.assign(campanas.listas, campanasGuardadas.listas || {});
+    Object.assign(campanas.contactos, campanasGuardadas.contactos || {});
+    Object.assign(campanas.conversaciones, campanasGuardadas.conversaciones || {});
+    indexarWamidsCampana();
+  }
   const seguimientosGuardados = await redisGet("iberica:seguimientosPresu");
   if (seguimientosGuardados) Object.assign(seguimientosPresu, seguimientosGuardados);
   const presuHistGuardado = await redisGet("iberica:presuHistorial");
@@ -4860,6 +4876,17 @@ app.post("/webhook", async (req, res) => {
     eventosRecientes.unshift({ ts: new Date().toISOString(), body: req.body });
     if (eventosRecientes.length > 80) eventosRecientes.pop();
 
+    // Botones de respuesta rápida de las plantillas («Sí, llamadme»…): se
+    // tratan como un texto con la etiqueta del botón.
+    if (String(req.body?.eventType || "").toUpperCase() === "INBOUND" &&
+        ["PAYLOAD", "BUTTON", "QUICK_REPLY", "INTERACTIVE", "POSTBACK"].includes(String(req.body?.type || "").toUpperCase())) {
+      const d = req.body.data || {};
+      const textoBoton = d.text || d.title || d.button?.text || d.interactive?.button_reply?.title || d.payload?.title || (typeof d.payload === "string" ? d.payload : null);
+      if (textoBoton) {
+        console.log(`[Webhook] Botón pulsado por ${req.body.from}: "${textoBoton}" (${req.body.type})`);
+        req.body = { ...req.body, type: "TEXT", data: { ...d, text: typeof textoBoton === "string" ? textoBoton : JSON.stringify(textoBoton) } };
+      }
+    }
     const tipo       = (req.body?.type || "").toUpperCase();
     const eventType  = (req.body?.eventType || "").toUpperCase();
 
@@ -4897,6 +4924,7 @@ app.post("/webhook", async (req, res) => {
         // Un envío (plantilla de encuesta/reseña, notificación...) NO llegó al
         // cliente. Registrar el motivo que devuelve WhatsApp para diagnóstico.
         console.error("[Fallo envío] body:", JSON.stringify(req.body).slice(0, 900));
+        try { const w = req.body?.data?.messageId || req.body?.messageId; if (w) marcarAcuseCampana(w, "FAILED"); } catch (_) {}
       } else if (tipo === "COMMENT") {
         // Comentario en un post/reel de Instagram → DM privado con la guía.
         // (Se maneja aquí a propósito: un comentario trae texto del CLIENTE y
@@ -4951,6 +4979,7 @@ app.post("/webhook", async (req, res) => {
     // se salta la pausa: si una persona de la oficina ha intervenido en el
     // chat, Marta se calla también aquí.
     if (CAMPANA_CHANNEL_ID && channelId === CAMPANA_CHANNEL_ID &&
+        !etiquetaEntradaNavidad(texto) && !conversacionCampana(telefono) &&
         (captacionActiva(telefono) ||
          (CAPTACION_ANUNCIO &&
           (esInicioCampana(texto) || esContactoNuevo(telefono) ||
@@ -4965,6 +4994,10 @@ app.post("/webhook", async (req, res) => {
 
     // A partir de aquí, el flujo normal solo continúa con mensajes de TEXTO.
     if (tipo !== "TEXT") {
+      if (conversacionCampana(telefono) && !botPausado(`${channelId}_${telefono}`)) {
+        try { if (await manejarRespuestaCampana({ telefono, memberId, channelId, texto: "", tipoEvento: tipo })) return res.sendStatus(200); }
+        catch (e) { console.error("[Campañas] Respuesta (media):", e.message); }
+      }
       // Un lead en cualificación puede mandar su foto por un canal normal
       if (esImagen && captacionActiva(telefono) && !botPausado(`${channelId}_${telefono}`)) {
         await manejarCaptacion({ telefono, memberId, channelId, texto: "", esImagen, req });
@@ -5028,7 +5061,7 @@ app.post("/webhook", async (req, res) => {
     // ── BAJA: a cualquier hora y en cualquier chat ──────────────────
     // Si una persona de la oficina lleva el chat, se registra en silencio
     // (la persona ve el mensaje); si no, Marta lo confirma.
-    const motivoBaja = detectarBaja(texto, enFlujoResena);
+    const motivoBaja = detectarBaja(texto, enFlujoResena || !!conversacionCampana(telefono));
     if (motivoBaja) {
       await registrarBaja(telefono, motivoBaja, texto);
       if (!conversaciones[telefono]) resetearConversacion(telefono);
@@ -5049,6 +5082,19 @@ app.post("/webhook", async (req, res) => {
     if (!enFlujoResena && botPausado(claveBot)) {
       console.log(`[Webhook] Bot pausado para ${telefono} en canal ${channelId} — mensaje ignorado`);
       return res.sendStatus(200);
+    }
+
+    // ── Respuestas a las campañas (Navidad y reactivación) ──────────
+    // A cualquier hora: Marta contesta, y lo que toca lo pasa a Nieves.
+    if (!enFlujoResena && (conversacionCampana(telefono) || etiquetaEntradaNavidad(texto))) {
+      try {
+        if (await manejarRespuestaCampana({ telefono, memberId, channelId, texto, tipoEvento: "TEXT" })) return res.sendStatus(200);
+      } catch (e) { console.error("[Campañas] Respuesta:", e.message); }
+    }
+    // Cliente de la casa: lo ve la oficina directamente
+    if (!enFlujoResena && campanas.contactos[claveBaja(telefono)]?.casa) {
+      try { if (await manejarClienteDeLaCasa({ telefono, memberId, channelId, texto })) return res.sendStatus(200); }
+      catch (e) { console.error("[Campañas] Cliente de la casa:", e.message); }
     }
 
     // ── Canal Soporte (encuestas/reseñas) — derivar a agente humano ──
@@ -5108,8 +5154,8 @@ app.post("/webhook", async (req, res) => {
     // anuncio"). Quien pregunta por puertas de forma orgánica sigue el
     // flujo normal de Marta (presupuesto, urgencia...), que recoge sus
     // datos y avisa a la oficina como corresponde.
-    if (captacionActiva(telefono) ||
-        (CAPTACION_ANUNCIO && !conversaciones[telefono] && esContactoNuevo(telefono) &&
+    if (!etiquetaEntradaNavidad(texto) && captacionActiva(telefono) ||
+        (CAPTACION_ANUNCIO && !etiquetaEntradaNavidad(texto) && !conversaciones[telefono] && esContactoNuevo(telefono) &&
          (tieneReferralAnuncio(req.body) || mencionaAnuncio(texto)))) {
       await manejarCaptacion({ telefono, memberId, channelId, texto, esImagen, req });
       return res.sendStatus(200);
@@ -5341,6 +5387,725 @@ app.get("/zoho/campos-case", async (req, res) => {
 });
 
 // ============================================================
+// CAMPAÑAS COMERCIALES — Navidad 2026 y reactivación de clientes
+// Documento: «Instrucciones para Marta · Navidad y reactivación» (28/10/2026)
+// Marta envía las plantillas que prepara la oficina (listas subidas en
+// /admin/campanas), consigue el «Sí, llamadme» y se lo pasa a Nieves con
+// su etiqueta. No vende ni da precios a estos clientes.
+// ============================================================
+const CAMP_TEXTOS = {
+  nav: "Hola, {{1}}. Somos Ibérica Seguridad, cerrajería de Almería; te atendimos {{2}} para {{3}}. Antes de las fiestas queremos saber si a tu puerta le falta algo: en una llamada de tres minutos te orientamos y, si conviene mejorar algo, te damos precio cerrado. Que en Navidad las únicas visitas sorpresa sean las de la familia. ¿Te llamamos? (Para urgencias, llama al 950 088 086.) Si no quieres más mensajes, responde BAJA.",
+  navRecordatorio: "Hola, {{1}}. Te escribimos hace unos días desde Ibérica Seguridad. Si te viene bien, te llamamos tres minutos y te orientamos sobre tu puerta; puedes dejarla lista antes de Navidad o con fecha para enero. Si no, no te volvemos a escribir con esto. ¿Te llamamos?",
+  t7: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Como has hablado con Nieves, ya eres cliente de la casa. Guarda este número: lo que escribas aquí lo ve la oficina directamente y, si coinciden dos urgencias, la tuya va delante. Te avisaremos cuando el técnico pase por tu zona. Contigo, hasta dejarlo resuelto. Para no recibir más mensajes, responde BAJA.",
+  t3: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Nieves te ha llamado un par de veces; no es nada urgente. Queríamos agradecerte la confianza de estos años y ofrecerte una revisión de tu puerta sin coste cuando el técnico pase por tu zona. Si te interesa, responde SÍ. Para no recibir más mensajes, BAJA.",
+  t4: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Hace un año te hicimos {{2}}. Un repaso de la cerradura, con engrase y ajuste, ayuda a que siga funcionando como el primer día. Si quieres que te avisemos cuando el técnico pase por tu zona, responde SÍ. Para no recibir más mensajes, BAJA.",
+  t5: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Antes de las vacaciones conviene tener claras dos cosas: que la puerta cierra bien con todas sus vueltas y quién tiene copia de tus llaves. Si quieres que revisemos la cerradura o el bombín antes de agosto, responde SÍ y te llama Nieves. Para no recibir más mensajes, BAJA.",
+  t6: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Si este mes entra un inquilino nuevo en alguno de tus pisos, cambiar el bombín entre uno y otro es la forma más sencilla de saber quién tiene llave. Lo coordinamos contigo o con el inquilino. ¿Te llama Nieves? Responde SÍ. Para no recibir más mensajes, BAJA.",
+};
+
+// Cada campaña: plantilla (variable de Railway), variables, días y cupo.
+// "dias": días de la semana permitidos (1 = lunes … 4 = jueves).
+const CAMPANAS_CONFIG = {
+  NAV26: {
+    nombre: "Navidad 2026 · Tu puerta, lista antes de las fiestas", envPlantilla: "NAV_TEMPLATE", texto: "nav",
+    variables: ["nombre", "cuando", "trabajo"], etiqueta: "NAV26-WA", comercial: true, control: true,
+    dias: [1, 2, 3, 4], cupo: { 1: 40, 2: 40, 3: 40, 4: 20 },
+    tramos: [["2026-11-10", "2026-11-12"], ["2026-11-16", "2026-12-03"], ["2026-12-09", "2026-12-17"]],
+    sinEnvio: ["2026-11-26", "2026-11-27"],
+    recordatorio: { envPlantilla: "NAV_TEMPLATE_RECORDATORIO", texto: "navRecordatorio", desde: "2026-12-09", hasta: "2026-12-17", diasDesdeEnvio: 5 },
+  },
+  "REACT-T7": { nombre: "T7 · Alta «Cliente de la casa»", envPlantilla: "T7_TEMPLATE", texto: "t7", variables: ["nombre"], etiqueta: "REACT-T7", comercial: false, control: false, casa: true, dias: [2, 3, 4], cupo: { 2: 40, 3: 40, 4: 40 } },
+  "REACT-T3": { nombre: "T3 · Cliente top que no contestó", envPlantilla: "T3_TEMPLATE", texto: "t3", variables: ["nombre"], etiqueta: "REACT-T3", comercial: true, control: true, dias: [2, 3, 4], cupo: { 2: 40, 3: 40, 4: 40 } },
+  "REACT-T4": { nombre: "T4 · Aniversario", envPlantilla: "T4_TEMPLATE", texto: "t4", variables: ["nombre", "trabajo"], etiqueta: "REACT-T4", comercial: true, control: true, aniversario: true, dias: [2, 3, 4], cupo: { 2: 40, 3: 40, 4: 40 } },
+  "REACT-T5": { nombre: "T5 · Antes de vacaciones", envPlantilla: "T5_TEMPLATE", texto: "t5", variables: ["nombre"], etiqueta: "REACT-T5", comercial: true, control: true, dias: [2, 3, 4], cupo: { 2: 40, 3: 40, 4: 40 } },
+  "REACT-T6": { nombre: "T6 · Cambio de inquilino", envPlantilla: "T6_TEMPLATE", texto: "t6", variables: ["nombre"], etiqueta: "REACT-T6", comercial: true, control: true, dias: [2, 3, 4], cupo: { 2: 40, 3: 40, 4: 40 } },
+};
+const CAMP_VENTANA = [10 * 60, 10 * 60 + 30];        // 10:00–10:30
+const CAMP_MAX_DIA = parseInt(process.env.CAMP_MAX_DIA || "60", 10); // tope global del número
+const CAMP_FRENO_NIEVES = parseInt(process.env.CAMP_FRENO_NIEVES || "12", 10);
+const CAMP_RECHAZO_MAX = 0.04;                       // BAJAs + fallos > 4 % → se para
+const CAMP_PAUSA_ENTRE_MS = parseInt(process.env.CAMP_PAUSA_ENTRE_MS || "20000", 10);
+const CAMP_DIAS_CONVERSACION = 21;                   // respuestas que cuentan como de la campaña
+
+const campanas = { listas: {}, contactos: {}, conversaciones: {} };
+// listas[id]      = { id, campana, creada, estado: revision|activa|pausada|terminada, motivo, filas: [...] }
+// fila            = { k, clave, nombre, cuando, trabajo, estado: pendiente|control|excluido|enviado|fallido, motivo, ts, wamid, entregado, leido, respondio, recordatorioTs }
+// contactos[k]    = { comerciales: [ts], sinRespuesta, casa, noCampana: {NAV26: ts} }
+// conversaciones[k] = { campana, etiqueta, listaId, ts, paso, presentado, nievesTs, datos }
+const campWamid = new Map(); // wamid → [listaId, índice]
+let guardadoCampPendiente = null;
+function guardarCampanas() {
+  if (guardadoCampPendiente) return;
+  guardadoCampPendiente = setTimeout(() => { guardadoCampPendiente = null; redisSet("iberica:campanas", campanas); }, 1500);
+}
+function indexarWamidsCampana() {
+  campWamid.clear();
+  for (const l of Object.values(campanas.listas)) l.filas.forEach((f, i) => { if (f.wamid) campWamid.set(f.wamid, [l.id, i]); if (f.wamidRec) campWamid.set(f.wamidRec, [l.id, i]); });
+}
+
+const diaSemanaMadrid = (f = new Date()) => ({ Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 })[new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Madrid", weekday: "short" }).format(f)];
+function hoyPermitidoCampana(cfg, f = new Date()) {
+  const d = diaMadrid(f);
+  if (FESTIVOS_ALMERIA[d]) return { ok: false, motivo: "festivo" };
+  if (!cfg.dias.includes(diaSemanaMadrid(f))) return { ok: false, motivo: "dia_no_permitido" };
+  if (cfg.sinEnvio?.includes(d)) return { ok: false, motivo: "sin_envio_ese_dia" };
+  if (cfg.tramos && !cfg.tramos.some(([a, b]) => d >= a && d <= b)) return { ok: false, motivo: "fuera_de_calendario" };
+  return { ok: true };
+}
+const enVentanaCampana = () => { const m = minutosActualesMadrid(); return m >= CAMP_VENTANA[0] && m < CAMP_VENTANA[1]; };
+
+// ── Subir una lista (CSV/TSV copiado del Excel) ─────────────
+// Columnas: telefono, nombre, cuando, trabajo (cabecera obligatoria).
+function parsearListaCampana(texto) {
+  const lineas = String(texto || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lineas.length < 2) return { error: "La lista necesita una fila de cabecera y al menos un cliente" };
+  const sep = lineas[0].includes("\t") ? "\t" : lineas[0].includes(";") ? ";" : ",";
+  const cab = lineas[0].split(sep).map((c) => normalizaTxt(c).replace(/[^a-z]/g, ""));
+  const col = (...n) => cab.findIndex((c) => n.some((x) => c.includes(x)));
+  const iTel = col("telefono", "movil", "tel", "whatsapp"), iNom = col("nombre", "cliente"), iCuando = col("cuando", "fecha"), iTrab = col("trabajo", "servicio");
+  if (iTel < 0) return { error: "Falta la columna «telefono»" };
+  const filas = lineas.slice(1).map((l) => {
+    const c = l.split(sep).map((x) => x.trim().replace(/^"|"$/g, ""));
+    return { telefono: c[iTel] || "", nombre: iNom >= 0 ? c[iNom] || "" : "", cuando: iCuando >= 0 ? c[iCuando] || "" : "", trabajo: iTrab >= 0 ? c[iTrab] || "" : "" };
+  });
+  return { filas };
+}
+
+const NO_PARTICULAR = /(\bs\.?\s?l\.?u?\b|\bs\.\s?a\.?\b|\bsociedad\b|\bcom\.?\s?prop|comunidad|propietarios|\bc\.\s?p\.|\bccpp\b|administraci[oó]n|inmobiliaria|\bhotel\b|\bbar\b|\brestaurante\b|\bgrupo\b|\bs\.?c\.?a?\b|parroquia|iglesia|sindicato|ayuntamiento|asociaci[oó]n)/i;
+
+function crearListaCampana(campana, texto) {
+  const cfg = CAMPANAS_CONFIG[campana];
+  if (!cfg) return { ok: false, error: "Campaña desconocida" };
+  const p = parsearListaCampana(texto);
+  if (p.error) return { ok: false, error: p.error };
+  const vistos = new Set();
+  const filas = p.filas.map((r) => {
+    const d = String(r.telefono).replace(/\D/g, "");
+    const clave = d.length === 9 ? `34${d}` : d;
+    const k = claveBaja(clave);
+    const nombre = String(r.nombre || "").trim().split(/\s+/)[0] || "";
+    const nombrePila = nombre ? nombre.charAt(0).toUpperCase() + nombre.slice(1).toLowerCase() : "";
+    const f = { k, clave, nombre: nombrePila, nombreCompleto: r.nombre, cuando: r.cuando, trabajo: r.trabajo, estado: "pendiente" };
+    if (!telefonoValido(clave) || k.length !== 9 || !/^[67]/.test(k)) { f.estado = "excluido"; f.motivo = "telefono_no_movil"; }
+    else if (vistos.has(k)) { f.estado = "excluido"; f.motivo = "duplicado"; }
+    else if (esBaja(k)) { f.estado = "excluido"; f.motivo = "baja"; }
+    else if (NO_PARTICULAR.test(r.nombre || "")) { f.estado = "excluido"; f.motivo = "no_es_particular"; }
+    else if (cfg.variables.includes("nombre") && !nombrePila) { f.estado = "excluido"; f.motivo = "sin_nombre"; }
+    else if (cfg.variables.includes("cuando") && !r.cuando) { f.estado = "excluido"; f.motivo = "sin_cuando"; }
+    else if (cfg.variables.includes("trabajo") && !r.trabajo) { f.estado = "excluido"; f.motivo = "sin_trabajo"; }
+    vistos.add(k);
+    return f;
+  });
+  // Grupo de control: un 10 % al azar no recibe el mensaje
+  if (cfg.control) {
+    const candidatas = filas.filter((f) => f.estado === "pendiente");
+    const n = Math.round(candidatas.length * 0.1);
+    for (let i = 0; i < n; i++) {
+      const libres = candidatas.filter((f) => f.estado === "pendiente");
+      libres[Math.floor(Math.random() * libres.length)].estado = "control";
+    }
+  }
+  const id = `${campana}-${new Date().toISOString().slice(0, 16).replace(/\D/g, "")}-${Math.random().toString(36).slice(2, 5)}`;
+  campanas.listas[id] = { id, campana, creada: Date.now(), estado: "revision", filas };
+  guardarCampanas();
+  return { ok: true, id };
+}
+
+const rellenarTexto = (plantilla, valores) => plantilla.replace(/\{\{(\d)\}\}/g, (_, i) => valores[Number(i) - 1] ?? "");
+function variablesFila(cfg, f) { return cfg.variables.map((v) => ({ nombre: f.nombre, cuando: f.cuando, trabajo: f.trabajo })[v]); }
+
+// ── Reglas de cada envío ─────────────────────────────────────
+function presupuestoAbierto(k) {
+  return Object.values(seguimientosPresu).some((s) => claveBaja(s.clave || s.telefono) === k && PRESU_ESTADOS_VIVOS.includes(s.estado));
+}
+function motivoNoEnviar(cfg, f, { recordatorio = false } = {}) {
+  const c = campanas.contactos[f.k] || {};
+  const ahora = Date.now(), dia = 24 * 3600 * 1000;
+  if (esBaja(f.k)) return "baja";
+  if (presupuestoAbierto(f.k)) return "presupuesto_abierto";
+  if (c.noCampana?.[cfg.campana]) return "dijo_no_a_esta_campana";
+  if (cfg.comercial && !recordatorio) {
+    const recientes = (c.comerciales || []).filter((t) => ahora - t < 365 * dia);
+    if (recientes.some((t) => ahora - t < 30 * dia)) return "mensaje_comercial_hace_menos_de_30_dias";
+    if (recientes.length >= 4) return "ya_tiene_4_mensajes_este_ano";
+    if ((c.sinRespuesta || 0) >= 3 && !cfg.aniversario) return "solo_aniversario_3_sin_respuesta";
+  }
+  return null;
+}
+
+// Zoho: casilla «WhatsApp Opt Out» del contacto (si existe)
+const CAMPO_OPTOUT = process.env.ZOHO_CAMPO_OPTOUT || "WhatsApp_Opt_Out";
+async function contactoZohoPorTelefono(k) {
+  const token = await obtenerTokenZoho();
+  const r = await axios.get(`https://www.zohoapis.eu/crm/v2/Contacts/search?phone=${k}`, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+  return { token, contactos: r.data?.data || [] };
+}
+async function optOutEnZoho(k) {
+  try {
+    const { contactos } = await contactoZohoPorTelefono(k);
+    return contactos.some((c) => c[CAMPO_OPTOUT] === true);
+  } catch (_) { return false; }
+}
+async function marcarOptOutZoho(k) {
+  try {
+    const { token, contactos } = await contactoZohoPorTelefono(k);
+    if (!contactos.length) return "sin_contacto_en_zoho";
+    await axios.put("https://www.zohoapis.eu/crm/v2/Contacts", { data: contactos.map((c) => ({ id: c.id, [CAMPO_OPTOUT]: true })) },
+      { headers: { Authorization: `Zoho-oauthtoken ${token}`, "Content-Type": "application/json" } });
+    return "ok";
+  } catch (e) {
+    console.error("[Bajas] No se pudo marcar WhatsApp Opt Out en Zoho:", JSON.stringify(e.response?.data || e.message).slice(0, 200));
+    return "error";
+  }
+}
+
+async function enviarPlantillaCampana(f, plantilla, variables) {
+  const canalBot = process.env.WOZTELL_CHANNEL_ID;
+  const m = await buscarOCrearMiembroWoztell(canalBot, f.clave, f.nombre);
+  if (!conversaciones[f.clave]) resetearConversacion(f.clave);
+  conversaciones[f.clave].memberId = m.memberId;
+  conversaciones[f.clave].channelId = canalBot;
+  actividad[f.clave] = { ...(actividad[f.clave] || { mensajesTotal: 0 }), canalId: canalBot, memberId: m.memberId };
+  return enviarPlantillaWoztell(f.clave, plantilla, variables, "es");
+}
+
+// Conversaciones con Nieves aún abiertas (pasadas en las últimas 48 h)
+const abiertasNieves = () => Object.values(campanas.conversaciones).filter((c) => c.nievesTs && Date.now() - c.nievesTs < 48 * 3600 * 1000 && !c.cerrada).length;
+
+function rechazoLista(l) {
+  const enviados = l.filas.filter((f) => ["enviado", "fallido"].includes(f.estado)).length;
+  const malos = l.filas.filter((f) => f.estado === "fallido" || (f.estado === "enviado" && esBaja(f.k) && f.ts && (bajas[f.k]?.ts || 0) >= f.ts)).length;
+  return { enviados, malos, tasa: enviados ? malos / enviados : 0 };
+}
+
+// BAJAs + fallos por encima del 4 % (con 25 envíos o más) → se para la lista
+async function pararSiRechazoAlto(l) {
+  const r = rechazoLista(l);
+  if (r.enviados < 25 || r.tasa <= CAMP_RECHAZO_MAX) return false;
+  l.estado = "pausada"; l.motivo = `rechazo ${(r.tasa * 100).toFixed(1)} % (BAJAs + fallos)`; guardarCampanas();
+  await avisarEquipoCampana(`⛔ Campaña ${l.campana} PARADA: ${l.motivo} en ${r.enviados} envíos. Revisar antes de seguir.`);
+  return true;
+}
+
+let tandaEnCurso = false;
+const enviadosHoy = () => {
+  const hoy = diaMadrid(new Date());
+  let n = 0;
+  for (const l of Object.values(campanas.listas)) for (const f of l.filas) {
+    if (f.ts && diaMadrid(new Date(f.ts)) === hoy && ["enviado", "fallido"].includes(f.estado)) n++;
+    if (f.recordatorioTs && diaMadrid(new Date(f.recordatorioTs)) === hoy) n++;
+  }
+  return n;
+};
+const enviadosHoyCampana = (campana) => {
+  const hoy = diaMadrid(new Date());
+  let n = 0;
+  for (const l of Object.values(campanas.listas)) if (l.campana === campana) for (const f of l.filas) {
+    if (f.ts && diaMadrid(new Date(f.ts)) === hoy && ["enviado", "fallido"].includes(f.estado)) n++;
+    if (f.recordatorioTs && diaMadrid(new Date(f.recordatorioTs)) === hoy) n++;
+  }
+  return n;
+};
+
+async function avisarEquipoCampana(texto) {
+  const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+  for (const d of [NOTIFICACIONES_CONFIG.nieves, NOTIFICACIONES_CONFIG.mari]) {
+    await enviarNotificacionAgente(d, { nombre: "Campañas de Marta", telefono: "—", direccion: "—", descripcion: texto, apertura: ahoraStr, refParte: "—", agente: "Marta · Campañas" }).catch(() => {});
+  }
+}
+
+// Una tanda: cada minuto se mira si toca; dentro de la ventana se envía de
+// uno en uno, respetando cupos, freno de Nieves y parada por rechazo.
+async function tandaCampanas({ forzar = false } = {}) {
+  if (tandaEnCurso) return { ok: false, motivo: "tanda_en_curso" };
+  if (!forzar && !enVentanaCampana()) return { ok: false, motivo: "fuera_de_ventana" };
+  tandaEnCurso = true;
+  const resumen = { enviados: 0, excluidos: 0, fallidos: 0, avisos: [] };
+  try {
+    if (abiertasNieves() > CAMP_FRENO_NIEVES) { resumen.avisos.push(`freno: Nieves tiene ${abiertasNieves()} conversaciones abiertas`); return resumen; }
+    const activas = Object.values(campanas.listas).filter((l) => l.estado === "activa").sort((a, b) => a.creada - b.creada);
+    for (const l of activas) {
+      const cfg = { ...CAMPANAS_CONFIG[l.campana], campana: l.campana };
+      const hoy = hoyPermitidoCampana(cfg);
+      if (!hoy.ok && !forzar) { resumen.avisos.push(`${l.id}: ${hoy.motivo}`); continue; }
+      const plantilla = process.env[cfg.envPlantilla];
+      if (!plantilla) { resumen.avisos.push(`${l.id}: falta la variable ${cfg.envPlantilla}`); continue; }
+      const cupo = forzar ? Math.max(...Object.values(cfg.cupo)) : cfg.cupo[diaSemanaMadrid()] || 0;
+      if (await pararSiRechazoAlto(l)) { resumen.avisos.push(`${l.id}: parada por rechazo`); continue; }
+      // Recordatorio único (Navidad, ola 2)
+      const rec = cfg.recordatorio;
+      const colaRec = rec && diaMadrid(new Date()) >= rec.desde && diaMadrid(new Date()) <= rec.hasta && process.env[rec.envPlantilla]
+        ? l.filas.filter((f) => f.estado === "enviado" && f.entregado && !f.respondio && !f.recordatorioTs && Date.now() - f.ts >= rec.diasDesdeEnvio * 24 * 3600 * 1000)
+        : [];
+      const cola = [...colaRec.map((f) => [f, true]), ...l.filas.filter((f) => f.estado === "pendiente").map((f) => [f, false])];
+      for (const [f, esRec] of cola) {
+        if (!forzar && !enVentanaCampana()) break;
+        if (enviadosHoyCampana(l.campana) >= cupo || enviadosHoy() >= CAMP_MAX_DIA) break;
+        if (l.estado !== "activa") break;
+        const motivo = motivoNoEnviar(cfg, f, { recordatorio: esRec }) || (await optOutEnZoho(f.k) ? "whatsapp_opt_out_en_zoho" : null);
+        if (motivo) {
+          if (!esRec) { f.estado = "excluido"; f.motivo = motivo; resumen.excluidos++; } else { f.recordatorioTs = -1; }
+          guardarCampanas();
+          continue;
+        }
+        let res;
+        try { res = await enviarPlantillaCampana(f, esRec ? process.env[rec.envPlantilla] : plantilla, esRec ? [f.nombre] : variablesFila(cfg, f)); }
+        catch (e) { res = { ok: false, detalle: e.message }; }
+        const c = (campanas.contactos[f.k] = campanas.contactos[f.k] || { comerciales: [], sinRespuesta: 0 });
+        if (res.ok) {
+          if (esRec) { f.recordatorioTs = Date.now(); if (res.wamid) { f.wamidRec = res.wamid; campWamid.set(res.wamid, [l.id, l.filas.indexOf(f)]); } }
+          else {
+            f.estado = "enviado"; f.ts = Date.now(); f.wamid = res.wamid || null;
+            if (res.wamid) campWamid.set(res.wamid, [l.id, l.filas.indexOf(f)]);
+            if (cfg.comercial) { c.comerciales.push(Date.now()); c.sinRespuesta = (c.sinRespuesta || 0) + 1; }
+            if (cfg.casa) c.casa = Date.now();
+          }
+          // La T7 no es una oferta: lo que escriba un cliente de la casa va a la oficina
+          if (!cfg.casa) campanas.conversaciones[f.k] = { ...(campanas.conversaciones[f.k] || {}), campana: l.campana, etiqueta: cfg.etiqueta, listaId: l.id, ts: Date.now(), paso: null, cerrada: null };
+          resumen.enviados++;
+        } else if (!esRec) {
+          if (/limite_de_creacion/.test(String(res.detalle))) break; // se sigue en la próxima vuelta
+          f.estado = "fallido"; f.ts = Date.now(); f.motivo = String(res.detalle || "").slice(0, 160); resumen.fallidos++;
+          if (await pararSiRechazoAlto(l)) { resumen.avisos.push(`${l.id}: parada por rechazo`); break; }
+          if (/\b132\d{3}\b/.test(String(res.detalle))) {
+            l.estado = "pausada"; l.motivo = `la plantilla ${plantilla} falla en Meta`; guardarCampanas();
+            await avisarEquipoCampana(`⛔ Campaña ${l.campana} PARADA: la plantilla ${plantilla} no funciona (${String(res.detalle).slice(0, 80)}).`);
+            break;
+          }
+        }
+        guardarCampanas();
+        if (CAMP_PAUSA_ENTRE_MS) await new Promise((r) => setTimeout(r, CAMP_PAUSA_ENTRE_MS));
+      }
+      if (!l.filas.some((f) => f.estado === "pendiente") && !(rec && diaMadrid(new Date()) <= rec.hasta)) { l.estado = "terminada"; guardarCampanas(); }
+    }
+  } finally { tandaEnCurso = false; }
+  if (resumen.enviados || resumen.fallidos) console.log("[Campañas] Tanda:", JSON.stringify(resumen));
+  return resumen;
+}
+
+// Acuses de las plantillas de campaña (entregado / leído / fallido)
+function marcarAcuseCampana(wamid, tipo) {
+  const ref = campWamid.get(wamid);
+  if (!ref) return false;
+  const f = campanas.listas[ref[0]]?.filas[ref[1]];
+  if (!f) return false;
+  if (tipo === "DELIVERED" || tipo === "READ") f.entregado = true;
+  if (tipo === "READ") f.leido = true;
+  if (tipo === "FAILED" && f.estado === "enviado" && f.wamid === wamid) { f.estado = "fallido"; f.motivo = "no_entregado"; }
+  guardarCampanas();
+  return true;
+}
+
+// ── Respuestas de Marta ──────────────────────────────────────
+const PRESENTACION_CAMPANA = "Soy Marta, el asistente automático de WhatsApp de Ibérica Seguridad. Las llamadas y los precios los lleva Nieves, de la oficina.";
+const TXT_URGENCIA = "Si estás fuera de casa o es urgente, llama ahora al 950 088 086: te atendemos las 24 horas. Si no es urgente, dímelo y seguimos por aquí.";
+const TXT_VIOLENCIA = "Entendido. Le paso tu mensaje a Nieves como prioridad y te llama hoy mismo para cambiar la cerradura cuanto antes. No tienes que contarnos nada más. Si en algún momento estás en peligro, llama al 112; el 016 te atiende las 24 horas y no deja rastro en la factura.";
+const PRECIO_WEB = process.env.CAMP_TEXTO_PRECIO_WEB || "El bombín de seguridad instalado son 99 € y con escudo 199 €, con IVA, desplazamiento y 5 llaves nuevas. Nieves te dice en tres minutos cuál le conviene a tu puerta.";
+const LEVANTE = /(carboneras|mojacar|vera\b|garrucha|turre|cuevas del almanzora|pulpi|huercal.overa|antas|los gallardos|bedar)/;
+
+// ¿Cuándo llama Nieves? Oficina: laborables de 9:00 a 19:00. null = hoy, ya.
+function cuandoLlamaNieves(f = new Date()) {
+  const hm = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", hour: "2-digit", minute: "2-digit", hour12: false }).format(f).split(":").map(Number);
+  const m = hm[0] * 60 + hm[1];
+  if (esLaborable(f) && m >= 9 * 60 && m < 19 * 60) return null;
+  if (esLaborable(f) && m < 9 * 60) return "esta mañana";
+  const dia = 24 * 3600 * 1000;
+  let d = new Date(f.getTime() + dia);
+  for (let i = 0; i < 10 && !esLaborable(d); i++) d = new Date(d.getTime() + dia);
+  if (diaMadrid(d) === diaMadrid(new Date(f.getTime() + dia))) return "mañana";
+  return "el " + new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", weekday: "long" }).format(d);
+}
+const teLlamaNieves = (extra = "") => {
+  const cuando = cuandoLlamaNieves();
+  return cuando
+    ? `Ahora la oficina está cerrada. Nieves te llama ${cuando} desde el 950 088 086.${extra}`
+    : `¡Genial! Te llama Nieves desde el 950 088 086. Guárdalo y así sabrás que somos nosotros.${extra}`;
+};
+
+// Frases de entrada desde la web, Instagram/Facebook o anuncios
+function etiquetaEntradaNavidad(texto) {
+  const t = normalizaTxt(texto);
+  if (!/puerta lista para las fiestas|lista para las fiestas/.test(t)) return null;
+  if (/\bweb\b/.test(t)) return "NAV26-WEB";
+  if (/\bvideo\b/.test(t)) return "NAV26-ORG";
+  if (/\banuncio\b/.test(t)) return "NAV26-ADS";
+  return "NAV26-WEB";
+}
+
+function conversacionCampana(telefono) {
+  const k = claveBaja(telefono);
+  const c = campanas.conversaciones[k];
+  if (!c || c.cerrada) return null;
+  if (Date.now() - (c.ts || 0) > CAMP_DIAS_CONVERSACION * 24 * 3600 * 1000) return null;
+  return c;
+}
+
+function clasificarRespuestaCampanaReglas(texto, paso) {
+  const t = normalizaTxt(texto).replace(/[¡!¿?.,;:"'()]/g, " ").replace(/\s+/g, " ").trim();
+  if (/^(si|sii+) llamadme$|^si,? llamadme|^llamadme|^si,? (por favor|claro|vale)?$|^si$|^vale$|^ok$|^claro$|^me interesa|^si me interesa/.test(t)) return "si";
+  if (/^mejor en enero|en enero|despues de reyes|despues de navidad|mas adelante/.test(t)) return "enero";
+  if (/^no,? gracias|^no me interesa|^no$|^no hace falta|^ahora no/.test(t)) return "no";
+  if (paso === "franja" && /(manana|tarde|cualquier|me da igual|mediodia|primera hora|\d{1,2}(:\d\d)? ?(h|horas)?)/.test(t)) return "franja";
+  if (/(cuanto|precio|cuesta|vale |coste|presupuesto)/.test(t)) return "precio";
+  if (/(gratis|sin coste|cuesta algo|venis a verla|venis a mirar|visita)/.test(t)) return "gratis";
+  if (/(timo|estafa|es vuestro|quien sois|es real|de verdad sois|fraude|spam)/.test(t)) return "timo";
+  if (/(vais|venis|llegais|cubris|trabajais) (hasta|a|en|por) /.test(t)) return "cobertura";
+  if (/(robot|maquina|eres una persona|eres real)/.test(t)) return "robot";
+  if (/(alquiler|alquilado|inquilino|casero|piso que alquilo)/.test(t)) return "alquiler";
+  if (/(negocio|local|tienda|oficina|empresa)/.test(t)) return "negocio";
+  if (/(han robado|robaron|entraron|han entrado) (en|a) (mi )?(vecin|el edificio|la calle|mi calle|el bloque|al lado)/.test(t)) return "robo_cerca";
+  if (/(un amigo|una amiga|mi hermano|mi hermana|mi madre|mi padre|mi vecino|mi vecina|os recomiendo|le he pasado|de parte de)/.test(t)) return "recomienda";
+  if (/acorazad/.test(t)) return "acorazada";
+  if (/(queja|reclamacion|me cobrasteis|mal servicio|muy mal|fatal|desastre|no funciona bien|se rompio)/.test(t)) return "queja";
+  if (paso === "llave") return "llave";
+  return "otro";
+}
+async function clasificarRespuestaCampana(texto, paso) {
+  const porReglas = clasificarRespuestaCampanaReglas(texto, paso);
+  if (porReglas !== "otro" || !process.env.OPENAI_API_KEY) return porReglas;
+  try {
+    const res = await Promise.race([
+      openai.chat.completions.create({
+        model: "gpt-4o-mini", temperature: 0, max_tokens: 10,
+        messages: [
+          { role: "system", content: `Un cliente de una cerrajería contesta a un WhatsApp que le ofrece una llamada de tres minutos para orientarle sobre su puerta${paso ? ` (paso actual: ${paso})` : ""}. Clasifica su respuesta con UNA palabra: si (quiere que le llamen), enero (mejor más adelante), no (no le interesa), franja (dice si mejor mañana o tarde), llave (da la marca de la llave o datos de la puerta), precio, gratis (pregunta si cuesta la llamada o la visita), timo (duda si somos nosotros), cobertura (pregunta si vamos a su pueblo), robot, alquiler, negocio, robo_cerca, recomienda, acorazada, queja, otro.` },
+          { role: "user", content: String(texto).slice(0, 400) },
+        ],
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
+    ]);
+    const c = normalizaTxt(res.choices?.[0]?.message?.content || "").replace(/[^a-z_]/g, "");
+    return ["si", "enero", "no", "franja", "llave", "precio", "gratis", "timo", "cobertura", "robot", "alquiler", "negocio", "robo_cerca", "recomienda", "acorazada", "queja", "otro"].includes(c) ? c : "otro";
+  } catch (_) { return porReglas; }
+}
+
+const URGENCIA_CAMPANA = /(estoy fuera|me he quedado fuera|sin llaves?|no puedo entrar|urgente|urgencia|me han robado|han entrado en (mi|casa)|robo en (mi|casa)|se me ha roto la llave|llave rota|no abre la puerta|no puedo abrir)/;
+const VIOLENCIA_CAMPANA = /(mi ex\b|ex pareja|expareja|ex marido|ex mujer|exmarido|me amenaza|amenaza|no me devuelve la llave|no quiere devolver|tiene llave y|maltrat|orden de alejamiento)/;
+
+async function avisarNievesCampana(telefono, conv, descripcion, prioridad = false) {
+  const k = claveBaja(telefono);
+  const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+  conv.nievesTs = conv.nievesTs || Date.now();
+  await enviarNotificacionAgente(NOTIFICACIONES_CONFIG.nieves, {
+    nombre: conversaciones[telefono]?.nombre || conv.nombre || `Cliente ${k}`,
+    telefono: k, direccion: "—",
+    descripcion: `${prioridad ? "🚨 PRIORIDAD · " : ""}[${conv.etiqueta}] ${descripcion}`,
+    apertura: ahoraStr, refParte: "—", agente: `Marta · ${conv.etiqueta}`,
+  }).catch((e) => console.error("[Campañas] Aviso a Nieves:", e.message));
+}
+async function avisarNoemiCampana(telefono, conv, descripcion) {
+  const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+  const destino = NOTIFICACIONES_CONFIG.noemi || NOTIFICACIONES_CONFIG.mari;
+  await enviarNotificacionAgente(destino, { nombre: `Cliente ${claveBaja(telefono)}`, telefono: claveBaja(telefono), direccion: "—", descripcion: `⚠️ QUEJA (para Noemí) [${conv.etiqueta}]: ${descripcion}`, apertura: ahoraStr, refParte: "—", agente: "Marta · Campañas" }).catch(() => {});
+}
+
+function marcarRespuestaFila(conv) {
+  const l = campanas.listas[conv.listaId];
+  const k = conv.k;
+  const f = l?.filas.find((x) => x.k === k && x.estado === "enviado");
+  if (f && !f.respondio) f.respondio = Date.now();
+  const c = campanas.contactos[k];
+  if (c) c.sinRespuesta = 0;
+}
+
+// Devuelve true si el mensaje era de una campaña y ya está contestado.
+async function manejarRespuestaCampana({ telefono, memberId, channelId, texto, tipoEvento }) {
+  const k = claveBaja(telefono);
+  let conv = conversacionCampana(telefono);
+  const etiquetaEntrada = !conv && tipoEvento === "TEXT" ? etiquetaEntradaNavidad(texto) : null;
+  let recienLlegado = false;
+  if (!conv && etiquetaEntrada) {
+    conv = campanas.conversaciones[k] = { campana: "NAV26", etiqueta: etiquetaEntrada, ts: Date.now(), paso: "entrada", entrada: true };
+    recienLlegado = true;
+  }
+  if (!conv) return false;
+  conv.k = k;
+  if (!conversaciones[telefono]) resetearConversacion(telefono);
+  const est = conversaciones[telefono];
+  est.memberId = memberId; est.channelId = channelId;
+  const t = normalizaTxt(texto || "");
+  const responder = async (msg) => {
+    const pre = conv.presentado ? "" : PRESENTACION_CAMPANA + "\n\n";
+    conv.presentado = true;
+    await enviarMensaje(telefono, pre + msg);
+  };
+  marcarRespuestaFila(conv);
+  conv.ts = Date.now();
+  guardarCampanas();
+
+  // Audios y fotos
+  if (tipoEvento === "AUDIO" || tipoEvento === "VOICE") {
+    await responder("¿Me lo puedes escribir en una línea? Si lo prefieres, te llama Nieves.");
+    return true;
+  }
+  if (tipoEvento !== "TEXT") {
+    if (conv.paso === "llave" || conv.paso === "con_nieves" || conv.paso === "franja") {
+      await responder("¡Gracias por la foto! Se la paso a Nieves para que te oriente.");
+      await avisarNievesCampana(telefono, conv, "ha mandado una foto de la cerradura (verla en el chat de Marta)");
+      conv.paso = "con_nieves";
+      guardarCampanas();
+      return true;
+    }
+    return false;
+  }
+
+  // Urgencias, por delante de todo
+  if (URGENCIA_CAMPANA.test(t) && !/\bno (es|era) (urgente|una urgencia)|sin prisa|no corre prisa/.test(t)) { conv.urgencia = Date.now(); await responder(TXT_URGENCIA); return true; }
+  if (VIOLENCIA_CAMPANA.test(t)) {
+    await responder(TXT_VIOLENCIA);
+    await avisarNievesCampana(telefono, conv, `posible violencia / llave no devuelta: "${texto.slice(0, 120)}". Cambiar cerradura en 24-48 h.`, true);
+    conv.paso = "con_nieves"; guardarCampanas();
+    return true;
+  }
+
+  // Llega desde la web, Instagram/Facebook o un anuncio con la frase de Navidad
+  if (recienLlegado) {
+    await responder(`${PRECIO_WEB} ¿Quieres que te llame Nieves?`);
+    guardarCampanas();
+    return true;
+  }
+
+  const cat = await clasificarRespuestaCampana(texto, conv.paso);
+  const esReact = conv.campana !== "NAV26";
+  const preguntaFranja = " ¿Mejor por la mañana o por la tarde?";
+  switch (cat) {
+    case "si": {
+      if (esReact && !cuandoLlamaNieves()) await responder(`Perfecto, se lo paso a Nieves y te llama desde el 950 088 086.${preguntaFranja}`);
+      else await responder(`${teLlamaNieves()}${preguntaFranja}`);
+      conv.paso = "franja";
+      await avisarNievesCampana(telefono, conv, `${esReact ? "SÍ" : "Sí, llamadme"} — pendiente de franja${cuandoLlamaNieves() ? ` (escribió fuera de horario: llamar ${cuandoLlamaNieves()})` : ""}`);
+      break;
+    }
+    case "franja": {
+      const franja = /tarde/.test(t) ? "por la tarde" : /manana|primera hora/.test(t) ? "por la mañana" : `«${texto.slice(0, 40)}»`;
+      conv.datos = { ...(conv.datos || {}), franja };
+      await responder(`Apuntado, ${franja === "por la tarde" || franja === "por la mañana" ? franja : "se lo digo"}. Si quieres ir adelantando, dime qué marca pone en tu llave o mándame una foto.`);
+      await avisarNievesCampana(telefono, conv, `prefiere que le llamen ${franja}`);
+      conv.paso = "llave";
+      break;
+    }
+    case "llave": {
+      conv.datos = { ...(conv.datos || {}), llave: texto.slice(0, 80) };
+      await responder("¡Gracias! Se lo paso a Nieves para que te oriente en la llamada.");
+      await avisarNievesCampana(telefono, conv, `datos de la puerta/llave: "${texto.slice(0, 100)}"`);
+      conv.paso = "con_nieves";
+      break;
+    }
+    case "enero":
+      await responder("Perfecto. Si quieres, Nieves te llama unos minutos y te lo deja con fecha para la segunda quincena de enero, con el precio cerrado que te diga. Si no, no te escribimos más con esto.");
+      conv.paso = "enero";
+      break;
+    case "no": {
+      await responder("Entendido, gracias por contestar. No te escribimos más con esto.");
+      const c = (campanas.contactos[k] = campanas.contactos[k] || { comerciales: [], sinRespuesta: 0 });
+      c.noCampana = { ...(c.noCampana || {}), [conv.campana]: Date.now() };
+      conv.cerrada = Date.now();
+      break;
+    }
+    case "precio":
+      if (conv.entrada) { await responder(`${PRECIO_WEB} ¿Te llama Nieves?`); conv.paso = "entrada"; }
+      else await responder("Te lo dice Nieves por teléfono con precio cerrado, antes de que vayamos: sin sorpresas al final. ¿Te llama?");
+      break;
+    case "gratis":
+      await responder("La llamada y la orientación no cuestan nada. Si quieres cambiar algo, Nieves te da antes el precio cerrado y el técnico va a instalar, no a mirar.");
+      break;
+    case "timo":
+      await responder("Sí, es nuestro. Este lo usamos para avisos a clientes; para urgencias y consultas, el 950 088 086, también por la noche. Si quieres comprobarlo, llámanos al 950 088 086 o búscanos en Google como Ibérica Seguridad.");
+      break;
+    case "cobertura":
+      if (LEVANTE.test(t)) await responder("Lo siento, a la zona de levante no llegamos. ¡Gracias por escribirnos!");
+      else await responder("Sí, a toda la provincia. Fuera de Almería capital y alrededores vamos en días de ruta por zonas; Nieves te dice la fecha de la tuya.");
+      break;
+    case "robot":
+      await responder("Soy un asistente automático, sí 🙂 Las llamadas y los precios los lleva Nieves, de la oficina. ¿Quieres que te llame?");
+      await avisarNievesCampana(telefono, conv, "pregunta si es un robot");
+      break;
+    case "alquiler": case "negocio": case "robo_cerca": case "recomienda": {
+      const txt = {
+        alquiler: "Entendido, sin problema: lo coordinamos contigo o con el inquilino. Se lo paso a Nieves y te llama.",
+        negocio: "Perfecto, también trabajamos para negocios. Se lo paso a Nieves y te llama.",
+        robo_cerca: "Entiendo que preocupe. Nieves te llama y te orienta con calma sobre tu puerta.",
+        recomienda: "¡Muchas gracias por acordarte de nosotros! Se lo paso a Nieves para que le llame.",
+      }[cat];
+      await responder(txt);
+      await avisarNievesCampana(telefono, conv, `${cat.replace("_", " ")}: "${texto.slice(0, 100)}"`);
+      conv.paso = "con_nieves";
+      break;
+    }
+    case "acorazada":
+      await responder("¡Apuntado! Las puertas acorazadas las lleva Nieves: se lo paso y te llama.");
+      await avisarNievesCampana(telefono, conv, `quiere una puerta ACORAZADA: "${texto.slice(0, 100)}"`);
+      conv.paso = "con_nieves";
+      break;
+    case "queja":
+      await responder("Siento mucho lo que nos cuentas. Se lo paso ahora mismo a Noemí, la responsable, para que te llame.");
+      await avisarNoemiCampana(telefono, conv, `"${texto.slice(0, 120)}"`);
+      conv.paso = "queja";
+      break;
+    default:
+      if (conv.paso === "enero" && /^(si|vale|ok|claro|perfecto)/.test(t)) {
+        await responder(`${teLlamaNieves()} Te lo deja con fecha para enero.`);
+        await avisarNievesCampana(telefono, conv, "Mejor en enero: quiere que le llame para dejarlo con fecha (2.ª quincena de enero)");
+        conv.paso = "con_nieves";
+      } else {
+        await responder("Se lo paso a Nieves, de la oficina, que te contesta en cuanto pueda.");
+        await avisarNievesCampana(telefono, conv, `escribe: "${texto.slice(0, 120)}"`);
+      }
+  }
+  guardarCampanas();
+  return true;
+}
+
+// Cliente de la casa (T7): lo que escribe lo ve la oficina directamente.
+// Se pasa a Mari o a Nieves según el horario y Marta no sigue el chat.
+async function manejarClienteDeLaCasa({ telefono, memberId, channelId, texto }) {
+  const k = claveBaja(telefono);
+  if (!campanas.contactos[k]?.casa || esBaja(k)) return false;
+  if (!conversaciones[telefono]) resetearConversacion(telefono);
+  const est = conversaciones[telefono];
+  est.memberId = memberId; est.channelId = channelId;
+  const t = normalizaTxt(texto || "");
+  const urgente = URGENCIA_CAMPANA.test(t) && !/\bno (es|era) (urgente|una urgencia)|sin prisa|no corre prisa/.test(t);
+  const enHorario = !cuandoLlamaNieves();
+  const destino = enHorario ? determinarDestinatarioNotificacion() : urgente ? NOTIFICACIONES_CONFIG.guardia : NOTIFICACIONES_CONFIG.mari;
+  const nombreDestino = destino?.nombre === "Guardia" ? "el técnico de guardia" : destino?.nombre || "la oficina";
+  await enviarMensaje(telefono, urgente
+    ? `Recibido. Si estás fuera de casa o es urgente, llama ahora al 950 088 086: te atendemos las 24 horas. Ya se lo paso a ${nombreDestino}.`
+    : enHorario
+      ? `Recibido 🙌 Se lo paso ahora mismo a ${nombreDestino}, de la oficina.`
+      : "Recibido 🙌 Ahora la oficina está cerrada: te contestan mañana a primera hora. Si es urgente, llama al 950 088 086.");
+  const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
+  await enviarNotificacionAgente(destino, { nombre: est.nombre || `Cliente de la casa ${k}`, telefono: k, direccion: "—", descripcion: `⭐ CLIENTE DE LA CASA escribe: "${String(texto).slice(0, 150)}"`, apertura: ahoraStr, refParte: "—", agente: "Marta · Cliente de la casa" }).catch(() => {});
+  pausarBot(`${channelId}_${telefono}`, PAUSA_TAKEOVER_H, "cliente de la casa: lo atiende la oficina");
+  return true;
+}
+
+function estadisticasCampanas() {
+  const listas = Object.values(campanas.listas).sort((a, b) => b.creada - a.creada).map((l) => {
+    const n = (fn) => l.filas.filter(fn).length;
+    const r = rechazoLista(l);
+    return {
+      id: l.id, campana: l.campana, nombre: CAMPANAS_CONFIG[l.campana]?.nombre, estado: l.estado, motivo: l.motivo || null,
+      creada: new Date(l.creada).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }),
+      plantilla: process.env[CAMPANAS_CONFIG[l.campana]?.envPlantilla] || `⚠️ falta ${CAMPANAS_CONFIG[l.campana]?.envPlantilla}`,
+      total: l.filas.length, pendientes: n((f) => f.estado === "pendiente"), grupoControl: n((f) => f.estado === "control"),
+      excluidos: n((f) => f.estado === "excluido"), enviados: n((f) => f.estado === "enviado"), fallidos: n((f) => f.estado === "fallido"),
+      entregados: n((f) => f.entregado), leidos: n((f) => f.leido), respondieron: n((f) => f.respondio), recordatorios: n((f) => f.recordatorioTs > 0),
+      rechazo: `${(r.tasa * 100).toFixed(1)} %`,
+      motivosExclusion: l.filas.filter((f) => f.estado === "excluido").reduce((a, f) => ((a[f.motivo] = (a[f.motivo] || 0) + 1), a), {}),
+    };
+  });
+  const etiquetas = {};
+  for (const c of Object.values(campanas.conversaciones)) if (c.nievesTs) etiquetas[c.etiqueta] = (etiquetas[c.etiqueta] || 0) + 1;
+  return { ventana: "10:00–10:30", maxDia: CAMP_MAX_DIA, enviadosHoy: enviadosHoy(), abiertasNieves: abiertasNieves(), frenoNieves: CAMP_FRENO_NIEVES, pasadosANievesPorEtiqueta: etiquetas, clientesDeLaCasa: Object.values(campanas.contactos).filter((c) => c.casa).length, listas };
+}
+
+// ── Panel de campañas ─────────────────────────────────────────
+app.get("/admin/api/campanas", authAdmin, (req, res) => res.json({ ok: true, ...estadisticasCampanas() }));
+
+app.post("/admin/api/campanas/lista", authAdmin, (req, res) => {
+  const { campana, texto } = req.body || {};
+  const r = crearListaCampana(String(campana || ""), String(texto || ""));
+  if (!r.ok) return res.status(400).json(r);
+  res.json({ ok: true, id: r.id, lista: estadisticasCampanas().listas.find((l) => l.id === r.id) });
+});
+
+// Vista previa: cómo le llega el mensaje a cada cliente (revisar a mano)
+app.get("/admin/api/campanas/lista/:id", authAdmin, (req, res) => {
+  const l = campanas.listas[req.params.id];
+  if (!l) return res.status(404).json({ ok: false, error: "No existe esa lista" });
+  const cfg = CAMPANAS_CONFIG[l.campana];
+  res.json({
+    ok: true, id: l.id, campana: l.campana, estado: l.estado,
+    filas: l.filas.map((f) => ({
+      telefono: f.k, nombre: f.nombreCompleto, estado: f.estado, motivo: f.motivo || null,
+      enviado: f.ts ? new Date(f.ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }) : null,
+      entregado: !!f.entregado, leido: !!f.leido, respondio: !!f.respondio,
+      mensaje: rellenarTexto(CAMP_TEXTOS[cfg.texto], variablesFila(cfg, f)),
+    })),
+  });
+});
+
+app.post("/admin/api/campanas/lista/:id/estado", authAdmin, (req, res) => {
+  const l = campanas.listas[req.params.id];
+  if (!l) return res.status(404).json({ ok: false, error: "No existe esa lista" });
+  const estado = String(req.body?.estado || "");
+  if (estado === "borrar") {
+    if (l.filas.some((f) => f.estado === "enviado")) return res.status(400).json({ ok: false, error: "Ya tiene envíos: páusala en vez de borrarla" });
+    delete campanas.listas[l.id]; guardarCampanas();
+    return res.json({ ok: true, borrada: true });
+  }
+  if (!["activa", "pausada", "terminada"].includes(estado)) return res.status(400).json({ ok: false, error: "Estado no válido" });
+  if (estado === "activa" && !process.env[CAMPANAS_CONFIG[l.campana].envPlantilla]) {
+    return res.status(400).json({ ok: false, error: `Antes hay que poner en Railway la variable ${CAMPANAS_CONFIG[l.campana].envPlantilla} con el nombre de la plantilla aprobada` });
+  }
+  l.estado = estado; l.motivo = estado === "pausada" ? "pausada a mano" : null;
+  guardarCampanas();
+  res.json({ ok: true, estado });
+});
+
+// Prueba manual de una tanda (?forzar=1 se salta la ventana y el calendario)
+app.get("/admin/api/campanas/tanda", authAdmin, async (req, res) => {
+  res.json({ ok: true, resumen: await tandaCampanas({ forzar: req.query.forzar === "1" }) });
+});
+
+app.get("/admin/campanas", authAdmin, (req, res) => {
+  const opciones = Object.entries(CAMPANAS_CONFIG).map(([k, c]) => `<option value="${k}">${c.nombre}</option>`).join("");
+  res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Campañas de Marta</title>
+<style>
+:root{--bg:#f5f7f5;--sf:#fff;--ink:#131715;--ink2:#48514c;--rule:#e1e6e2;--verde:#1f882c;--rojo:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1210;--sf:#171b18;--ink:#e8ece9;--ink2:#b3bcb6;--rule:#29302b;--verde:#3e9f4e;--rojo:#ec7b70}}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,Segoe UI,sans-serif}
+main{max-width:960px;margin:0 auto;padding:20px 16px 60px;display:grid;gap:18px}
+section{background:var(--sf);border:1px solid var(--rule);border-radius:10px;padding:16px;display:grid;gap:10px}
+h1{font-size:24px;margin:0}h2{font-size:17px;margin:0}
+textarea,select,button{font:inherit;border:1px solid var(--rule);border-radius:8px;padding:8px;background:var(--sf);color:var(--ink)}
+textarea{min-height:140px;width:100%;box-sizing:border-box}
+button{cursor:pointer;background:var(--verde);color:#fff;border:0}button.sec{background:transparent;color:var(--ink);border:1px solid var(--rule)}
+.tabla{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top}
+.muted{color:var(--ink2);font-size:13px}.err{color:var(--rojo)}.fila{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+</style></head><body><main>
+<h1>Campañas de Marta</h1>
+<p class="muted">Marta envía de 10:00 a 10:30 (Navidad: lunes a jueves; reactivación: martes a jueves), nunca en festivos. Un 10 % de cada lista queda como grupo de control. Antes de activar una lista, revisa los mensajes.</p>
+<section><h2>1 · Subir una lista</h2>
+<select id="campana">${opciones}</select>
+<p class="muted">Pega desde el Excel con cabecera: <b>telefono</b>, <b>nombre</b> y, en Navidad, <b>cuando</b> («en marzo», «hace un tiempo») y <b>trabajo</b> («abrirte la puerta de casa»). En el aniversario (T4), <b>trabajo</b>.</p>
+<textarea id="texto" placeholder="telefono	nombre	cuando	trabajo"></textarea>
+<div class="fila"><button onclick="subir()">Subir lista</button><span id="msg" class="muted"></span></div></section>
+<section><h2>2 · Listas</h2><div id="resumen" class="muted"></div><div class="tabla" id="listas"></div></section>
+<section id="vista" hidden><h2>Vista previa</h2><div class="tabla" id="filas"></div></section>
+<script>
+const $=(i)=>document.getElementById(i);
+async function api(u,o){const r=await fetch(u,o);return r.json();}
+async function cargar(){
+  const d=await api('/admin/api/campanas');
+  $('resumen').textContent='Enviados hoy: '+d.enviadosHoy+' de '+d.maxDia+' · Conversaciones abiertas de Nieves: '+d.abiertasNieves+' (freno a partir de '+d.frenoNieves+') · Clientes de la casa: '+d.clientesDeLaCasa;
+  $('listas').innerHTML='<table><tr><th>Lista</th><th>Estado</th><th>Envíos</th><th>Respuesta</th><th></th></tr>'+d.listas.map(l=>'<tr><td><b>'+l.nombre+'</b><br><span class="muted">'+l.creada+' · plantilla: '+l.plantilla+'</span></td><td>'+l.estado+(l.motivo?'<br><span class="err">'+l.motivo+'</span>':'')+'</td><td>'+l.enviados+' enviados · '+l.pendientes+' pendientes<br><span class="muted">'+l.grupoControl+' control · '+l.excluidos+' excluidos · '+l.fallidos+' fallidos</span></td><td>'+l.entregados+' entregados · '+l.respondieron+' respondieron<br><span class="muted">rechazo '+l.rechazo+'</span></td><td class="fila"><button class="sec" onclick="ver(\\''+l.id+'\\')">Ver</button>'+(l.estado!=='activa'&&l.estado!=='terminada'?'<button onclick="estado(\\''+l.id+'\\',\\'activa\\')">Activar</button>':'')+(l.estado==='activa'?'<button class="sec" onclick="estado(\\''+l.id+'\\',\\'pausada\\')">Pausar</button>':'')+(l.enviados===0?'<button class="sec" onclick="estado(\\''+l.id+'\\',\\'borrar\\')">Borrar</button>':'')+'</td></tr>').join('')+'</table>';
+}
+async function subir(){
+  $('msg').textContent='Subiendo…';
+  const r=await api('/admin/api/campanas/lista',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({campana:$('campana').value,texto:$('texto').value})});
+  $('msg').textContent=r.ok?'Lista subida: '+r.lista.pendientes+' para enviar, '+r.lista.grupoControl+' de control, '+r.lista.excluidos+' excluidos. Revísala antes de activarla.':(r.error||'Error');
+  if(r.ok){$('texto').value='';cargar();ver(r.id);}
+}
+async function estado(id,e){
+  if(e==='activa'&&!confirm('¿Activar la lista? Marta empezará a enviar en la próxima ventana de 10:00 a 10:30.'))return;
+  const r=await api('/admin/api/campanas/lista/'+id+'/estado',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({estado:e})});
+  if(!r.ok)alert(r.error);cargar();
+}
+async function ver(id){
+  const d=await api('/admin/api/campanas/lista/'+id);
+  $('vista').hidden=false;
+  const esc=(s)=>String(s??'').replace(/[&<>]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  $('filas').innerHTML='<table><tr><th>Cliente</th><th>Estado</th><th>Mensaje</th></tr>'+d.filas.map(f=>'<tr><td>'+esc(f.nombre)+'<br><span class="muted">'+f.telefono+'</span></td><td>'+f.estado+(f.motivo?'<br><span class="muted">'+esc(f.motivo)+'</span>':'')+'</td><td>'+esc(f.mensaje)+'</td></tr>').join('')+'</table>';
+  $('vista').scrollIntoView({behavior:'smooth'});
+}
+cargar();
+</script></main></body></html>`);
+});
+
+// ============================================================
 // ARRANQUE DEL SERVIDOR
 // ============================================================
 app.listen(PORT, async () => {
@@ -5366,6 +6131,8 @@ app.listen(PORT, async () => {
   setInterval(sondearPresupuestosEnviados, 5 * 60 * 1000);
   setTimeout(barridoToquesPresupuesto, 5 * 60 * 1000);
   setInterval(barridoToquesPresupuesto, 30 * 60 * 1000);
+  // Campañas comerciales: cada minuto se mira si toca tanda (10:00–10:30)
+  setInterval(() => tandaCampanas().catch((e) => console.error("[Campañas] Tanda falló:", e.message)), 60 * 1000);
 
   // Pre-cargar el token de Zoho al arrancar para detectar errores de configuración
   try {
