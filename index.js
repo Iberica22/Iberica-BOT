@@ -307,6 +307,19 @@ const CANALES_AGENTES = {
 const CANAL_INSTAGRAM = "6a804571292b8b00616d71f9";
 const martaEnInstagram = () => String(process.env.MARTA_INSTAGRAM || "off").toLowerCase() === "on";
 
+// Excepción: quien pide el checklist por DM («checklist», «lista», «guía»)
+// recibe el enlace aunque Marta esté apagada en Instagram. Solo eso; el
+// resto de la conversación sigue siendo de la oficina.
+const CHECKLIST_URL = process.env.CHECKLIST_URL ||
+  "https://iberica22.github.io/Iberica-BOT/checklist-tu-casa-punto-por-punto.pdf";
+const CHECKLIST_MENSAJE =
+  "¡Hola! 👋 Aquí tienes nuestro checklist gratuito «Tu casa, punto por punto»: " +
+  "20 comprobaciones sencillas para revisar puertas, cerraduras y ventanas 🚪🔑\n\n" +
+  `👉 ${CHECKLIST_URL}\n\n` +
+  "Si marcas algo en «Revisar», mándanos una foto por WhatsApp al 670 71 02 02 " +
+  "y te orientamos gratis y sin compromiso.\n\nIbérica Seguridad · Almería";
+const pideChecklist = (texto) => /\b(check ?list|lista|guia)\b/.test(normalizaTxt(texto));
+
 // ── Horarios de activación del bot por canal ──────────────────
 // El bot solo responde automáticamente en las franjas indicadas.
 // Sin horario = siempre activo (ej: Noe).
@@ -4967,6 +4980,17 @@ app.post("/webhook", async (req, res) => {
     actividad[telefono].canalId  = channelId;
     actividad[telefono].memberId = memberId;  // para poder escribirle (reseñas) tras un reinicio
     redisSet("iberica:actividad", actividad);
+
+    // ── Instagram: checklist por palabra clave (aunque Marta esté apagada) ──
+    if (channelId === CANAL_INSTAGRAM && tipo === "TEXT" && pideChecklist(texto)) {
+      if (botPausado(`${channelId}_${telefono}`)) {
+        console.log(`[Instagram] ${telefono} pide el checklist, pero el chat lo lleva una persona — no se envía`);
+      } else {
+        console.log(`[Instagram] ${telefono} pide el checklist — enviando enlace`);
+        await enviarCap({ telefono, channelId, memberId }, CHECKLIST_MENSAJE);
+      }
+      return res.sendStatus(200);
+    }
 
     // ── Instagram: Marta no contesta (lo lleva la oficina) ──────────────
     if (channelId === CANAL_INSTAGRAM && !martaEnInstagram()) {
