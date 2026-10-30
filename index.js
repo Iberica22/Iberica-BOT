@@ -2678,7 +2678,7 @@ const ESQUEMA_CLASIFICACION = {
 const CATEGORIAS_PRESU = ["acepta", "precio", "aplaza", "consulta", "declina", "duda"];
 async function clasificarRespuestaPresu(mensaje, toque) {
   const contexto = toque === 3
-    ? `\nCONTEXTO: Marta le acaba de preguntar si ha decidido aparcar o dejar el presupuesto. Un "sí", "sí, lo dejamos" o similar es "declina"; un "no, sigo interesado" es "aplaza" salvo que pida seguir adelante ya ("acepta").`
+    ? `\nCONTEXTO: Marta le acaba de preguntar si ha decidido aparcar o dejar el presupuesto. Un "sí", "sí, lo dejamos" o similar es "declina"; un "no, sigo interesado" es "aplaza" salvo que pida seguir adelante ya ("acepta"). Ojo: "sí, pídelo", "sí, adelante" o "sí, lo quiero" son "acepta".`
     : "";
   try {
     const res = await Promise.race([
@@ -2691,7 +2691,7 @@ async function clasificarRespuestaPresu(mensaje, toque) {
             role: "system",
             content:
 `Un cliente de Ibérica Seguridad (cerrajería y puertas de seguridad) responde al seguimiento de un presupuesto que le enviamos. Clasifica su respuesta con UNA sola palabra:
-- acepta: quiere seguir adelante, acepta, pregunta cuándo podéis venir a hacerlo.
+- acepta: quiere seguir adelante, acepta, pide que lo encarguéis o lo pidáis ("sí, pídelo", "encargadlo", "pedidlo"), dice que lo quiere, pregunta cuándo podéis venir a hacerlo.
 - precio: le parece caro, pide descuento, lo compara con otro presupuesto.
 - aplaza: no por ahora, de momento no, más adelante, se lo está pensando, no va a hacer nada por el momento.
 - consulta: la decisión no es solo suya; tiene que verlo o consultarlo con otra persona o grupo (pareja, familia, socio, jefe, la comunidad de vecinos, la junta, el administrador).
@@ -2711,11 +2711,12 @@ Responde solo la palabra.`,
 }
 function clasificarRespuestaPresuPorPalabras(mensaje, toque) {
   const low = normalizaTxt(mensaje).trim();
-  if (toque === 3 && /^(si|sí|vale|ok|efectivamente|asi es)\b/.test(low) && !/adelante|seguir|hacerlo/.test(low)) return "declina";
-  if (/(adelante|acepto|acepta(mos)?|de acuerdo|confirmo|hacedlo|cuando (pueden|podeis|puedan)|vale,? si|queremos hacerlo|me lo quedo)/.test(low)) return "acepta";
+  const pideQueSeHaga = /(adelante|seguir|hacerlo|pidel[oa]|pedidl[oa]|pidan|pedir(lo|la)|encarg|haz(lo|me) el pedido|haced el pedido|lo quiero|lo queremos|cuando (pueden|podeis|puedan) venir)/;
+  if (toque === 3 && /^(si|sí|vale|ok|efectivamente|asi es)\b/.test(low) && !pideQueSeHaga.test(low)) return "declina";
+  if (pideQueSeHaga.test(low) || /(acepto|acepta(mos)?|de acuerdo|confirmo|hacedlo|vale,? si|queremos hacerlo|me lo quedo)/.test(low)) return "acepta";
   if (/(caro|carisimo|precio|coste|cuesta|barato|rebaja|descuento|competencia|otro presupuesto)/.test(low)) return "precio";
   if (/(consultar|comentar|hablar|ver|decidir) (lo |la |con )?(con )?(mi |la |el |los )?(mujer|marido|pareja|familia|socio|jefe|hijo|hija|comunidad|junta|vecinos|administrador)|(la |una )?junta( de vecinos)?|comunidad de (vecinos|propietarios)|administrador de fincas/.test(low)) return "consulta";
-  if (/(pensar|pensando|mas adelante|todavia no|aun no|ahora no|por (el|ahora|lo pronto)|de momento|por ahora|ya (te|os) (dire|digo)|consultar|decidir|dudando|no lo (tengo|tenemos) claro|no (voy|vamos) a hacer nada)/.test(low)) return "aplaza";
+  if (/(pensar|pensando|pienso|piense|mas adelante|todavia no|aun no|ahora no|por (el|ahora|lo pronto)|de momento|por ahora|ya (te|os) (dire|digo)|consultar|decidir|dudando|no lo (tengo|tenemos) claro|no (voy|vamos) a hacer nada)/.test(low)) return "aplaza";
   if (/(no (lo )?(quiero|queremos|vamos a hacerlo|va a ser)|no me interesa|descartado|ya lo (hice|hicimos|contrate|contratamos)|otra empresa|dejalo|no,? gracias)/.test(low)) return "declina";
   return "duda";
 }
@@ -5077,11 +5078,22 @@ app.post("/webhook", async (req, res) => {
 
     // Lo mismo para seguimientos de presupuesto con toque pendiente de
     // respuesta: se reconstruye el paso presu_respuesta tras un redeploy.
-    if (channelId === CANAL_SOPORTE && !(conversaciones[telefono]?.step || "").match(/^(resena_|presu_)/)) {
+    // El seguimiento puede haber salido por el número donde el cliente ya
+    // tenía chat (Noe, Mari…), así que se mira en cualquier canal.
+    // Fuera del número de Marta, nunca si una persona lleva ya el chat.
+    if (!(conversaciones[telefono]?.step || "").match(/^(resena_|presu_)/) &&
+        (channelId === CANAL_SOPORTE || !botPausado(`${channelId}_${telefono}`))) {
+      // También si ya contestó antes ("me lo pienso", "te escribo cuando lo
+      // tenga claro") y vuelve a escribir con su decisión: "sí, pídelo"
+      // tiene que llegar como aceptación del presupuesto, no como un
+      // mensaje suelto al número de Marta.
       const segAbierto = Object.values(seguimientosPresu).find(
-        (s) => s.clave === telefono && ["en_curso", "fin_marta", "toque1", "toque2", "toque3"].includes(s.estado) &&
-               (s.enviados || s.toque1Ts) &&
-               Date.now() - (s.ultimoMensajeTs || s.toque3Ts || s.toque2Ts || s.toque1Ts || 0) < 7 * 24 * 3600 * 1000
+        (s) => s.clave === telefono && (s.enviados || s.toque1Ts) && (
+          (["en_curso", "fin_marta", "toque1", "toque2", "toque3"].includes(s.estado) &&
+           Date.now() - (s.ultimoMensajeTs || s.toque3Ts || s.toque2Ts || s.toque1Ts || 0) < 7 * 24 * 3600 * 1000) ||
+          (["respondido", "volver_a_llamar", "aplazado"].includes(s.estado) && !botPausado(`${channelId}_${telefono}`) &&
+           Date.now() - (s.enviadoTs || 0) < ((PLANES_PRESU[s.tipo] || PLANES_PRESU.particular).cierre) * 24 * 3600 * 1000)
+        )
       );
       if (segAbierto) {
         if (!conversaciones[telefono]) resetearConversacion(telefono);
