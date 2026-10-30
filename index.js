@@ -5451,7 +5451,7 @@ app.get("/zoho/campos-case", async (req, res) => {
 const CAMP_TEXTOS = {
   nav: "Hola, {{1}}. Somos Ibérica Seguridad, cerrajería de Almería; te atendimos {{2}} para {{3}}. Antes de las fiestas queremos saber si a tu puerta le falta algo: en una llamada de tres minutos te orientamos y, si conviene mejorar algo, te damos precio cerrado. Que en Navidad las únicas visitas sorpresa sean las de la familia. ¿Te llamamos? (Para urgencias, llama al 950 088 086.) Si no quieres más mensajes, responde BAJA.",
   navRecordatorio: "Hola, {{1}}. Te escribimos hace unos días desde Ibérica Seguridad. Si te viene bien, te llamamos tres minutos y te orientamos sobre tu puerta; puedes dejarla lista antes de Navidad o con fecha para enero. Si no, no te volvemos a escribir con esto. ¿Te llamamos? Si no quieres más mensajes, responde BAJA.",
-  t7: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Como has hablado con Nieves, ya eres cliente de la casa. Guarda este número: lo que escribas aquí lo ve la oficina directamente y, si coinciden dos urgencias, la tuya va delante. Te avisaremos cuando el técnico pase por tu zona. Contigo, hasta dejarlo resuelto. Para no recibir más mensajes, responde BAJA.",
+  t7: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Como has hablado con Nieves, ya eres cliente de la casa. Guarda este WhatsApp: lo que nos escribas aquí lo ve la oficina directamente. Y para urgencias, guarda también el 950 088 086: te atendemos las 24 horas y, si coinciden dos urgencias, la tuya va delante. Te avisaremos cuando el técnico pase por tu zona. Contigo, hasta dejarlo resuelto. Para no recibir más mensajes, responde BAJA.",
   t3: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Nieves te ha llamado un par de veces; no es nada urgente. Queríamos agradecerte la confianza de estos años y ofrecerte una revisión de tu puerta sin coste cuando el técnico pase por tu zona. Si te interesa, responde SÍ. Para no recibir más mensajes, BAJA.",
   t4: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Hace un año te hicimos {{2}}. Un repaso de la cerradura, con engrase y ajuste, ayuda a que siga funcionando como el primer día. Si quieres que te avisemos cuando el técnico pase por tu zona, responde SÍ. Para no recibir más mensajes, BAJA.",
   t5: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Antes de las vacaciones conviene tener claras dos cosas: que la puerta cierra bien con todas sus vueltas y quién tiene copia de tus llaves. Si quieres que revisemos la cerradura o el bombín antes de agosto, responde SÍ y te llama Nieves. Para no recibir más mensajes, BAJA.",
@@ -5803,6 +5803,7 @@ function conversacionCampana(telefono) {
 
 function clasificarRespuestaCampanaReglas(texto, paso) {
   const t = normalizaTxt(texto).replace(/[¡!¿?.,;:"'()]/g, " ").replace(/\s+/g, " ").trim();
+  if (/^si,? (me interesa|avisadme|que me llamen?|que me llame nieves)\b/.test(t)) return "si";
   if (/^(si|sii+) llamadme$|^si,? llamadme|^llamadme|^si,? (por favor|claro|vale)?$|^si$|^vale$|^ok$|^claro$|^me interesa|^si me interesa/.test(t)) return "si";
   if (/^mejor en enero|en enero|despues de reyes|despues de navidad|mas adelante/.test(t)) return "enero";
   if (/^no,? gracias|^no me interesa|^no$|^no hace falta|^ahora no/.test(t)) return "no";
