@@ -13,7 +13,8 @@ Imágenes generadas en Higgsfield (GPT Image 2.5, calidad alta, 2K), con la
 portada como referencia de la llave para el resto. El logo NO lo dibuja la
 IA: se pega el `docs/logo.jpg` real encima, en una pastilla blanca abajo
 (ImageMagick). Las versiones finales con logo están subidas a Higgsfield
-como `iberica-halloween-1-portada.png` … `iberica-halloween-7-cierre.png`.
+como `iberica-halloween-1-portada.png` … `iberica-halloween-7-cierre.png`; la 05
+buena es `iberica-halloween-6-echar-la-llave-05.png`.
 
 ## Diapositivas
 
@@ -24,7 +25,7 @@ como `iberica-halloween-1-portada.png` … `iberica-halloween-7-cierre.png`.
 | 02 | Negro / verde | Que la llave gire… y gire… y no abra | Si la cerradura dice basta, te la cambiamos. | Llave momia mareada dando vueltas en el bombín |
 | 03 | Negro / verde | Que tu vecino aún tenga copia de tu llave | Cilindros de alta seguridad con tarjeta de propiedad. | Llave bruja y su «copia» acechando en la escalera |
 | 04 | Negro / verde | Volver del puente y ver la cerradura forzada | Escudo antitaladro: el punto débil, reforzado. | Llave esqueleto de guardia junto a un escudo |
-| 05 | Negro / verde | Que tu puerta se abra con una radiografía | Puertas acorazadas FICHET y KIUSO, con 3 años de garantía. | Llave calabaza junto a una acorazada; puerta vieja temblando |
+| 05 | Negro / verde | Salir de casa sin echar la llave | Sin la llave echada, hasta la mejor puerta se abre con una radiografía. | Llave calabaza echando la llave; un fantasma se queda con las ganas |
 | Cierre | Negro / verde | EL ÚNICO SUSTO, QUE SEA EL DISFRAZ | Urgencias 24 horas · 950 088 086 · Llamada y WhatsApp · C/ San Leonardo 34, Almería | Llave sin disfraz, saludando, con cubo de chuches |
 
 ## Pie de foto
@@ -55,4 +56,6 @@ en comentarios cuál es el tuyo. 🎃
 - Solo servicios y marcas que salen en la web (`docs/index.html`,
   `docs/puertas.html`).
 - Contacto público: 950 088 086 (no el número de campañas de Marta).
+- No vender la acorazada contra la radiografía: sin la llave echada, cualquier
+  puerta (también una acorazada) se abre así. El mensaje es «echa la llave».
 - Publicar antes del 31/10; el «puente» de la diapositiva 04 vale hasta el 2/11.
