@@ -303,9 +303,9 @@ const CANALES_AGENTES = {
   "6a804571292b8b00616d71f9": "Instagram", // DMs de @ibericaseguridad (24/7, sin horario)
 };
 
-// Instagram: Marta NO contesta (ni DMs ni comentarios) salvo MARTA_INSTAGRAM=on
+// Instagram: Marta contesta DMs y comentarios; MARTA_INSTAGRAM=off la calla
 const CANAL_INSTAGRAM = "6a804571292b8b00616d71f9";
-const martaEnInstagram = () => String(process.env.MARTA_INSTAGRAM || "off").toLowerCase() === "on";
+const martaEnInstagram = () => String(process.env.MARTA_INSTAGRAM || "on").toLowerCase() !== "off";
 
 // ── Horarios de activación del bot por canal ──────────────────
 // El bot solo responde automáticamente en las franjas indicadas.
