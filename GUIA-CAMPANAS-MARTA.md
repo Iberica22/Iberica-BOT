@@ -1,9 +1,13 @@
 # Campañas de Marta — Navidad 2026 y reactivación
 
 Basado en «Instrucciones para Marta · Navidad y reactivación» (28/10/2026).
-Marta envía las plantillas desde su número (661 66 59 29), consigue el «Sí,
-llamadme» y se lo pasa a Nieves con su etiqueta. A los clientes de la
-plantilla no les da precios.
+Marta consigue el «Sí, llamadme» y se lo pasa a Nieves con su etiqueta. A
+los clientes de la plantilla no les da precios.
+
+- **Navidad:** sale desde un número propio, el **674 09 66 10**, para no
+  arriesgar la calidad del número de Marta.
+- **Reactivación (T3, T4, T5, T6 y T7):** sale desde el número de siempre
+  de Marta, el 661 66 59 29.
 
 ## Cómo se lanza una tanda
 
@@ -101,6 +105,7 @@ guardia.
 
 | Variable | Plantilla |
 |---|---|
+| `CAMP_CHANNEL_ID` | Identificador del canal de Woztell del 674 09 66 10 (Navidad). Sin él, la lista de Navidad no se activa |
 | `NAV_TEMPLATE` | Navidad, principal (marketing, con los 3 botones) |
 | `NAV_TEMPLATE_RECORDATORIO` | Navidad, recordatorio único |
 | `T7_TEMPLATE` | Alta «Cliente de la casa» (utilidad) |
