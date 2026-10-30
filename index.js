@@ -3888,6 +3888,12 @@ async function manejarComentarioIG(body) {
   const commentId = body?.comment_id || body?.data?.id;
   if (!usuario || !canal || !memberId || !commentId) return;
   if (usuario === body?.to) return;               // comentario de la propia cuenta
+  // El checklist por comentario lo manda HeyMark (respuesta pública + DM);
+  // si Marta también contestara, el cliente recibiría el mensaje dos veces.
+  if (pideChecklist(texto)) {
+    console.log(`[Comentarios] @${username} pide el checklist — lo atiende HeyMark`);
+    return;
+  }
   if (comentariosRespondidos[commentId]) return;  // ya respondido
   comentariosRespondidos[commentId] = Date.now();
   if (Object.keys(comentariosRespondidos).length > 500) {
