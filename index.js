@@ -303,6 +303,10 @@ const CANALES_AGENTES = {
   "6a804571292b8b00616d71f9": "Instagram", // DMs de @ibericaseguridad (24/7, sin horario)
 };
 
+// Instagram: Marta NO contesta (ni DMs ni comentarios) salvo MARTA_INSTAGRAM=on
+const CANAL_INSTAGRAM = "6a804571292b8b00616d71f9";
+const martaEnInstagram = () => String(process.env.MARTA_INSTAGRAM || "off").toLowerCase() === "on";
+
 // ── Horarios de activación del bot por canal ──────────────────
 // El bot solo responde automáticamente en las franjas indicadas.
 // Sin horario = siempre activo (ej: Noe).
@@ -4929,7 +4933,8 @@ app.post("/webhook", async (req, res) => {
         // Comentario en un post/reel de Instagram → DM privado con la guía.
         // (Se maneja aquí a propósito: un comentario trae texto del CLIENTE y
         // no debe pasar por la detección de intervención humana.)
-        try { await manejarComentarioIG(req.body); } catch (e) { console.error("[Comentarios] Error:", e.message); }
+        if (!martaEnInstagram()) console.log("[Instagram] Comentario ignorado: Marta no contesta en Instagram");
+        else try { await manejarComentarioIG(req.body); } catch (e) { console.error("[Comentarios] Error:", e.message); }
       } else if (tipo === "SMB_CONTACTS") {
         // Sincronización de la agenda de la app de WhatsApp Business: llegan
         // cientos seguidos, sin texto. Ni son respuestas ni llenan los logs.
@@ -4962,6 +4967,12 @@ app.post("/webhook", async (req, res) => {
     actividad[telefono].canalId  = channelId;
     actividad[telefono].memberId = memberId;  // para poder escribirle (reseñas) tras un reinicio
     redisSet("iberica:actividad", actividad);
+
+    // ── Instagram: Marta no contesta (lo lleva la oficina) ──────────────
+    if (channelId === CANAL_INSTAGRAM && !martaEnInstagram()) {
+      console.log(`[Instagram] DM de ${telefono} sin respuesta de Marta (MARTA_INSTAGRAM=off)`);
+      return res.sendStatus(200);
+    }
 
     // ── Ignorar mensajes de agentes internos (no son clientes) ──────────
     if (NOMBRES_AGENTES[telefono]) {
