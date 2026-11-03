@@ -14,11 +14,19 @@ los clientes de la plantilla no les da precios.
 1. Adm3 prepara la lista ya cruzada: sin compañías, sin los 173, sin los
    clientes con 3 servicios o más y sin la casilla «Llamada Nieves».
 2. En **/admin/campanas** se elige la campaña y se pega la lista desde el
-   Excel, con cabecera:
-   - **Navidad:** `telefono`, `nombre`, `cuando` («en marzo», «hace un
-     tiempo») y `trabajo` («abrirte la puerta de casa»).
-   - **T4 (aniversario):** `telefono`, `nombre` y `trabajo`.
-   - **T3, T5, T6 y T7:** `telefono` y `nombre`.
+   Excel, con cabecera. Columnas:
+   - **Siempre:** `telefono` y `nombre`.
+   - **Navidad y T4 (aniversario):** además `fecha` y `articulo` de la
+     última factura, tal cual salen de FactuSOL. Marta escribe sola:
+     - el «cuándo»: «en marzo», «en marzo del año pasado» o «hace un
+       tiempo»;
+     - el trabajo: «cambiarte el bombín», «abrirte la puerta de casa»…
+   - Si un artículo no lo sabe traducir (por ejemplo, una mosquitera), lo
+     deja fuera con el motivo «articulo_sin_traducir». Esas filas se pueden
+     subir aparte con las columnas `cuando` y `trabajo` escritas a mano.
+   - Si el trabajo es genérico («mano de obra», «otros») y tiene más de un
+     año, también lo deja fuera, porque el mensaje queda vago y parece un
+     timo.
 3. La lista queda **en revisión**. Con «Ver» sale el mensaje exacto de cada
    cliente; se revisa a mano (obligatorio con los 120 de la prueba).
 4. «Activar»: Marta envía en la siguiente ventana.

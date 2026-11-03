@@ -4549,7 +4549,7 @@ app.get("/admin/api/bajas", authAdmin, async (req, res) => {
     console.log(`[Bajas] ${k} quitado de la lista desde el panel`);
   }
   const lista = Object.entries(bajas)
-    .map(([telefono, b]) => ({ telefono, fecha: new Date(b.ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }), motivo: b.motivo, origen: b.origen, texto: b.texto }))
+    .map(([telefono, b]) => ({ telefono, fecha: new Date(b.ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }), motivo: b.motivo, origen: b.origen, texto: b.texto, whatsappOptOutZoho: b.zohoOptOut || "pendiente" }))
     .sort((a, b) => (bajas[b.telefono].ts - bajas[a.telefono].ts));
   res.json({ ok: true, total: lista.length, bajas: lista });
 });
@@ -5519,13 +5519,53 @@ function parsearListaCampana(texto) {
   const sep = lineas[0].includes("\t") ? "\t" : lineas[0].includes(";") ? ";" : ",";
   const cab = lineas[0].split(sep).map((c) => normalizaTxt(c).replace(/[^a-z]/g, ""));
   const col = (...n) => cab.findIndex((c) => n.some((x) => c.includes(x)));
-  const iTel = col("telefono", "movil", "tel", "whatsapp"), iNom = col("nombre", "cliente"), iCuando = col("cuando", "fecha"), iTrab = col("trabajo", "servicio");
+  const iTel = col("telefono", "movil", "tel", "whatsapp"), iNom = col("nombre", "cliente"), iCuando = col("cuando"), iTrab = col("trabajo", "servicio"),
+        iFecha = col("fecha"), iArt = col("articulo", "familia", "descripcion", "concepto");
   if (iTel < 0) return { error: "Falta la columna «telefono»" };
   const filas = lineas.slice(1).map((l) => {
     const c = l.split(sep).map((x) => x.trim().replace(/^"|"$/g, ""));
-    return { telefono: c[iTel] || "", nombre: iNom >= 0 ? c[iNom] || "" : "", cuando: iCuando >= 0 ? c[iCuando] || "" : "", trabajo: iTrab >= 0 ? c[iTrab] || "" : "" };
+    const v = (i) => (i >= 0 ? c[i] || "" : "");
+    return { telefono: v(iTel), nombre: v(iNom), cuando: v(iCuando), trabajo: v(iTrab), fecha: v(iFecha), articulo: v(iArt) };
   });
   return { filas };
+}
+
+// ── Variables a partir de la última factura (fecha + artículo) ──
+// Así Adm3 pega el listado de FactuSOL tal cual, sin escribir frases.
+function leerFechaFactura(t) {
+  const x = String(t || "").trim();
+  let m = x.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+  if (m) return new Date(Date.UTC(Number(m[3].length === 2 ? "20" + m[3] : m[3]), Number(m[2]) - 1, Number(m[1]), 12));
+  m = x.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12));
+  if (/^\d{5}$/.test(x)) return new Date(Date.UTC(1899, 11, 30) + Number(x) * 24 * 3600 * 1000); // fecha de Excel
+  return null;
+}
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+// {{2}} con la preposición dentro: «en marzo», «en marzo del año pasado», «hace un tiempo»
+function cuandoDesdeFecha(fecha, hoy = new Date()) {
+  const anioHoy = Number(diaMadrid(hoy).slice(0, 4));
+  const anio = fecha.getUTCFullYear(), mes = MESES[fecha.getUTCMonth()];
+  if (anio === anioHoy) return `en ${mes}`;
+  if (anio === anioHoy - 1) return `en ${mes} del año pasado`;
+  return "hace un tiempo";
+}
+// {{3}} (Navidad: «te atendimos … para …») y {{2}} del aniversario («Hace un año te hicimos …»)
+const TRABAJOS_ARTICULO = [
+  { re: /apertura|abrir|abierta/, nav: "abrirte la puerta de casa", t4: "la apertura de tu puerta" },
+  { re: /escudo/, nav: "ponerte un escudo de seguridad", t4: "la instalación del escudo de seguridad" },
+  { re: /bombin|bombillo|cilindro|minos|amig|abus|d6/, nav: "cambiarte el bombín", t4: "el cambio de bombín" },
+  { re: /cerrojo|\bfac\b|\bsag\b|\btoy\b/, nav: "ponerte un cerrojo", t4: "la instalación del cerrojo" },
+  { re: /cerradura|fichet|monobloc|tesa|ezcurra|kiuso|dierre/, nav: "cambiarte la cerradura", t4: "el cambio de cerradura" },
+  { re: /acorazada|blindada|\bpuerta\b/, nav: "instalarte la puerta", t4: "la instalación de tu puerta" },
+  { re: /motor|automatismo|mando|receptor/, nav: "el motor de tu puerta", t4: "el trabajo en el motor de tu puerta" },
+  { re: /copia|duplicado|llave/, nav: "hacerte copias de llaves", t4: "las copias de tus llaves" },
+  { re: /mano de obra|reparaci|ajuste|varios|otros|servicio/, nav: "un trabajo de cerrajería", t4: "un trabajo de cerrajería", generico: true },
+];
+function trabajoDesdeArticulo(articulo, estilo) {
+  const t = normalizaTxt(articulo);
+  const r = TRABAJOS_ARTICULO.find((x) => x.re.test(t));
+  return r ? { frase: r[estilo], generico: !!r.generico } : null;
 }
 
 const NO_PARTICULAR = /(\bs\.?\s?l\.?u?\b|\bs\.\s?a\.?\b|\bsociedad\b|\bcom\.?\s?prop|comunidad|propietarios|\bc\.\s?p\.|\bccpp\b|administraci[oó]n|inmobiliaria|\bhotel\b|\bbar\b|\brestaurante\b|\bgrupo\b|\bs\.?c\.?a?\b|parroquia|iglesia|sindicato|ayuntamiento|asociaci[oó]n)/i;
@@ -5542,14 +5582,25 @@ function crearListaCampana(campana, texto) {
     const k = claveBaja(clave);
     const nombre = String(r.nombre || "").trim().split(/\s+/)[0] || "";
     const nombrePila = nombre ? nombre.charAt(0).toUpperCase() + nombre.slice(1).toLowerCase() : "";
-    const f = { k, clave, nombre: nombrePila, nombreCompleto: r.nombre, cuando: r.cuando, trabajo: r.trabajo, estado: "pendiente" };
+    // Sin «cuando»/«trabajo» escritos: se sacan de la fecha y el artículo
+    const fechaFactura = r.fecha ? leerFechaFactura(r.fecha) : null;
+    let cuando = r.cuando, trabajo = r.trabajo, generico = false;
+    if (!cuando && fechaFactura) cuando = cuandoDesdeFecha(fechaFactura);
+    if (!trabajo && r.articulo) {
+      const tr = trabajoDesdeArticulo(r.articulo, cfg.texto === "t4" ? "t4" : "nav");
+      if (tr) { trabajo = tr.frase; generico = tr.generico; }
+    }
+    const masDe12Meses = fechaFactura && Date.now() - fechaFactura.getTime() > 365 * 24 * 3600 * 1000;
+    const f = { k, clave, nombre: nombrePila, nombreCompleto: r.nombre, cuando, trabajo, articulo: r.articulo || null, estado: "pendiente" };
     if (!telefonoValido(clave) || k.length !== 9 || !/^[67]/.test(k)) { f.estado = "excluido"; f.motivo = "telefono_no_movil"; }
     else if (vistos.has(k)) { f.estado = "excluido"; f.motivo = "duplicado"; }
     else if (esBaja(k)) { f.estado = "excluido"; f.motivo = "baja"; }
     else if (NO_PARTICULAR.test(r.nombre || "")) { f.estado = "excluido"; f.motivo = "no_es_particular"; }
     else if (cfg.variables.includes("nombre") && !nombrePila) { f.estado = "excluido"; f.motivo = "sin_nombre"; }
-    else if (cfg.variables.includes("cuando") && !r.cuando) { f.estado = "excluido"; f.motivo = "sin_cuando"; }
-    else if (cfg.variables.includes("trabajo") && !r.trabajo) { f.estado = "excluido"; f.motivo = "sin_trabajo"; }
+    else if (cfg.variables.includes("cuando") && !cuando) { f.estado = "excluido"; f.motivo = r.fecha ? "fecha_no_valida" : "sin_cuando"; }
+    else if (cfg.variables.includes("trabajo") && !trabajo) { f.estado = "excluido"; f.motivo = r.articulo ? "articulo_sin_traducir (escribir el trabajo a mano)" : "sin_trabajo"; }
+    // Trabajo genérico de hace más de un año: el mensaje quedaría vago y parece un timo
+    else if (cfg.texto === "nav" && generico && masDe12Meses) { f.estado = "excluido"; f.motivo = "trabajo_generico_de_mas_de_12_meses"; }
     vistos.add(k);
     return f;
   });
@@ -6103,7 +6154,7 @@ app.get("/admin/api/campanas/lista/:id", authAdmin, (req, res) => {
   res.json({
     ok: true, id: l.id, campana: l.campana, estado: l.estado,
     filas: l.filas.map((f) => ({
-      telefono: f.k, nombre: f.nombreCompleto, estado: f.estado, motivo: f.motivo || null,
+      telefono: f.k, nombre: f.nombreCompleto, articulo: f.articulo || null, estado: f.estado, motivo: f.motivo || null,
       enviado: f.ts ? new Date(f.ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }) : null,
       entregado: !!f.entregado, leido: !!f.leido, respondio: !!f.respondio,
       mensaje: rellenarTexto(CAMP_TEXTOS[cfg.texto], variablesFila(cfg, f)),
@@ -6158,7 +6209,7 @@ button{cursor:pointer;background:var(--verde);color:#fff;border:0}button.sec{bac
 <p class="muted">Marta envía de 10:00 a 10:30 (Navidad: lunes a jueves; reactivación: martes a jueves), nunca en festivos. Un 10 % de cada lista queda como grupo de control. Antes de activar una lista, revisa los mensajes.</p>
 <section><h2>1 · Subir una lista</h2>
 <select id="campana">${opciones}</select>
-<p class="muted">Pega desde el Excel con cabecera: <b>telefono</b>, <b>nombre</b> y, en Navidad, <b>cuando</b> («en marzo», «hace un tiempo») y <b>trabajo</b> («abrirte la puerta de casa»). En el aniversario (T4), <b>trabajo</b>.</p>
+<p class="muted">Pega desde el Excel con cabecera: <b>telefono</b> y <b>nombre</b>. En Navidad y en el aniversario (T4), además <b>fecha</b> y <b>articulo</b> de la última factura: Marta escribe sola el «cuándo» («en marzo», «en marzo del año pasado», «hace un tiempo») y el trabajo («cambiarte el bombín»). Si prefieres escribirlos tú, usa las columnas <b>cuando</b> y <b>trabajo</b>. Revisa siempre la vista previa.</p>
 <textarea id="texto" placeholder="telefono	nombre	cuando	trabajo"></textarea>
 <div class="fila"><button onclick="subir()">Subir lista</button><span id="msg" class="muted"></span></div></section>
 <section><h2>2 · Listas</h2><div id="resumen" class="muted"></div><div class="tabla" id="listas"></div></section>
@@ -6186,7 +6237,7 @@ async function ver(id){
   const d=await api('/admin/api/campanas/lista/'+id);
   $('vista').hidden=false;
   const esc=(s)=>String(s??'').replace(/[&<>]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-  $('filas').innerHTML='<table><tr><th>Cliente</th><th>Estado</th><th>Mensaje</th></tr>'+d.filas.map(f=>'<tr><td>'+esc(f.nombre)+'<br><span class="muted">'+f.telefono+'</span></td><td>'+f.estado+(f.motivo?'<br><span class="muted">'+esc(f.motivo)+'</span>':'')+'</td><td>'+esc(f.mensaje)+'</td></tr>').join('')+'</table>';
+  $('filas').innerHTML='<table><tr><th>Cliente</th><th>Estado</th><th>Mensaje</th></tr>'+d.filas.map(f=>'<tr><td>'+esc(f.nombre)+'<br><span class="muted">'+f.telefono+(f.articulo?' · '+esc(f.articulo):'')+'</span></td><td>'+f.estado+(f.motivo?'<br><span class="muted">'+esc(f.motivo)+'</span>':'')+'</td><td>'+esc(f.mensaje)+'</td></tr>').join('')+'</table>';
   $('vista').scrollIntoView({behavior:'smooth'});
 }
 cargar();
