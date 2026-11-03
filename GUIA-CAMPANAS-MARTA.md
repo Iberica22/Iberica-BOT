@@ -134,7 +134,10 @@ Responde «Recibido, se lo paso a…» y lo pasa a Mari o a Nieves según la
 hora. Fuera de horario va a Mari para primera hora, y si es urgente, a la
 guardia.
 
-## Variables de Railway (nombre exacto de la plantilla aprobada en Meta)
+## Variables de Railway (solo si una plantilla se llama distinto)
+
+Marta ya usa por defecto estos nombres: `nav26_puerta_fiestas`, `nav26_recordatorio`, `t7_cliente_casa`, `t3_top_sin_contestar`, `t4_aniversario`, `t5_vacaciones` y `t6_inquilinos`. Las variables solo hacen falta si en Meta se crean con otro nombre.
+
 
 | Variable | Plantilla |
 |---|---|
@@ -149,7 +152,7 @@ guardia.
 | `ZOHO_CAMPO_OPTOUT` | Opcional. Nombre API de la casilla «WhatsApp Opt Out» (por defecto `WhatsApp_Opt_Out`) |
 | `CAMP_TEXTO_PRECIO_WEB` | Opcional. Texto del precio para las entradas web |
 
-Sin la variable, la lista no se puede activar.
+Si la plantilla no está aprobada en Meta, el primer envío falla, la lista se para sola y se avisa a Nieves y a Mari.
 
 ## Panel
 

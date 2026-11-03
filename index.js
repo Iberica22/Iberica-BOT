@@ -5511,6 +5511,9 @@ const CAMPANAS_CONFIG = {
   "REACT-T5": { nombre: "T5 · Antes de vacaciones", envPlantilla: "T5_TEMPLATE", texto: "t5", variables: ["nombre"], etiqueta: "REACT-T5", comercial: true, control: true, dias: [2, 3, 4], cupo: { 2: 40, 3: 40, 4: 40 } },
   "REACT-T6": { nombre: "T6 · Cambio de inquilino", envPlantilla: "T6_TEMPLATE", texto: "t6", variables: ["nombre"], etiqueta: "REACT-T6", comercial: true, control: true, dias: [2, 3, 4], cupo: { 2: 40, 3: 40, 4: 40 } },
 };
+// Nombre de cada plantilla en Meta: la variable de Railway, o el nombre acordado
+const PLANTILLAS_DEFECTO = {"NAV_TEMPLATE": "nav26_puerta_fiestas", "NAV_TEMPLATE_RECORDATORIO": "nav26_recordatorio", "T7_TEMPLATE": "t7_cliente_casa", "T3_TEMPLATE": "t3_top_sin_contestar", "T4_TEMPLATE": "t4_aniversario", "T5_TEMPLATE": "t5_vacaciones", "T6_TEMPLATE": "t6_inquilinos"};
+const plantillaDe = (env) => process.env[env] || PLANTILLAS_DEFECTO[env] || null;
 const CAMP_VENTANA = [10 * 60, 10 * 60 + 30];        // 10:00–10:30
 const CAMP_MAX_DIA = parseInt(process.env.CAMP_MAX_DIA || "60", 10); // tope global del número
 const CAMP_FRENO_NIEVES = parseInt(process.env.CAMP_FRENO_NIEVES || "12", 10);
@@ -5779,14 +5782,14 @@ async function tandaCampanas({ forzar = false } = {}) {
       const cfg = { ...CAMPANAS_CONFIG[l.campana], campana: l.campana };
       const hoy = hoyPermitidoCampana(cfg);
       if (!hoy.ok && !forzar) { resumen.avisos.push(`${l.id}: ${hoy.motivo}`); continue; }
-      const plantilla = process.env[cfg.envPlantilla];
+      const plantilla = plantillaDe(cfg.envPlantilla);
       if (!plantilla) { resumen.avisos.push(`${l.id}: falta la variable ${cfg.envPlantilla}`); continue; }
       if (cfg.numeroPropio && !CANAL_CAMPANA_NAVIDAD) { resumen.avisos.push(`${l.id}: falta la variable CAMP_CHANNEL_ID`); continue; }
       const cupo = forzar ? Math.max(...Object.values(cfg.cupo)) : cfg.cupo[diaSemanaMadrid()] || 0;
       if (await pararSiRechazoAlto(l)) { resumen.avisos.push(`${l.id}: parada por rechazo`); continue; }
       // Recordatorio único (Navidad, ola 2)
       const rec = cfg.recordatorio;
-      const colaRec = rec && diaMadrid(new Date()) >= rec.desde && diaMadrid(new Date()) <= rec.hasta && process.env[rec.envPlantilla]
+      const colaRec = rec && diaMadrid(new Date()) >= rec.desde && diaMadrid(new Date()) <= rec.hasta && plantillaDe(rec.envPlantilla)
         ? l.filas.filter((f) => f.estado === "enviado" && f.entregado && !f.respondio && !f.recordatorioTs && Date.now() - f.ts >= rec.diasDesdeEnvio * 24 * 3600 * 1000)
         : [];
       const cola = [...colaRec.map((f) => [f, true]), ...l.filas.filter((f) => f.estado === "pendiente").map((f) => [f, false])];
@@ -5801,7 +5804,7 @@ async function tandaCampanas({ forzar = false } = {}) {
           continue;
         }
         let res;
-        try { res = await enviarPlantillaCampana(f, esRec ? process.env[rec.envPlantilla] : plantilla, esRec ? [f.nombre] : variablesFila(cfg, f), cfg); }
+        try { res = await enviarPlantillaCampana(f, esRec ? plantillaDe(rec.envPlantilla) : plantilla, esRec ? [f.nombre] : variablesFila(cfg, f), cfg); }
         catch (e) { res = { ok: false, detalle: e.message }; }
         const c = (campanas.contactos[f.k] = campanas.contactos[f.k] || { comerciales: [], sinRespuesta: 0 });
         if (res.ok) {
@@ -6160,7 +6163,7 @@ function estadisticasCampanas() {
     return {
       id: l.id, campana: l.campana, nombre: CAMPANAS_CONFIG[l.campana]?.nombre, estado: l.estado, motivo: l.motivo || null,
       creada: new Date(l.creada).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }),
-      plantilla: process.env[CAMPANAS_CONFIG[l.campana]?.envPlantilla] || `⚠️ falta ${CAMPANAS_CONFIG[l.campana]?.envPlantilla}`,
+      plantilla: plantillaDe(CAMPANAS_CONFIG[l.campana]?.envPlantilla) || `⚠️ falta ${CAMPANAS_CONFIG[l.campana]?.envPlantilla}`,
       numero: CAMPANAS_CONFIG[l.campana]?.numeroPropio ? NUMERO_CAMPANA : "661 66 59 29 (Marta)",
       total: l.filas.length, pendientes: n((f) => f.estado === "pendiente"), grupoControl: n((f) => f.estado === "control"),
       excluidos: n((f) => f.estado === "excluido"), enviados: n((f) => f.estado === "enviado"), fallidos: n((f) => f.estado === "fallido"),
@@ -6328,7 +6331,7 @@ app.post("/admin/api/campanas/lista/:id/estado", authAdmin, (req, res) => {
   if (estado === "activa" && CAMPANAS_CONFIG[l.campana].numeroPropio && !CANAL_CAMPANA_NAVIDAD) {
     return res.status(400).json({ ok: false, error: `Antes hay que poner en Railway la variable CAMP_CHANNEL_ID con el canal de Woztell del ${NUMERO_CAMPANA}` });
   }
-  if (estado === "activa" && !process.env[CAMPANAS_CONFIG[l.campana].envPlantilla]) {
+  if (estado === "activa" && !plantillaDe(CAMPANAS_CONFIG[l.campana].envPlantilla)) {
     return res.status(400).json({ ok: false, error: `Antes hay que poner en Railway la variable ${CAMPANAS_CONFIG[l.campana].envPlantilla} con el nombre de la plantilla aprobada` });
   }
   l.estado = estado; l.motivo = estado === "pausada" ? "pausada a mano" : null;
