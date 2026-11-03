@@ -105,7 +105,7 @@ guardia.
 
 | Variable | Plantilla |
 |---|---|
-| `CAMP_CHANNEL_ID` | Identificador del canal de Woztell del 674 09 66 10 (Navidad). Sin él, la lista de Navidad no se activa |
+| `CAMP_CHANNEL_ID` | Opcional. Canal de Woztell de la campaña de Navidad (por defecto el del 674 09 66 10, `6ae487f5a31d9ed1c2354113`) |
 | `NAV_TEMPLATE` | Navidad, principal (marketing, con los 3 botones) |
 | `NAV_TEMPLATE_RECORDATORIO` | Navidad, recordatorio único |
 | `T7_TEMPLATE` | Alta «Cliente de la casa» (utilidad) |

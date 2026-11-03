@@ -303,7 +303,9 @@ const CANALES_AGENTES = {
   "6a804571292b8b00616d71f9": "Instagram", // DMs de @ibericaseguridad (24/7, sin horario)
 };
 
-if (process.env.CAMP_CHANNEL_ID) CANALES_AGENTES[process.env.CAMP_CHANNEL_ID] = "Campaña Navidad"; // 674 09 66 10
+// Número propio de la campaña de Navidad (674 09 66 10). CAMP_CHANNEL_ID lo cambia.
+const CANAL_CAMPANA_NAVIDAD = process.env.CAMP_CHANNEL_ID || "6ae487f5a31d9ed1c2354113";
+CANALES_AGENTES[CANAL_CAMPANA_NAVIDAD] = "Campaña Navidad";
 
 // Instagram: Marta contesta DMs y comentarios; MARTA_INSTAGRAM=off la calla
 const CANAL_INSTAGRAM = "6a804571292b8b00616d71f9";
@@ -5617,7 +5619,7 @@ async function marcarOptOutZoho(k) {
 // La campaña de Navidad sale por su propio número (674 09 66 10), para no
 // arriesgar la calidad del de Marta; la reactivación, por el de Marta.
 const NUMERO_CAMPANA = "674 09 66 10";
-const canalCampana = (cfg) => (cfg?.numeroPropio && process.env.CAMP_CHANNEL_ID) || process.env.WOZTELL_CHANNEL_ID;
+const canalCampana = (cfg) => (cfg?.numeroPropio && CANAL_CAMPANA_NAVIDAD) || process.env.WOZTELL_CHANNEL_ID;
 
 async function enviarPlantillaCampana(f, plantilla, variables, cfg) {
   const canalBot = canalCampana(cfg);
@@ -5690,7 +5692,7 @@ async function tandaCampanas({ forzar = false } = {}) {
       if (!hoy.ok && !forzar) { resumen.avisos.push(`${l.id}: ${hoy.motivo}`); continue; }
       const plantilla = process.env[cfg.envPlantilla];
       if (!plantilla) { resumen.avisos.push(`${l.id}: falta la variable ${cfg.envPlantilla}`); continue; }
-      if (cfg.numeroPropio && !process.env.CAMP_CHANNEL_ID) { resumen.avisos.push(`${l.id}: falta la variable CAMP_CHANNEL_ID`); continue; }
+      if (cfg.numeroPropio && !CANAL_CAMPANA_NAVIDAD) { resumen.avisos.push(`${l.id}: falta la variable CAMP_CHANNEL_ID`); continue; }
       const cupo = forzar ? Math.max(...Object.values(cfg.cupo)) : cfg.cupo[diaSemanaMadrid()] || 0;
       if (await pararSiRechazoAlto(l)) { resumen.avisos.push(`${l.id}: parada por rechazo`); continue; }
       // Recordatorio único (Navidad, ola 2)
@@ -6070,7 +6072,7 @@ function estadisticasCampanas() {
       id: l.id, campana: l.campana, nombre: CAMPANAS_CONFIG[l.campana]?.nombre, estado: l.estado, motivo: l.motivo || null,
       creada: new Date(l.creada).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }),
       plantilla: process.env[CAMPANAS_CONFIG[l.campana]?.envPlantilla] || `⚠️ falta ${CAMPANAS_CONFIG[l.campana]?.envPlantilla}`,
-      numero: CAMPANAS_CONFIG[l.campana]?.numeroPropio ? (process.env.CAMP_CHANNEL_ID ? NUMERO_CAMPANA : `⚠️ falta CAMP_CHANNEL_ID (${NUMERO_CAMPANA})`) : "661 66 59 29 (Marta)",
+      numero: CAMPANAS_CONFIG[l.campana]?.numeroPropio ? NUMERO_CAMPANA : "661 66 59 29 (Marta)",
       total: l.filas.length, pendientes: n((f) => f.estado === "pendiente"), grupoControl: n((f) => f.estado === "control"),
       excluidos: n((f) => f.estado === "excluido"), enviados: n((f) => f.estado === "enviado"), fallidos: n((f) => f.estado === "fallido"),
       entregados: n((f) => f.entregado), leidos: n((f) => f.leido), respondieron: n((f) => f.respondio), recordatorios: n((f) => f.recordatorioTs > 0),
@@ -6119,7 +6121,7 @@ app.post("/admin/api/campanas/lista/:id/estado", authAdmin, (req, res) => {
     return res.json({ ok: true, borrada: true });
   }
   if (!["activa", "pausada", "terminada"].includes(estado)) return res.status(400).json({ ok: false, error: "Estado no válido" });
-  if (estado === "activa" && CAMPANAS_CONFIG[l.campana].numeroPropio && !process.env.CAMP_CHANNEL_ID) {
+  if (estado === "activa" && CAMPANAS_CONFIG[l.campana].numeroPropio && !CANAL_CAMPANA_NAVIDAD) {
     return res.status(400).json({ ok: false, error: `Antes hay que poner en Railway la variable CAMP_CHANNEL_ID con el canal de Woztell del ${NUMERO_CAMPANA}` });
   }
   if (estado === "activa" && !process.env[CAMPANAS_CONFIG[l.campana].envPlantilla]) {
