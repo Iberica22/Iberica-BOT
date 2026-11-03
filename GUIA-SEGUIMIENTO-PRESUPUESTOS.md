@@ -89,20 +89,18 @@ Fuentes: [Sandler, prospects que no devuelven la llamada](https://go.sandler.com
    chat; si allí no existe la plantilla, desde el número del BOT. Las
    plantillas hay que crearlas en la cuenta de WhatsApp del número del BOT.
 
-## Presupuesto aceptado → aviso al operario
+## Presupuesto aceptado → aviso a José
 
-Cuando un parte en seguimiento pasa en Zoho a **Material / Pedir
-material**, Marta avisa por WhatsApp al **operario del parte**: «✅
-PRESUPUESTO ACEPTADO, pedir material», con el asunto y las anotaciones (nº
-de presupuesto). Da igual si el cliente aceptó por WhatsApp con Marta o por
-teléfono con María.
+En cuanto el cliente le dice a Marta que sí («Sí, pídelo», «adelante»…),
+Marta:
 
-- El WhatsApp de cada operario va en Railway, en `OPERARIOS_WHATSAPP`:
-  `{"José Pérez": "674163818"}`.
-- Si el operario del parte no tiene número, el aviso va a Mari para que se
-  lo pase.
-- Cuando Marta detecta la aceptación, el aviso a Mari lo recuerda: «pásalo
-  a Material / Pedir material en Zoho y se avisa al operario».
+1. le contesta «¡Genial! Le paso tu confirmación al equipo»;
+2. manda un WhatsApp a **José (674 163 818)**: «✅ PRESUPUESTO ACEPTADO por
+   WhatsApp: tramitar y pedir material», con el cliente, el parte, el
+   asunto, el nº de presupuesto (Anotaciones) y lo que dijo el cliente;
+3. avisa a Mari con 🎯 y le dice que José ya está avisado.
+
+`PRESU_AVISO_ACEPTADO` (Railway) cambia a quién va el aviso.
 
 ## Bajas
 
