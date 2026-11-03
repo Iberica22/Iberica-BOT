@@ -31,6 +31,31 @@ los clientes de la plantilla no les da precios.
    cliente; se revisa a mano (obligatorio con los 120 de la prueba).
 4. «Activar»: Marta envía en la siguiente ventana.
 
+## O que Marta saque la lista sola desde Zoho
+
+En **/admin/campanas → «… o generarla desde Zoho»** se elige Navidad o
+Aniversario y se pulsa **Generar desde Zoho**. Marta lee los partes y
+contactos y deja la lista **en revisión**.
+
+- **Trabajos que cuentan:** estado Facturado o Cerrado, salvo «Anulada por
+  el cliente».
+- **Cuándo vino:** la Fecha-Hora Inicio de su último trabajo.
+- **El trabajo:** sale del asunto del parte.
+- **Navidad:** particulares (origen Teléfono, Tienda o Recomendación) cuyo
+  último trabajo fue hace más de 6 meses. Quedan fuera:
+  - las compañías y, siempre, Mapfre;
+  - las empresas;
+  - los clientes con 3 trabajos o más, o con 600 € o más facturados (esos
+    los llama Nieves);
+  - los que no tienen móvil o tienen la casilla WhatsApp Opt Out marcada.
+- **Aniversario:** los que vinieron hace 11-12 meses.
+- **Lista de excluidos:** se pueden pegar teléfonos para quitarlos (por
+  ejemplo, los 173 que llama Nieves).
+
+No incluye a quien no tenga parte en Zoho, como las ventas de mostrador.
+Tampoco ve las marcas de FactuSOL ([NOCOM]). Revisad siempre la vista
+previa antes de activar.
+
 ## Qué comprueba Marta sola
 
 **Al subir la lista** quita:

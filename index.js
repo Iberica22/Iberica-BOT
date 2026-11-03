@@ -5591,8 +5591,11 @@ const TRABAJOS_ARTICULO = [
   { re: /bombin|bombillo|cilindro|minos|amig|abus|d6/, nav: "cambiarte el bombín", t4: "el cambio de bombín" },
   { re: /cerrojo|\bfac\b|\bsag\b|\btoy\b/, nav: "ponerte un cerrojo", t4: "la instalación del cerrojo" },
   { re: /cerradura|fichet|monobloc|tesa|ezcurra|kiuso|dierre/, nav: "cambiarte la cerradura", t4: "el cambio de cerradura" },
-  { re: /acorazada|blindada|\bpuerta\b/, nav: "instalarte la puerta", t4: "la instalación de tu puerta" },
+  { re: /seccional|garaje|cochera|basculante|muelle/, nav: "la puerta del garaje", t4: "el trabajo en la puerta del garaje" },
   { re: /motor|automatismo|mando|receptor/, nav: "el motor de tu puerta", t4: "el trabajo en el motor de tu puerta" },
+  { re: /acorazada|blindada/, nav: "instalarte la puerta", t4: "la instalación de tu puerta" },
+  { re: /persiana/, nav: "arreglar la persiana", t4: "el arreglo de la persiana" },
+  { re: /\bpuerta\b/, nav: "un trabajo en tu puerta", t4: "un trabajo en tu puerta", generico: true },
   { re: /copia|duplicado|llave/, nav: "hacerte copias de llaves", t4: "las copias de tus llaves" },
   { re: /mano de obra|reparaci|ajuste|varios|otros|servicio/, nav: "un trabajo de cerrajería", t4: "un trabajo de cerrajería", generico: true },
 ];
@@ -5671,6 +5674,7 @@ function motivoNoEnviar(cfg, f, { recordatorio = false } = {}) {
     if (recientes.some((t) => ahora - t < 30 * dia)) return "mensaje_comercial_hace_menos_de_30_dias";
     if (recientes.length >= 4) return "ya_tiene_4_mensajes_este_ano";
     if ((c.sinRespuesta || 0) >= 3 && !cfg.aniversario) return "solo_aniversario_3_sin_respuesta";
+    if (cfg.aniversario && recientes.some((t) => ahora - t < 60 * dia)) return "contacto_comercial_hace_menos_de_60_dias";
   }
   return null;
 }
@@ -6170,6 +6174,121 @@ function estadisticasCampanas() {
   return { ventana: "10:00–10:30", maxDia: CAMP_MAX_DIA, enviadosHoy: enviadosHoy(), abiertasNieves: abiertasNieves(), frenoNieves: CAMP_FRENO_NIEVES, pasadosANievesPorEtiqueta: etiquetas, clientesDeLaCasa: Object.values(campanas.contactos).filter((c) => c.casa).length, listas };
 }
 
+// ── Generar la lista desde Zoho (sin FactuSOL) ───────────────
+// Trabajos hechos: Estado «Facturado» o «Cerrado» (salvo «Anulada por el
+// cliente»). «Cuándo vino»: la Fecha-Hora Inicio del parte. Por cliente
+// (contacto) se mira su ÚLTIMO trabajo hecho.
+//   Navidad (NAV26): último trabajo hace más de 6 meses; particulares
+//     (Teléfono, Tienda, Recomendación); fuera los de compañía (y siempre
+//     Mapfre), los de 3 trabajos o más y los de 600 € o más facturados
+//     (esos los llama Nieves), y los teléfonos que se peguen para excluir.
+//   Aniversario (REACT-T4): último trabajo hace entre 11 y 12 meses.
+const generacionZoho = { estado: "parado", progreso: "", resultado: null, error: null, ts: null };
+async function paginasZoho(modulo, token, alPaso, maxPaginas = 80) {
+  const todos = [];
+  let page = 1, pageToken = null;
+  for (let i = 0; i < maxPaginas; i++) {
+    const params = { per_page: 200, sort_by: "Modified_Time", sort_order: "desc", ...(pageToken ? { page_token: pageToken } : { page }) };
+    let r;
+    try { r = await axios.get(`https://www.zohoapis.eu/crm/v2/${modulo}`, { params, headers: { Authorization: `Zoho-oauthtoken ${token}` } }); }
+    catch (e) {
+      if (!todos.length) throw e;
+      todos.cortado = `Zoho solo dejó leer ${todos.length} ${modulo === "Cases" ? "partes" : "contactos"} (los más recientes)`;
+      break;
+    }
+    const datos = r.data?.data || [];
+    todos.push(...datos);
+    alPaso?.(todos.length);
+    const info = r.data?.info || {};
+    if (!info.more_records || !datos.length) break;
+    if (info.next_page_token) pageToken = info.next_page_token; else page++;
+  }
+  return todos;
+}
+const campoPorNombre = (obj, re) => Object.keys(obj || {}).find((k) => re.test(k));
+function fechaInicioParte(c) {
+  const k = campoPorNombre(c, /fecha.*hora.*inicio|fecha.*inicio/i);
+  const v = (k && c[k]) || c.Created_Time;
+  const f = v ? new Date(v) : null;
+  return f && !isNaN(f) ? f : null;
+}
+const trabajoHecho = (c) => ["facturado", "cerrado"].includes(normalizaTxt(c.Status || "")) && !/anulad/.test(normalizaTxt(c.Subestado || ""));
+const ddmmaaaa = (f) => new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", day: "2-digit", month: "2-digit", year: "numeric" }).format(f);
+
+async function generarListaDesdeZoho(campana, excluirTexto = "") {
+  const cfg = CAMPANAS_CONFIG[campana];
+  if (!cfg || !["nav", "t4"].includes(cfg.texto)) throw new Error("Solo para Navidad y aniversario");
+  const excluir = new Set(String(excluirTexto).split(/[\s,;]+/).map(claveBaja).filter((k) => k.length === 9));
+  const token = await obtenerTokenZoho();
+  generacionZoho.progreso = "Leyendo partes de Zoho…";
+  const partes = await paginasZoho("Cases", token, (n) => { generacionZoho.progreso = `Leyendo partes de Zoho… ${n}`; });
+  generacionZoho.progreso = "Leyendo contactos de Zoho…";
+  const contactos = await paginasZoho("Contacts", token, (n) => { generacionZoho.progreso = `Leyendo contactos de Zoho… ${n}`; });
+  const porId = new Map(contactos.map((c) => [c.id, c]));
+
+  // Agrupar por cliente
+  const clientes = new Map();
+  for (const c of partes) {
+    const id = c.Related_To?.id;
+    if (!id) continue;
+    const cl = clientes.get(id) || { hechos: [], mapfre: false, abierto: false };
+    if (/mapfre/.test(normalizaTxt(JSON.stringify(c)))) cl.mapfre = true;
+    if (trabajoHecho(c)) cl.hechos.push(c);
+    clientes.set(id, cl);
+  }
+  const ahora = Date.now(), dia = 24 * 3600 * 1000;
+  const motivos = {};
+  const fuera = (m) => { motivos[m] = (motivos[m] || 0) + 1; };
+  const filas = [];
+  for (const [id, cl] of clientes) {
+    if (!cl.hechos.length) continue;
+    cl.hechos.sort((a, b) => (fechaInicioParte(b)?.getTime() || 0) - (fechaInicioParte(a)?.getTime() || 0));
+    const ultimo = cl.hechos[0];
+    const fecha = fechaInicioParte(ultimo);
+    if (!fecha) { fuera("sin_fecha"); continue; }
+    const hace = ahora - fecha.getTime();
+    if (cfg.texto === "nav" && hace < 182 * dia) { fuera("vino_hace_menos_de_6_meses"); continue; }
+    if (cfg.texto === "t4" && (hace < 335 * dia || hace > 366 * dia)) continue; // fuera de la semana del aniversario
+    if (cl.mapfre) { fuera("mapfre"); continue; }
+    if (parteDeAseguradora(ultimo)) { fuera("compania_de_seguros"); continue; }
+    const origen = campoOrigenParte(ultimo);
+    if (origen && !/telefono|tienda|recomendacion|particular/.test(origen)) { fuera("no_es_particular_directo"); continue; }
+    if (cfg.texto === "nav") {
+      if (cl.hechos.length >= 3) { fuera("3_trabajos_o_mas_los_llama_nieves"); continue; }
+      const facturado = cl.hechos.reduce((t, c) => t + (leerCantidad(c.Importe) || 0), 0);
+      if (facturado >= 600) { fuera("600_euros_o_mas_los_llama_nieves"); continue; }
+    }
+    const contacto = porId.get(id) || {};
+    const movil = String(contacto.Mobile || contacto.Phone || "").replace(/\D/g, "");
+    if (!movil) { fuera("sin_movil"); continue; }
+    const k = claveBaja(movil);
+    if (excluir.has(k)) { fuera("en_la_lista_de_excluidos"); continue; }
+    if (contacto[CAMPO_OPTOUT] === true) { fuera("whatsapp_opt_out_en_zoho"); continue; }
+    if (contacto.Account_Name?.name) { fuera("contacto_de_empresa"); continue; }
+    const nombre = contacto.First_Name || contacto.Full_Name || ultimo.Related_To?.name || "";
+    filas.push(`${k}\t${nombre}\t${ddmmaaaa(fecha)}\t${String(ultimo.Subject || "").replace(/[\t\r\n]+/g, " ")}`);
+  }
+  if (!filas.length) return { ok: false, error: "No ha salido ningún cliente con esos criterios", motivos, partes: partes.length, contactos: contactos.length };
+  const r = crearListaCampana(campana, ["telefono\tnombre\tfecha\tarticulo", ...filas].join("\n"));
+  if (r.ok) { campanas.listas[r.id].origen = "zoho"; guardarCampanas(); }
+  const avisos = [partes.cortado, contactos.cortado].filter(Boolean);
+  return { ...r, partesLeidos: partes.length, contactosLeidos: contactos.length, candidatos: filas.length, quitadosAntes: motivos, avisos };
+}
+
+app.post("/admin/api/campanas/generar", authAdmin, (req, res) => {
+  if (generacionZoho.estado === "trabajando") return res.json({ ok: false, error: "Ya se está generando una lista" });
+  const campana = String(req.body?.campana || "NAV26");
+  Object.assign(generacionZoho, { estado: "trabajando", progreso: "Empezando…", resultado: null, error: null, ts: Date.now() });
+  generarListaDesdeZoho(campana, req.body?.excluir || "")
+    .then((r) => Object.assign(generacionZoho, { estado: "hecho", resultado: r, progreso: "" }))
+    .catch((e) => Object.assign(generacionZoho, { estado: "error", error: String(e.response?.data?.message || e.message).slice(0, 200), progreso: "" }));
+  res.json({ ok: true, estado: "trabajando" });
+});
+app.get("/admin/api/campanas/generar", authAdmin, (req, res) => {
+  const r = generacionZoho.resultado;
+  res.json({ ok: true, ...generacionZoho, lista: r?.id ? estadisticasCampanas().listas.find((l) => l.id === r.id) : null });
+});
+
 // ── Panel de campañas ─────────────────────────────────────────
 app.get("/admin/api/campanas", authAdmin, (req, res) => res.json({ ok: true, ...estadisticasCampanas() }));
 
@@ -6246,6 +6365,11 @@ button{cursor:pointer;background:var(--verde);color:#fff;border:0}button.sec{bac
 <p class="muted">Pega desde el Excel con cabecera: <b>telefono</b> y <b>nombre</b>. En Navidad y en el aniversario (T4), además <b>fecha</b> y <b>articulo</b> de la última factura: Marta escribe sola el «cuándo» («en marzo», «en marzo del año pasado», «hace un tiempo») y el trabajo («cambiarte el bombín»). Si prefieres escribirlos tú, usa las columnas <b>cuando</b> y <b>trabajo</b>. Revisa siempre la vista previa.</p>
 <textarea id="texto" placeholder="telefono	nombre	cuando	trabajo"></textarea>
 <div class="fila"><button onclick="subir()">Subir lista</button><span id="msg" class="muted"></span></div></section>
+<section><h2>… o generarla desde Zoho</h2>
+<p class="muted">Marta saca la lista sola de los partes de Zoho (Facturado o Cerrado). <b>Navidad</b>: particulares cuyo último trabajo fue hace más de 6 meses, sin compañías ni Mapfre, sin los de 3 trabajos o más ni los de 600 € o más (los llama Nieves). <b>Aniversario</b>: los que vinieron hace 11-12 meses. Queda en revisión: míralo antes de activarla.</p>
+<select id="campanaZoho"><option value="NAV26">Navidad 2026</option><option value="REACT-T4">T4 · Aniversario</option></select>
+<textarea id="excluir" placeholder="Opcional: teléfonos a excluir, uno por línea (por ejemplo, los 173 que llama Nieves)" style="min-height:70px"></textarea>
+<div class="fila"><button onclick="generar()">Generar desde Zoho</button><span id="msgZoho" class="muted"></span></div></section>
 <section><h2>2 · Listas</h2><div id="resumen" class="muted"></div><div class="tabla" id="listas"></div></section>
 <section id="vista" hidden><h2>Vista previa</h2><div class="tabla" id="filas"></div></section>
 <script>
@@ -6261,6 +6385,18 @@ async function subir(){
   const r=await api('/admin/api/campanas/lista',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({campana:$('campana').value,texto:$('texto').value})});
   $('msg').textContent=r.ok?'Lista subida: '+r.lista.pendientes+' para enviar, '+r.lista.grupoControl+' de control, '+r.lista.excluidos+' excluidos. Revísala antes de activarla.':(r.error||'Error');
   if(r.ok){$('texto').value='';cargar();ver(r.id);}
+}
+async function generar(){
+  const r=await api('/admin/api/campanas/generar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({campana:$('campanaZoho').value,excluir:$('excluir').value})});
+  if(!r.ok){$('msgZoho').textContent=r.error;return;}
+  const mirar=async()=>{const g=await api('/admin/api/campanas/generar');
+    if(g.estado==='trabajando'){$('msgZoho').textContent=g.progreso;setTimeout(mirar,2000);return;}
+    if(g.estado==='error'){$('msgZoho').textContent='Error: '+g.error;return;}
+    const x=g.resultado||{};
+    if(!x.ok){$('msgZoho').textContent=(x.error||'Error')+' · quitados: '+JSON.stringify(x.motivos||{});return;}
+    $('msgZoho').textContent=(x.avisos&&x.avisos.length?'⚠️ '+x.avisos.join(' · ')+'. ':'')+'Lista creada desde '+x.partesLeidos+' partes: '+g.lista.pendientes+' para enviar, '+g.lista.grupoControl+' de control, '+g.lista.excluidos+' excluidos. Quitados antes: '+Object.entries(x.quitadosAntes||{}).map(([k,v])=>k.replace(/_/g,' ')+' '+v).join(' · ');
+    cargar();ver(x.id);};
+  mirar();
 }
 async function estado(id,e){
   if(e==='activa'&&!confirm('¿Activar la lista? Marta empezará a enviar en la próxima ventana de 10:00 a 10:30.'))return;
