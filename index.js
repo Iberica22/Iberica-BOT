@@ -6365,11 +6365,11 @@ button{cursor:pointer;background:var(--verde);color:#fff;border:0}button.sec{bac
 <p class="muted">Pega desde el Excel con cabecera: <b>telefono</b> y <b>nombre</b>. En Navidad y en el aniversario (T4), además <b>fecha</b> y <b>articulo</b> de la última factura: Marta escribe sola el «cuándo» («en marzo», «en marzo del año pasado», «hace un tiempo») y el trabajo («cambiarte el bombín»). Si prefieres escribirlos tú, usa las columnas <b>cuando</b> y <b>trabajo</b>. Revisa siempre la vista previa.</p>
 <textarea id="texto" placeholder="telefono	nombre	cuando	trabajo"></textarea>
 <div class="fila"><button onclick="subir()">Subir lista</button><span id="msg" class="muted"></span></div></section>
-<section><h2>… o generarla desde Zoho</h2>
-<p class="muted">Marta saca la lista sola de los partes de Zoho (Facturado o Cerrado). <b>Navidad</b>: particulares cuyo último trabajo fue hace más de 6 meses, sin compañías ni Mapfre, sin los de 3 trabajos o más ni los de 600 € o más (los llama Nieves). <b>Aniversario</b>: los que vinieron hace 11-12 meses. Queda en revisión: míralo antes de activarla.</p>
-<select id="campanaZoho"><option value="NAV26">Navidad 2026</option><option value="REACT-T4">T4 · Aniversario</option></select>
+<section><h2>… o que Marta la saque sola de Zoho</h2>
+<p class="muted">Son dos listas distintas. Cada botón crea la suya, en revisión: míralas antes de activarlas.</p>
+<p class="muted"><b>Navidad 2026</b> (una vez, ahora): particulares cuyo último trabajo fue hace más de 6 meses, sin compañías ni Mapfre, sin los de 3 trabajos o más ni los de 600 € o más (los llama Nieves).<br><b>Aniversario</b> (cada semana, desde enero): los que vinieron hace 11-12 meses («Hace un año te hicimos…»).</p>
 <textarea id="excluir" placeholder="Opcional: teléfonos a excluir, uno por línea (por ejemplo, los 173 que llama Nieves)" style="min-height:70px"></textarea>
-<div class="fila"><button onclick="generar()">Generar desde Zoho</button><span id="msgZoho" class="muted"></span></div></section>
+<div class="fila"><button onclick="generar('NAV26')">Generar lista de Navidad</button><button class="sec" onclick="generar('REACT-T4')">Generar lista de aniversario</button><span id="msgZoho" class="muted"></span></div></section>
 <section><h2>2 · Listas</h2><div id="resumen" class="muted"></div><div class="tabla" id="listas"></div></section>
 <section id="vista" hidden><h2>Vista previa</h2><div class="tabla" id="filas"></div></section>
 <script>
@@ -6386,8 +6386,8 @@ async function subir(){
   $('msg').textContent=r.ok?'Lista subida: '+r.lista.pendientes+' para enviar, '+r.lista.grupoControl+' de control, '+r.lista.excluidos+' excluidos. Revísala antes de activarla.':(r.error||'Error');
   if(r.ok){$('texto').value='';cargar();ver(r.id);}
 }
-async function generar(){
-  const r=await api('/admin/api/campanas/generar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({campana:$('campanaZoho').value,excluir:$('excluir').value})});
+async function generar(campana){
+  const r=await api('/admin/api/campanas/generar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({campana,excluir:$('excluir').value})});
   if(!r.ok){$('msgZoho').textContent=r.error;return;}
   const mirar=async()=>{const g=await api('/admin/api/campanas/generar');
     if(g.estado==='trabajando'){$('msgZoho').textContent=g.progreso;setTimeout(mirar,2000);return;}
