@@ -1375,6 +1375,7 @@ async function sondearPresupuestosEnviados() {
           resumen.cancelados++;
           registrarResultadoPresu(seg.ref, `cancelado_cambio_de_estado_en_crm: ${seg.estadoFinalCrm}`);
           guardarSeguimientosPresu();
+          await avisarOperarioAceptado(seg, caso);
         }
         continue;
       }
@@ -1508,6 +1509,50 @@ async function enviarToquePresu(seg, plantilla, numToque) {
   return { ok: true };
 }
 
+// ── Presupuesto aceptado → aviso al operario para pedir material ──
+// Cuando un parte en seguimiento pasa en Zoho a «Material / Pedir material»
+// (lo acepte por WhatsApp con Marta o por teléfono con María), se avisa por
+// WhatsApp al operario del parte. WhatsApp de cada operario:
+// OPERARIOS_WHATSAPP = {"José Pérez": "674163818", ...} (Railway). Si el
+// operario no tiene número, el aviso va a la responsable para que se lo pase.
+const OPERARIOS_WHATSAPP_DEFECTO = {};
+function whatsappOperario(nombre) {
+  let mapa = { ...OPERARIOS_WHATSAPP_DEFECTO };
+  try { Object.assign(mapa, JSON.parse(process.env.OPERARIOS_WHATSAPP || "{}")); } catch (_) {}
+  const n = normalizaTxt(nombre).trim();
+  const k = Object.keys(mapa).find((x) => normalizaTxt(x).trim() === n || normalizaTxt(x).trim().split(/\s+/)[0] === n.split(/\s+/)[0] && n.split(/\s+/).length === 1);
+  const tel = k ? String(mapa[k]).replace(/\D/g, "") : null;
+  return tel ? (tel.length === 9 ? `34${tel}` : tel) : null;
+}
+const esPasoAPedirMaterial = (caso) => /material/.test(normalizaTxt(`${caso.Status || ""} ${caso.Subestado || ""}`)) || /acept/.test(normalizaTxt(caso.Status || ""));
+
+async function avisarOperarioAceptado(seg, caso) {
+  if (!seg || seg.avisoOperarioTs || !esPasoAPedirMaterial(caso)) return;
+  seg.avisoOperarioTs = Date.now();
+  guardarSeguimientosPresu();
+  const operario = typeof caso.Operario === "object" ? caso.Operario?.name : caso.Operario;
+  const anot = typeof caso.Anotaciones === "string" ? caso.Anotaciones : "";
+  const datos = {
+    nombre: seg.nombre || caso.Related_To?.name || "Cliente",
+    telefono: String(seg.telefono || "—").replace(/\D/g, "").slice(-9) || "—",
+    direccion: "—",
+    descripcion: `✅ PRESUPUESTO ACEPTADO, pedir material: ${caso.Subject || "—"}${anot ? ` · ${anot}` : ""}`,
+    apertura: new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }),
+    refParte: seg.ref, agente: "Marta · Presupuestos",
+  };
+  const tel = operario ? whatsappOperario(operario) : null;
+  try {
+    if (tel) {
+      const m = await buscarOCrearMiembroWoztell(CANAL_NOTIFICACIONES, tel, operario);
+      await enviarNotificacionAgente({ nombre: operario, channelId: CANAL_NOTIFICACIONES, memberId: m.memberId }, datos);
+      registrarResultadoPresu(seg.ref, `aviso_operario_pedir_material: ${operario}`);
+    } else {
+      await enviarNotificacionAgente(destinatarioPresupuestos(), { ...datos, descripcion: `${datos.descripcion} · Avisa a ${operario || "el operario"} (no tengo su WhatsApp)` });
+      registrarResultadoPresu(seg.ref, `aviso_pedir_material_a_responsable (operario sin WhatsApp: ${operario || "—"})`);
+    }
+  } catch (e) { console.error("[Presupuestos] Aviso al operario falló:", e.message); }
+}
+
 // ¿Sigue el parte en Presupuesto / Enviado en Zoho? Si no, se cierra el
 // seguimiento con el estado al que pasó. null = no se pudo comprobar.
 async function presupuestoSigueEnviado(seg) {
@@ -1522,6 +1567,7 @@ async function presupuestoSigueEnviado(seg) {
       seg.estadoFinalCrm = `${caso.Status || "?"} / ${caso.Subestado || "—"}`;
       guardarSeguimientosPresu();
       registrarResultadoPresu(seg.ref, `cancelado_cambio_de_estado_en_crm: ${seg.estadoFinalCrm}`);
+      await avisarOperarioAceptado(seg, caso);
       return false;
     }
     return true;
@@ -3190,7 +3236,7 @@ async function procesarRespuestaPresu(telefono) {
     await enviarMensaje(telefono, "¡Genial! 🙌 Le paso ahora mismo tu confirmación al equipo y te llaman para cuadrar fechas. ¡Gracias por confiar en Ibérica!");
     crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente ACEPTA. Respuesta: "${msg.slice(0, 300)}"`);
     registrarResultadoPresu(ref, "respondio_ACEPTA");
-    await avisar("🎯 PRESUPUESTO ACEPTADO");
+    await avisar("🎯 PRESUPUESTO ACEPTADO · pásalo a Material / Pedir material en Zoho y se avisa al operario");
   };
   const declina = async () => {
     await enviarMensaje(telefono, "Entendido, ¡y gracias por decírnoslo! 🙏 Te guardamos el presupuesto por si más adelante lo retomas. Aquí nos tienes para lo que necesites 🔐");
