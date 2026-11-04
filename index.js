@@ -5764,7 +5764,8 @@ const enviadosHoyCampana = (campana) => {
 async function avisarEquipoCampana(texto) {
   const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
   for (const d of [NOTIFICACIONES_CONFIG.nieves, NOTIFICACIONES_CONFIG.mari]) {
-    await enviarNotificacionAgente(d, { nombre: "Campañas de Marta", telefono: "—", direccion: "—", descripcion: texto, apertura: ahoraStr, refParte: "—", agente: "Marta · Campañas" }).catch(() => {});
+    await enviarAvisoInterno(d, { origen: "Campañas de Marta", cliente: "—", telefono: "—", que: texto },
+      { nombre: "Campañas de Marta", telefono: "—", direccion: "—", descripcion: texto, apertura: ahoraStr, refParte: "—", agente: "Marta · Campañas" }).catch(() => {});
   }
 }
 
@@ -5938,16 +5939,38 @@ async function clasificarRespuestaCampana(texto, paso) {
 const URGENCIA_CAMPANA = /(estoy fuera|me he quedado fuera|sin llaves?|no puedo entrar|urgente|urgencia|me han robado|han entrado en (mi|casa)|robo en (mi|casa)|se me ha roto la llave|llave rota|no abre la puerta|no puedo abrir)/;
 const VIOLENCIA_CAMPANA = /(mi ex\b|ex pareja|expareja|ex marido|ex mujer|exmarido|me amenaza|amenaza|no me devuelve la llave|no quiere devolver|tiene llave y|maltrat|orden de alejamiento)/;
 
+// Avisos internos de campañas con la plantilla «aviso_interno_marta» (cuenta
+// del número de avisos): «Aviso de Marta para el equipo. Origen: {{1}}.
+// Cliente: {{2}}, teléfono {{3}}. Qué pide: {{4}}. Gracias.» Si falla, se
+// usa la de siempre (nuevo_parte_urgencia), así que no se pierde ningún aviso.
+const AVISO_INTERNO_TEMPLATE = process.env.AVISO_INTERNO_TEMPLATE || "aviso_interno_marta";
+const limpiarParam = (v) => String(v ?? "—").replace(/[\r\n\t]+/g, " · ").replace(/ {4,}/g, " ").trim().slice(0, 900) || "—";
+async function enviarAvisoInterno(destino, { origen, cliente, telefono, que }, datosRespaldo) {
+  if (AVISO_INTERNO_TEMPLATE !== "off" && destino?.memberId) {
+    try {
+      const res = await axios.post(`https://bot.api.woztell.com/sendResponses?accessToken=${process.env.WOZTELL_TOKEN}`, {
+        channelId: destino.channelId, memberId: destino.memberId,
+        response: [{ type: "TEMPLATE", elementName: AVISO_INTERNO_TEMPLATE, languageCode: "es",
+          components: [{ type: "body", parameters: [origen, cliente, telefono, que].map((t) => ({ type: "text", text: limpiarParam(t) })) }] }],
+      });
+      registrarWamidsEnvio(res.data);
+      if (res.data?.ok === 1 && res.data?.sendResult?.result?.[0]?.ok !== 0) return true;
+      console.warn("[Avisos] aviso_interno_marta rechazada, uso la plantilla de siempre:", JSON.stringify(res.data?.sendResult?.result?.[0]?.error || res.data).slice(0, 200));
+    } catch (e) { console.warn("[Avisos] aviso_interno_marta falló, uso la plantilla de siempre:", e.message); }
+  }
+  await enviarNotificacionAgente(destino, datosRespaldo);
+  return false;
+}
+
 async function avisarNievesCampana(telefono, conv, descripcion, prioridad = false) {
   const k = claveBaja(telefono);
   const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
   conv.nievesTs = conv.nievesTs || Date.now();
-  await enviarNotificacionAgente(NOTIFICACIONES_CONFIG.nieves, {
-    nombre: conversaciones[telefono]?.nombre || conv.nombre || `Cliente ${k}`,
-    telefono: k, direccion: "—",
-    descripcion: `${prioridad ? "🚨 PRIORIDAD · " : ""}[${conv.etiqueta}] ${descripcion}`,
-    apertura: ahoraStr, refParte: "—", agente: `Marta · ${conv.etiqueta}`,
-  }).catch((e) => console.error("[Campañas] Aviso a Nieves:", e.message));
+  const cliente = conversaciones[telefono]?.nombre || conv.nombre || `Cliente ${k}`;
+  await enviarAvisoInterno(NOTIFICACIONES_CONFIG.nieves,
+    { origen: `${prioridad ? "🚨 PRIORIDAD " : ""}${conv.etiqueta}`, cliente, telefono: k, que: descripcion },
+    { nombre: cliente, telefono: k, direccion: "—", descripcion: `${prioridad ? "🚨 PRIORIDAD · " : ""}[${conv.etiqueta}] ${descripcion}`, apertura: ahoraStr, refParte: "—", agente: `Marta · ${conv.etiqueta}` },
+  ).catch((e) => console.error("[Campañas] Aviso a Nieves:", e.message));
 }
 async function avisarNoemiCampana(telefono, conv, descripcion) {
   const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
@@ -6151,7 +6174,10 @@ async function manejarClienteDeLaCasa({ telefono, memberId, channelId, texto }) 
       ? `Recibido 🙌 Se lo paso ahora mismo a ${nombreDestino}, de la oficina.`
       : "Recibido 🙌 Ahora la oficina está cerrada: te contestan mañana a primera hora. Si es urgente, llama al 950 088 086.");
   const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
-  await enviarNotificacionAgente(destino, { nombre: est.nombre || `Cliente de la casa ${k}`, telefono: k, direccion: "—", descripcion: `⭐ CLIENTE DE LA CASA escribe: "${String(texto).slice(0, 150)}"`, apertura: ahoraStr, refParte: "—", agente: "Marta · Cliente de la casa" }).catch(() => {});
+  await enviarAvisoInterno(destino,
+    { origen: "⭐ CLIENTE DE LA CASA", cliente: est.nombre || `Cliente ${k}`, telefono: k, que: `escribe: "${String(texto).slice(0, 150)}"${urgente ? " (URGENTE)" : ""}` },
+    { nombre: est.nombre || `Cliente de la casa ${k}`, telefono: k, direccion: "—", descripcion: `⭐ CLIENTE DE LA CASA escribe: "${String(texto).slice(0, 150)}"`, apertura: ahoraStr, refParte: "—", agente: "Marta · Cliente de la casa" },
+  ).catch(() => {});
   pausarBot(`${channelId}_${telefono}`, PAUSA_TAKEOVER_H, "cliente de la casa: lo atiende la oficina");
   return true;
 }
