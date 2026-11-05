@@ -597,6 +597,7 @@
   <div class="stats-bar">
     <span class="count" id="contador"></span>
     <span id="hint"></span>
+    <span id="tarifaEstado" style="font-size:12px;opacity:.7"></span>
   </div>
 </div>
 
@@ -887,6 +888,35 @@ const IVA = 0.21;
 // permanece oculto. Ver factusol-worker/GUIA-INSTALACION.md
 const FACTUSOL_WEBHOOK_URL = 'https://factusol-iberica.gerencia-cd3.workers.dev';
 let presuFactusol = null; // {firma, numeroFormateado} del último guardado
+
+// ── Precios en directo de FACTUSOL (tarifa P.V.P. + IVA, vía el Worker) ──
+// Si el Worker no contesta, se usa la lista de arriba (copia guardada).
+const TARIFA_GUARDADA = '23/10/2026';
+(async function cargarTarifaEnDirecto() {
+  const estado = document.getElementById('tarifaEstado');
+  const guardada = () => { estado.textContent = `· Precios guardados del ${TARIFA_GUARDADA}`; };
+  if (!FACTUSOL_WEBHOOK_URL) return guardada();
+  try {
+    const ctrl = new AbortController();
+    const corte = setTimeout(() => ctrl.abort(), 20000);
+    const r = await fetch(FACTUSOL_WEBHOOK_URL + '/tarifa', { signal: ctrl.signal });
+    clearTimeout(corte);
+    const j = await r.json();
+    if (!j.ok || !Array.isArray(j.productos) || j.productos.length < 1000) throw new Error('respuesta incompleta');
+    const fecha = new Date(j.leida).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    // Con productos ya en el presupuesto no se cambia la lista a mitad
+    if (Object.keys(carrito).length) { estado.textContent = '· Hay precios nuevos de FACTUSOL: recarga la página al terminar este presupuesto'; return; }
+    const refs = new Map(PRODUCTOS.map((p) => [p.codigo, p.ref]));
+    const nuevos = j.productos.map((p) => ({ ...p, ref: refs.get(p.codigo) || p.ref || '' }));
+    PRODUCTOS.length = 0;
+    PRODUCTOS.push(...nuevos);
+    estado.textContent = `· Precios de FACTUSOL al día (${fecha})`;
+    if (input.value.trim()) buscar();
+  } catch (e) {
+    console.warn('Tarifa en directo no disponible, uso la guardada:', e.message);
+    guardada();
+  }
+})();
 
 function payloadFactusol() {
   const lineas = [];

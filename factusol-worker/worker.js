@@ -88,6 +88,30 @@ export default {
         return json({ ok: true, ...sondas }, 200, cors);
       }
 
+      // Tarifa en directo para el buscador: tarifa 3 «P.V.P.» + IVA de cada
+      // artículo con precio. Se guarda 12 h en la caché de Cloudflare (así la
+      // API de Delsol se consulta como mucho un par de veces al día).
+      // ?refrescar=1&k=<DIAG_KEY> fuerza una lectura nueva.
+      if (url.pathname === '/tarifa') {
+        const forzar = url.searchParams.get('refrescar') === '1' && env.DIAG_KEY && url.searchParams.get('k') === env.DIAG_KEY;
+        const cache = caches.default;
+        const claveCache = new Request('https://cache.iberica/tarifa-v1');
+        if (!forzar) {
+          const guardada = await cache.match(claveCache);
+          if (guardada) {
+            const r = new Response(guardada.body, guardada);
+            for (const [k, v] of Object.entries(cors)) r.headers.set(k, v);
+            return r;
+          }
+        }
+        const token = await autenticar(env);
+        const productos = await leerTarifa(env, token);
+        const cuerpo = JSON.stringify({ ok: true, tarifa: 'P.V.P. (tarifa 3) con IVA', leida: new Date().toISOString(), total: productos.length, productos });
+        const resp = new Response(cuerpo, { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=43200', ...cors } });
+        if (productos.length > 1000) await cache.put(claveCache, resp.clone());
+        return resp;
+      }
+
       // Diagnóstico de artículos y tarifas (para que el buscador lea los
       // precios en directo): muestra de F_ART, tarifas y su relación.
       if (url.pathname === '/diag-tarifa') {
@@ -112,12 +136,39 @@ export default {
         return json({ ok: true, ...resultado }, 200, cors);
       }
 
-      return json({ ok: false, error: 'Ruta no válida. Usa POST /presupuesto o GET /ping' }, 404, cors);
+      return json({ ok: false, error: 'Ruta no válida. Usa POST /presupuesto, GET /tarifa o GET /ping' }, 404, cors);
     } catch (err) {
       return json({ ok: false, error: String(err.message || err) }, 500, cors);
     }
   },
 };
+
+/* ───────────────────── Tarifa en directo ───────────────────── */
+// Tipo de IVA de FACTUSOL (TIVART) → porcentaje
+const IVA_POR_TIPO = { 0: 21, 1: 10, 2: 4, 3: 0 };
+const TARIFA_PVP = 3; // F_TAR: 1 PROFESIONALES · 2 TALLER · 3 P.V.P.
+
+async function leerTarifa(env, token) {
+  // Dos consultas sencillas y la unión aquí (más seguro que un JOIN en la API)
+  const lineas = await consulta(env, token, `SELECT ARTLTA, PRELTA FROM F_LTA WHERE TARLTA = ${TARIFA_PVP} AND PRELTA > 0`);
+  const arts = await consulta(env, token, 'SELECT CODART, DESART, REFART, TIVART FROM F_ART');
+  const porCodigo = new Map(arts.map((a) => [String(a.CODART).trim(), a]));
+  const productos = [];
+  for (const l of lineas) {
+    const a = porCodigo.get(String(l.ARTLTA).trim());
+    if (!a) continue;
+    const ivaPct = IVA_POR_TIPO[Number(a.TIVART)] ?? 21;
+    productos.push({
+      codigo: String(a.CODART).trim(),
+      ref: String(a.REFART || '').trim(),
+      descripcion: String(a.DESART || '').replace(/\s+/g, ' ').trim(),
+      iva: ivaPct + '%',
+      precio: Math.round(Number(l.PRELTA) * (1 + ivaPct / 100) * 100) / 100,
+    });
+  }
+  productos.sort((x, y) => (x.codigo < y.codigo ? -1 : x.codigo > y.codigo ? 1 : 0));
+  return productos;
+}
 
 function json(obj, status, cors) {
   return new Response(JSON.stringify(obj), {

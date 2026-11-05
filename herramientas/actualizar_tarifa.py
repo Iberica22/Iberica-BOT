@@ -1,4 +1,10 @@
-"""Actualiza los precios del buscador de tarifas (docs/tarifas.html) con el
+"""Copia guardada de la tarifa del buscador (docs/tarifas.html).
+
+El buscador lee los precios EN DIRECTO de FACTUSOL a través del Worker
+(GET /tarifa). Esta copia solo se usa si el Worker no contesta; conviene
+refrescarla de vez en cuando con este script.
+
+Actualiza los precios del buscador de tarifas (docs/tarifas.html) con el
 «Listado de tarifas» exportado de FactuSOL (.XLS, columnas Código, Ref.,
 Descripción, IVA y P.V.P.+IVA).
 
@@ -61,6 +67,8 @@ def main():
     quitados = len(set(viejos) - {p["codigo"] for p in productos})
     nuevo = "const PRODUCTOS = " + json.dumps(productos, ensure_ascii=False, separators=(",", ":")) + ";"
     html = html[:ini] + nuevo + html[fin:]
+    if fecha:
+        html = re.sub(r"const TARIFA_GUARDADA = '[^']*';", f"const TARIFA_GUARDADA = '{fecha}';", html)
     open(PAGINA, "w", encoding="utf-8").write(html)
     print(f"Tarifa {fecha or '(sin fecha)'}: {len(productos)} artículos · {cambian} cambian de precio · {nuevos} nuevos · {quitados} quitados")
 
