@@ -5788,6 +5788,12 @@ async function tandaCampanas({ forzar = false } = {}) {
   try {
     if (abiertasNieves() > CAMP_FRENO_NIEVES) { resumen.avisos.push(`freno: Nieves tiene ${abiertasNieves()} conversaciones abiertas`); return resumen; }
     const activas = Object.values(campanas.listas).filter((l) => l.estado === "activa").sort((a, b) => a.creada - b.creada);
+    if (!activas.length) {
+      const enRevision = Object.values(campanas.listas).filter((l) => l.estado === "revision").length;
+      resumen.avisos.push(enRevision
+        ? `No hay ninguna lista activa: hay ${enRevision} en revisión. Pulsa «Activar» en el panel.`
+        : "No hay ninguna lista activa. Sube o genera una en el panel y actívala.");
+    }
     for (const l of activas) {
       const cfg = { ...CAMPANAS_CONFIG[l.campana], campana: l.campana };
       const hoy = hoyPermitidoCampana(cfg);
@@ -5803,6 +5809,11 @@ async function tandaCampanas({ forzar = false } = {}) {
         ? l.filas.filter((f) => f.estado === "enviado" && f.entregado && !f.respondio && !f.recordatorioTs && Date.now() - f.ts >= rec.diasDesdeEnvio * 24 * 3600 * 1000)
         : [];
       const cola = [...colaRec.map((f) => [f, true]), ...l.filas.filter((f) => f.estado === "pendiente").map((f) => [f, false])];
+      if (!cola.length) {
+        const n = (e) => l.filas.filter((f) => f.estado === e).length;
+        const motivos = l.filas.filter((f) => f.estado === "excluido").map((f) => f.motivo);
+        resumen.avisos.push(`${l.id}: nadie pendiente de enviar (${n("enviado")} ya enviados, ${n("control")} en el grupo de control, ${n("excluido")} excluidos${motivos.length ? ": " + [...new Set(motivos)].join(", ") : ""}).`);
+      }
       for (const [f, esRec] of cola) {
         if (!forzar && !enVentanaCampana()) break;
         if (enviadosHoyCampana(l.campana) >= cupo || enviadosHoy() >= CAMP_MAX_DIA) break;
