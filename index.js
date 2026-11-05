@@ -5675,10 +5675,11 @@ function variablesFila(cfg, f) { return cfg.variables.map((v) => ({ nombre: f.no
 function presupuestoAbierto(k) {
   return Object.values(seguimientosPresu).some((s) => claveBaja(s.clave || s.telefono) === k && PRESU_ESTADOS_VIVOS.includes(s.estado));
 }
-function motivoNoEnviar(cfg, f, { recordatorio = false } = {}) {
+function motivoNoEnviar(cfg, f, { recordatorio = false, prueba = false } = {}) {
   const c = campanas.contactos[f.k] || {};
   const ahora = Date.now(), dia = 24 * 3600 * 1000;
   if (esBaja(f.k)) return "baja";
+  if (prueba) return null;
   if (presupuestoAbierto(f.k)) return "presupuesto_abierto";
   if (c.noCampana?.[cfg.campana]) return "dijo_no_a_esta_campana";
   if (cfg.comercial && !recordatorio) {
@@ -5780,14 +5781,14 @@ async function avisarEquipoCampana(texto) {
 
 // Una tanda: cada minuto se mira si toca; dentro de la ventana se envía de
 // uno en uno, respetando cupos, freno de Nieves y parada por rechazo.
-async function tandaCampanas({ forzar = false } = {}) {
+async function tandaCampanas({ forzar = false, soloLista = null } = {}) {
   if (tandaEnCurso) return { ok: false, motivo: "tanda_en_curso" };
   if (!forzar && !enVentanaCampana()) return { ok: false, motivo: "fuera_de_ventana" };
   tandaEnCurso = true;
   const resumen = { enviados: 0, excluidos: 0, fallidos: 0, avisos: [] };
   try {
-    if (abiertasNieves() > CAMP_FRENO_NIEVES) { resumen.avisos.push(`freno: Nieves tiene ${abiertasNieves()} conversaciones abiertas`); return resumen; }
-    const activas = Object.values(campanas.listas).filter((l) => l.estado === "activa").sort((a, b) => a.creada - b.creada);
+    if (!soloLista && abiertasNieves() > CAMP_FRENO_NIEVES) { resumen.avisos.push(`freno: Nieves tiene ${abiertasNieves()} conversaciones abiertas`); return resumen; }
+    const activas = Object.values(campanas.listas).filter((l) => l.estado === "activa" && (!soloLista || l.id === soloLista) && (soloLista || !l.prueba)).sort((a, b) => a.creada - b.creada);
     if (!activas.length) {
       const enRevision = Object.values(campanas.listas).filter((l) => l.estado === "revision").length;
       resumen.avisos.push(enRevision
@@ -5818,7 +5819,7 @@ async function tandaCampanas({ forzar = false } = {}) {
         if (!forzar && !enVentanaCampana()) break;
         if (enviadosHoyCampana(l.campana) >= cupo || enviadosHoy() >= CAMP_MAX_DIA) break;
         if (l.estado !== "activa") break;
-        const motivo = motivoNoEnviar(cfg, f, { recordatorio: esRec }) || (await optOutEnZoho(f.k) ? "whatsapp_opt_out_en_zoho" : null);
+        const motivo = motivoNoEnviar(cfg, f, { recordatorio: esRec, prueba: !!l.prueba }) || (!l.prueba && await optOutEnZoho(f.k) ? "whatsapp_opt_out_en_zoho" : null);
         if (motivo) {
           if (!esRec) { f.estado = "excluido"; f.motivo = motivo; resumen.excluidos++; } else { f.recordatorioTs = -1; }
           guardarCampanas();
@@ -5833,7 +5834,7 @@ async function tandaCampanas({ forzar = false } = {}) {
           else {
             f.estado = "enviado"; f.ts = Date.now(); f.wamid = res.wamid || null;
             if (res.wamid) campWamid.set(res.wamid, [l.id, l.filas.indexOf(f)]);
-            if (cfg.comercial) { c.comerciales.push(Date.now()); c.sinRespuesta = (c.sinRespuesta || 0) + 1; }
+            if (cfg.comercial && !l.prueba) { c.comerciales.push(Date.now()); c.sinRespuesta = (c.sinRespuesta || 0) + 1; }
             if (cfg.casa) c.casa = Date.now();
           }
           // La T7 no es una oferta: lo que escriba un cliente de la casa va a la oficina
@@ -6383,6 +6384,33 @@ app.post("/admin/api/campanas/lista/:id/estado", authAdmin, (req, res) => {
   l.estado = estado; l.motivo = estado === "pausada" ? "pausada a mano" : null;
   guardarCampanas();
   res.json({ ok: true, estado });
+});
+
+// Prueba de una plantilla con un móvil: crea la lista, la activa y envía ya.
+//   /admin/api/campanas/prueba?tel=6XXXXXXXX&nombre=Noemi[&campana=NAV26]
+app.get("/admin/api/campanas/prueba", authAdmin, async (req, res) => {
+  const campana = String(req.query.campana || "NAV26");
+  const cfg = CAMPANAS_CONFIG[campana];
+  const tel = claveBaja(req.query.tel);
+  if (!cfg) return res.json({ ok: false, error: "Campaña desconocida" });
+  if (tel.length !== 9) return res.json({ ok: false, error: "Pon tu móvil en el enlace: ?tel=6XXXXXXXX" });
+  if (NOMBRES_AGENTES[`34${tel}`]) return res.json({ ok: false, error: "Ese móvil es del equipo: Marta ignora sus mensajes y los botones no contestarían. Usa otro." });
+  const nombre = String(req.query.nombre || "Prueba").trim();
+  const r = crearListaCampana(campana, `telefono\tnombre\tfecha\tarticulo\n${tel}\t${nombre}\t15/03/2026\tCAMBIO DE BOMBIN`);
+  if (!r.ok) return res.json(r);
+  const l = campanas.listas[r.id];
+  l.prueba = true;
+  l.filas.forEach((f) => { if (f.estado === "control") f.estado = "pendiente"; });
+  if (l.filas[0].estado !== "pendiente") return res.json({ ok: false, error: `Ese móvil no se puede usar: ${l.filas[0].motivo}` });
+  l.estado = "activa";
+  // Que la conversación de prueba empiece de cero
+  delete campanas.conversaciones[tel];
+  if (campanas.contactos[tel]?.noCampana) delete campanas.contactos[tel].noCampana[campana];
+  guardarCampanas();
+  const resumen = await tandaCampanas({ forzar: true, soloLista: l.id });
+  const f = l.filas[0];
+  l.estado = "terminada"; guardarCampanas();
+  res.json({ ok: f.estado === "enviado", enviadoDesde: canalCampana(cfg) === CANAL_CAMPANA_NAVIDAD ? NUMERO_CAMPANA : "661 66 59 29 (Marta)", plantilla: plantillaDe(cfg.envPlantilla), estado: f.estado, motivo: f.motivo || null, resumen });
 });
 
 // Prueba manual de una tanda (?forzar=1 se salta la ventana y el calendario)
