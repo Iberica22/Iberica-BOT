@@ -4973,7 +4973,8 @@ app.post("/webhook", async (req, res) => {
     const telefono  = req.body?.from;      // número del cliente (clave de estado)
     const memberId  = req.body?.member;    // ID interno Woztell para enviar mensajes
     const channelId = req.body?.channel;   // canal real — puede diferir del .env
-    const texto     = req.body?.data?.text || "";
+    // En fotos y documentos, el texto que las acompaña (pie de foto)
+    const texto     = req.body?.data?.text || req.body?.data?.caption || req.body?.data?.title || "";
     // Imagen/documento — solo lo usa el flujo de captación (fotos de la puerta)
     const esImagen  = tipo === "IMAGE" || tipo === "MEDIA" || tipo === "DOCUMENT" || !!req.body?.data?.url;
 
@@ -5073,7 +5074,10 @@ app.post("/webhook", async (req, res) => {
     }
 
     // A partir de aquí, el flujo normal solo continúa con mensajes de TEXTO.
-    if (tipo !== "TEXT") {
+    // Una foto con texto («¿tenéis cerradura para persiana metálica?» + foto)
+    // se atiende como un mensaje de texto: el texto es lo que pregunta.
+    const fotoConTexto = esImagen && texto.trim().length > 0;
+    if (tipo !== "TEXT" && !fotoConTexto) {
       if (conversacionCampana(telefono) && !botPausado(`${channelId}_${telefono}`)) {
         try { if (await manejarRespuestaCampana({ telefono, memberId, channelId, texto: "", tipoEvento: tipo })) return res.sendStatus(200); }
         catch (e) { console.error("[Campañas] Respuesta (media):", e.message); }
@@ -5085,12 +5089,17 @@ app.post("/webhook", async (req, res) => {
       }
       // Foto/documento fuera de la campaña: con la IA activa, agradecerla en
       // vez de ignorarla en silencio (la oficina la ve en la bandeja).
-      if (
-        esImagen && IA_MODO === "on" &&
-        conversaciones[telefono]?.memberId &&
-        !botPausado(`${channelId}_${telefono}`)
-      ) {
-        await enviarNatural(telefono, "¡Gracias por la foto! 📸 Se la paso al equipo para que lo valore mejor. Seguimos por aquí 😊");
+      if (esImagen && IA_MODO === "on" && !botPausado(`${channelId}_${telefono}`) && !NOMBRES_AGENTES[telefono]) {
+        if (conversaciones[telefono]?.memberId) {
+          await enviarNatural(telefono, "¡Gracias por la foto! 📸 Se la paso al equipo para que lo valore mejor. Seguimos por aquí 😊");
+        } else if (dentroDeHorario(channelId) && !(channelId === CANAL_INSTAGRAM && !martaEnInstagram())) {
+          // Primer mensaje y solo una foto: preguntar qué necesita (antes, silencio)
+          resetearConversacion(telefono);
+          conversaciones[telefono].memberId  = memberId;
+          conversaciones[telefono].channelId = channelId;
+          conversaciones[telefono].step = "menu_principal";
+          await enviarNatural(telefono, "¡Hola! 👋 Soy Marta, de Ibérica Seguridad. Gracias por la foto 📸 ¿Me cuentas qué necesitas y en qué zona está? Así te ayudo enseguida.");
+        }
       }
       return res.sendStatus(200);
     }
