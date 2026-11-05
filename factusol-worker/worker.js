@@ -88,6 +88,24 @@ export default {
         return json({ ok: true, ...sondas }, 200, cors);
       }
 
+      // Diagnóstico de artículos y tarifas (para que el buscador lea los
+      // precios en directo): muestra de F_ART, tarifas y su relación.
+      if (url.pathname === '/diag-tarifa') {
+        if (!env.DIAG_KEY || url.searchParams.get('k') !== env.DIAG_KEY) {
+          return json({ ok: false, error: 'Diagnóstico deshabilitado o clave incorrecta' }, 403, cors);
+        }
+        const token = await autenticar(env);
+        const sondas = {};
+        sondas.articulo_fichet = await consultaSegura(env, token, "SELECT TOP 1 * FROM F_ART WHERE CODART = '000001'");
+        sondas.muestra_F_ART = await consultaSegura(env, token, 'SELECT TOP 2 * FROM F_ART');
+        sondas.cuantos_F_ART = await consultaSegura(env, token, 'SELECT COUNT(*) AS N FROM F_ART');
+        sondas.tarifas_F_TAR = await consultaSegura(env, token, 'SELECT * FROM F_TAR');
+        sondas.lineas_tarifa_fichet = await consultaSegura(env, token, "SELECT * FROM F_LTA WHERE ARTLTA = '000001'");
+        sondas.muestra_F_LTA = await consultaSegura(env, token, 'SELECT TOP 3 * FROM F_LTA');
+        sondas.cuantos_F_LTA = await consultaSegura(env, token, 'SELECT COUNT(*) AS N FROM F_LTA');
+        return json({ ok: true, ...sondas }, 200, cors);
+      }
+
       if (url.pathname === '/presupuesto' && request.method === 'POST') {
         const datos = await request.json();
         const resultado = await grabarPresupuesto(env, datos);
