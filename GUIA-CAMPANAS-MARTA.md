@@ -119,6 +119,12 @@ Manager.
 | BAJA, enfado, «quitadme», fallecimiento | BAJA en el momento, casilla WhatsApp Opt Out en Zoho y aviso a Mari para [NOCOM]. Nunca pasa a Nieves |
 | Pide borrar sus datos | BAJA y aviso de protección de datos (plazo de un mes) |
 
+**Cuando ya lo lleva Nieves** (después de «Se lo paso a Nieves…», de la
+llave o de un caso especial), Marta deja de contestar en ese chat: lo que
+escriba el cliente se le reenvía a Nieves (como mucho un aviso por hora) y
+los «gracias», «vale» o emojis ni se contestan ni se avisan. Solo vuelve a
+hablar si es una urgencia, violencia o una BAJA.
+
 En T3, T4, T5 y T6, el «SÍ» se contesta con «Perfecto, se lo paso a Nieves y
 te llama desde el 950 088 086. ¿Mejor por la mañana o por la tarde?» y va a
 Nieves con su etiqueta (REACT-T3, REACT-T4…).

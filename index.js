@@ -243,7 +243,6 @@ function manejarAcuseEnvio(body, tipo) {
   if (wamid) marcarAcuseCampana(wamid, tipo);
   if (!wamid || !telefono || !canal) return;
   if (wamidsBot.has(wamid)) return;        // acuse de un envío del propio bot
-  if (NOMBRES_AGENTES[telefono]) return;   // notificación interna a un agente
 
   const conocido = () => conversaciones[telefono] || actividad[telefono];
   let pista = "";
@@ -253,12 +252,15 @@ function manejarAcuseEnvio(body, tipo) {
   // Ojo: usar `actividad` (persistente en Redis) y no solo `conversaciones`
   // (memoria volátil): tras un redeploy las conversaciones se vacían y las
   // respuestas manuales deben seguir pausando/renovando la pausa igualmente.
+  // También si el chat es con alguien del equipo (Mari, Nieves…) que está
+  // probando: los avisos internos salen por la API, nunca desde la app.
   if (esWamidDeApp(wamid)) {
     if (!conocido()) return; // número desconocido
     registrarAcuseAjeno({ tipo, telefono, pista, accion: "pausa (app)" });
     pausarPorIntervencion(canal, telefono, "respuesta manual desde la app de WhatsApp");
     return;
   }
+  if (NOMBRES_AGENTES[telefono]) return;   // notificación interna a un agente
 
   // Wamid desconocido con aspecto de envío API: un mensaje escrito desde
   // WhatsApp Web o el inbox de Woztell. SENT y DELIVERED se usan como señal
@@ -5946,7 +5948,7 @@ async function clasificarRespuestaCampana(texto, paso) {
       openai.chat.completions.create({
         model: "gpt-4o-mini", temperature: 0, max_tokens: 10,
         messages: [
-          { role: "system", content: `Un cliente de una cerrajería contesta a un WhatsApp que le ofrece una llamada de tres minutos para orientarle sobre su puerta${paso ? ` (paso actual: ${paso})` : ""}. Clasifica su respuesta con UNA palabra: si (quiere que le llamen), enero (mejor más adelante), no (no le interesa), franja (dice si mejor mañana o tarde), llave (da la marca de la llave o datos de la puerta), precio, gratis (pregunta si cuesta la llamada o la visita), timo (duda si somos nosotros), cobertura (pregunta si vamos a su pueblo), robot, alquiler, negocio, robo_cerca, recomienda, acorazada, queja, otro.` },
+          { role: "system", content: `Un cliente de una cerrajería contesta a un WhatsApp que le ofrece una llamada de tres minutos para orientarle sobre su puerta${paso ? ` (paso actual: ${paso})` : ""}. Clasifica su respuesta con UNA palabra: si (quiere que le llamen), enero (mejor más adelante), no (no le interesa), franja (dice si mejor mañana o tarde), llave (da la marca de la llave o datos de la puerta), precio, gratis (pregunta si cuesta la llamada o la visita), timo (duda si somos nosotros), cobertura (pregunta si vamos a su pueblo), robot, alquiler, negocio, robo_cerca, recomienda, acorazada, queja, otro. Si el mensaje no va dirigido a la empresa (un comentario a otra persona, «es el bot», «se le ha ido», «a mí no creo»…), es ambiguo o no se entiende, contesta otro: ante la duda, otro.` },
           { role: "user", content: String(texto).slice(0, 400) },
         ],
       }),
@@ -6085,6 +6087,29 @@ async function manejarRespuestaCampana({ telefono, memberId, channelId, texto, t
     return true;
   }
 
+  // Ya en manos de Nieves (o de Noemí): Marta no sigue contestando a cada
+  // mensaje, para no pisar a la persona ni responder a frases sueltas. Lo
+  // que escriba se le reenvía a Nieves (como mucho un aviso por hora).
+  // BAJAs, urgencias y violencia ya se han atendido arriba.
+  if (conv.paso === "con_nieves" || conv.paso === "queja") {
+    // «Gracias», «vale», «ok», un emoji…: ni contestar ni avisar.
+    if (/^(muchas )?(gracias|grcs|vale|ok|okey|perfecto|genial|de acuerdo|estupendo|bien|hasta luego|un saludo|igualmente|si|sii+)( (a ti|a vosotros|muchas|nieves|marta))?$/.test(t.replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim()) || !/[a-z0-9]/.test(t)) {
+      guardarCampanas();
+      return true;
+    }
+    const ahora = Date.now();
+    conv.pendienteNieves = [...(conv.pendienteNieves || []), String(texto).slice(0, 80)].slice(-5);
+    if (!conv.reenvioTs || ahora - conv.reenvioTs > 60 * 60 * 1000) {
+      conv.reenvioTs = ahora;
+      const lo = conv.pendienteNieves.map((x) => `"${x}"`).join(" · ");
+      conv.pendienteNieves = [];
+      if (conv.paso === "queja") await avisarNoemiCampana(telefono, conv, `sigue escribiendo: ${lo}`);
+      else await avisarNievesCampana(telefono, conv, `sigue escribiendo (Marta no contesta, ya lo llevas tú): ${lo}`);
+    }
+    guardarCampanas();
+    return true;
+  }
+
   const cat = await clasificarRespuestaCampana(texto, conv.paso);
   const esReact = conv.campana !== "NAV26";
   const preguntaFranja = " ¿Mejor por la mañana o por la tarde?";
@@ -6170,6 +6195,7 @@ async function manejarRespuestaCampana({ telefono, memberId, channelId, texto, t
       } else {
         await responder("Se lo paso a Nieves, de la oficina, que te contesta en cuanto pueda.");
         await avisarNievesCampana(telefono, conv, `escribe: "${texto.slice(0, 120)}"`);
+        conv.paso = "con_nieves";
       }
   }
   guardarCampanas();
