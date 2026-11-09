@@ -6376,6 +6376,32 @@ app.post("/admin/api/campanas/lista", authAdmin, (req, res) => {
 });
 
 // Vista previa: cómo le llega el mensaje a cada cliente (revisar a mano)
+// ¿Por qué está este móvil en una campaña? /admin/api/campanas/contacto?tel=6XXXXXXXX
+app.get("/admin/api/campanas/contacto", authAdmin, (req, res) => {
+  const k = claveBaja(req.query.tel);
+  if (k.length !== 9) return res.json({ ok: false, error: "Pon el móvil: ?tel=6XXXXXXXX" });
+  const fecha = (ts) => (ts ? new Date(ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }) : null);
+  const conv = campanas.conversaciones[k];
+  const listas = Object.values(campanas.listas)
+    .map((l) => ({ l, f: l.filas.find((f) => f.k === k) }))
+    .filter((x) => x.f)
+    .map(({ l, f }) => ({
+      lista: l.id, campana: l.campana, creada: fecha(l.creada), estadoLista: l.estado,
+      deDonde: l.prueba ? "ENLACE DE PRUEBA (/admin/api/campanas/prueba)" : l.origen === "zoho" ? "lista generada desde Zoho" : "lista pegada a mano en /admin/campanas",
+      fila: f.estado, motivo: f.motivo || null, enviado: fecha(f.ts), respondio: !!f.respondio,
+    }));
+  res.json({
+    ok: true, telefono: k,
+    conversacion: conv ? {
+      campana: conv.campana, etiqueta: conv.etiqueta, paso: conv.paso, ultimoMensaje: fecha(conv.ts), cerrada: fecha(conv.cerrada),
+      empezo: conv.entrada ? `Escribió la frase de Navidad (${conv.etiqueta})` : conv.listaId ? `Le llegó la plantilla de la lista ${conv.listaId}` : "desconocido",
+    } : null,
+    listas,
+    contacto: campanas.contactos[k] || null,
+    baja: esBaja(k),
+  });
+});
+
 app.get("/admin/api/campanas/lista/:id", authAdmin, (req, res) => {
   const l = campanas.listas[req.params.id];
   if (!l) return res.status(404).json({ ok: false, error: "No existe esa lista" });

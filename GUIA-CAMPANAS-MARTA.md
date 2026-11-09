@@ -166,5 +166,8 @@ Si la plantilla no está aprobada en Meta, el primer envío falla, la lista se p
   cifras (enviados, entregados, respuestas, rechazo).
 - `GET /admin/api/campanas`: las mismas cifras en JSON, más las
   conversaciones pasadas a Nieves por etiqueta.
+- `GET /admin/api/campanas/contacto?tel=6XXXXXXXX`: por qué ese móvil está
+  en una campaña (enlace de prueba, lista pegada, lista de Zoho o frase de
+  Navidad), cuándo se le envió y en qué paso está.
 - `GET /admin/api/campanas/tanda?forzar=1`: lanza una tanda a mano, fuera
   de la ventana. Solo para pruebas.
