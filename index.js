@@ -5062,7 +5062,7 @@ app.post("/webhook", async (req, res) => {
     // se salta la pausa: si una persona de la oficina ha intervenido en el
     // chat, Marta se calla también aquí.
     if (CAMPANA_CHANNEL_ID && channelId === CAMPANA_CHANNEL_ID &&
-        !etiquetaEntradaNavidad(texto) && !conversacionCampana(telefono) &&
+        !etiquetaEntradaNavidad(texto) && !conversacionCampana(telefono, channelId) &&
         (captacionActiva(telefono) ||
          (CAPTACION_ANUNCIO &&
           (esInicioCampana(texto) || esContactoNuevo(telefono) ||
@@ -5080,7 +5080,7 @@ app.post("/webhook", async (req, res) => {
     // se atiende como un mensaje de texto: el texto es lo que pregunta.
     const fotoConTexto = esImagen && texto.trim().length > 0;
     if (tipo !== "TEXT" && !fotoConTexto) {
-      if (conversacionCampana(telefono) && !botPausado(`${channelId}_${telefono}`)) {
+      if (conversacionCampana(telefono, channelId) && !botPausado(`${channelId}_${telefono}`)) {
         try { if (await manejarRespuestaCampana({ telefono, memberId, channelId, texto: "", tipoEvento: tipo })) return res.sendStatus(200); }
         catch (e) { console.error("[Campañas] Respuesta (media):", e.message); }
       }
@@ -5163,7 +5163,7 @@ app.post("/webhook", async (req, res) => {
     // ── BAJA: a cualquier hora y en cualquier chat ──────────────────
     // Si una persona de la oficina lleva el chat, se registra en silencio
     // (la persona ve el mensaje); si no, Marta lo confirma.
-    const motivoBaja = detectarBaja(texto, enFlujoResena || !!conversacionCampana(telefono));
+    const motivoBaja = detectarBaja(texto, enFlujoResena || !!conversacionCampana(telefono, channelId));
     if (motivoBaja) {
       await registrarBaja(telefono, motivoBaja, texto);
       if (!conversaciones[telefono]) resetearConversacion(telefono);
@@ -5188,13 +5188,13 @@ app.post("/webhook", async (req, res) => {
 
     // ── Respuestas a las campañas (Navidad y reactivación) ──────────
     // A cualquier hora: Marta contesta, y lo que toca lo pasa a Nieves.
-    if (!enFlujoResena && (conversacionCampana(telefono) || etiquetaEntradaNavidad(texto))) {
+    if (!enFlujoResena && canalDeCampanas(channelId) && (conversacionCampana(telefono, channelId) || etiquetaEntradaNavidad(texto))) {
       try {
         if (await manejarRespuestaCampana({ telefono, memberId, channelId, texto, tipoEvento: "TEXT" })) return res.sendStatus(200);
       } catch (e) { console.error("[Campañas] Respuesta:", e.message); }
     }
     // Cliente de la casa: lo ve la oficina directamente
-    if (!enFlujoResena && campanas.contactos[claveBaja(telefono)]?.casa) {
+    if (!enFlujoResena && canalDeCampanas(channelId) && campanas.contactos[claveBaja(telefono)]?.casa) {
       try { if (await manejarClienteDeLaCasa({ telefono, memberId, channelId, texto })) return res.sendStatus(200); }
       catch (e) { console.error("[Campañas] Cliente de la casa:", e.message); }
     }
@@ -5911,7 +5911,16 @@ function etiquetaEntradaNavidad(texto) {
   return "NAV26-WEB";
 }
 
-function conversacionCampana(telefono) {
+// Las campañas solo viven en los números desde los que salen: el de Navidad
+// (674 09 66 10) y el de Marta (661 66 59 29). Si ese mismo cliente escribe
+// al WhatsApp personal de Mari, Nieves, José… no es una respuesta a la
+// campaña y Marta no debe contestar ahí como si lo fuera.
+const CANAL_SOPORTE_MARTA = "69fda40ba6876fcf26d5407f";
+const canalDeCampanas = (channelId) => !channelId ||
+  [CANAL_CAMPANA_NAVIDAD, CANAL_SOPORTE_MARTA, process.env.WOZTELL_CHANNEL_ID].filter(Boolean).includes(channelId);
+
+function conversacionCampana(telefono, channelId) {
+  if (!canalDeCampanas(channelId)) return null;
   const k = claveBaja(telefono);
   const c = campanas.conversaciones[k];
   if (!c || c.cerrada) return null;
@@ -6031,7 +6040,7 @@ function marcarRespuestaFila(conv) {
 // Devuelve true si el mensaje era de una campaña y ya está contestado.
 async function manejarRespuestaCampana({ telefono, memberId, channelId, texto, tipoEvento }) {
   const k = claveBaja(telefono);
-  let conv = conversacionCampana(telefono);
+  let conv = conversacionCampana(telefono, channelId);
   const etiquetaEntrada = !conv && tipoEvento === "TEXT" ? etiquetaEntradaNavidad(texto) : null;
   let recienLlegado = false;
   if (!conv && etiquetaEntrada) {
