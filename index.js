@@ -5545,6 +5545,8 @@ app.get("/zoho/campos-case", async (req, res) => {
 const CAMP_TEXTOS = {
   nav: "Hola, {{1}}. Somos Ibérica Seguridad, cerrajería de Almería; te atendimos {{2}} para {{3}}. Antes de las fiestas queremos saber si a tu puerta le falta algo: en una llamada de tres minutos te orientamos y, si conviene mejorar algo, te damos precio cerrado. Que en Navidad las únicas visitas sorpresa sean las de la familia. ¿Te llamamos? (Para urgencias, llama al 950 088 086.) Si no quieres más mensajes, responde BAJA.",
   navRecordatorio: "Hola, {{1}}. Te escribimos hace unos días desde Ibérica Seguridad. Si te viene bien, te llamamos tres minutos y te orientamos sobre tu puerta; puedes dejarla lista antes de Navidad o con fecha para enero. Si no, no te volvemos a escribir con esto. ¿Te llamamos? Si no quieres más mensajes, responde BAJA.",
+  // T7b (código SI-ALTA): como la T7 pero sin la revisión ni el técnico
+  t7b: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Como has hablado con Nieves, ya eres cliente de la casa. Guarda este WhatsApp: lo que nos escribas aquí lo ve la oficina directamente. Y para urgencias, guarda también el 950 088 086: te atendemos las 24 horas y, si coinciden dos urgencias, la tuya va delante. Contigo, hasta dejarlo resuelto. Para no recibir más mensajes, responde BAJA.",
   t7: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Como has hablado con Nieves, ya eres cliente de la casa. Guarda este WhatsApp: lo que nos escribas aquí lo ve la oficina directamente. Y para urgencias, guarda también el 950 088 086: te atendemos las 24 horas y, si coinciden dos urgencias, la tuya va delante. Te avisaremos cuando el técnico pase por tu zona. Contigo, hasta dejarlo resuelto. Para no recibir más mensajes, responde BAJA.",
   t3: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Nieves te ha llamado un par de veces; no es nada urgente. Queríamos agradecerte la confianza de estos años y ofrecerte una revisión de tu puerta sin coste cuando el técnico pase por tu zona. Si te interesa, responde SÍ. Para no recibir más mensajes, BAJA.",
   t4: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Hace un año te hicimos {{2}}. Un repaso de la cerradura, con engrase y ajuste, ayuda a que siga funcionando como el primer día. Si quieres que te avisemos cuando el técnico pase por tu zona, responde SÍ. Para no recibir más mensajes, BAJA.",
@@ -6313,7 +6315,17 @@ const altasCasa = { porTel: {}, notasVistas: {}, ultimoDia: null, ultimaLectura:
 const ALTAS_PERSONAS_DISTINTAS = ["639829007", "619386243", ...String(process.env.ALTAS_PERSONAS_DISTINTAS || "").split(/[\s,;]+/).map((t) => claveBaja(t)).filter((t) => t.length === 9)];
 let altasEnCurso = false;
 const guardarAltasCasa = () => redisSet("iberica:altasCasa", altasCasa);
-const esNotaAlta = (texto) => { const t = normalizaTxt(texto || "").toUpperCase(); return /\bREACT/.test(t) && /\bSI[^A-Z0-9]{0,3}ALTA\b/.test(t); };
+// Códigos de Nieves en la nota: SI-ALTA → T7b; SI-REV y SI-TRAB → T7.
+const codigosAlta = (texto) => {
+  const t = normalizaTxt(texto || "").toUpperCase();
+  if (!/\bREACT/.test(t)) return [];
+  return ["ALTA", "REV", "TRAB"].filter((c) => new RegExp(`\\bSI[^A-Z0-9]{0,3}${c}`).test(t));
+};
+const esNotaAlta = (texto) => codigosAlta(texto).length > 0;
+// Qué plantilla le toca: T7 si alguna nota dice SI-REV o SI-TRAB; si solo SI-ALTA, T7b.
+// La T7b no se envía hasta que exista la variable T7B_TEMPLATE (plantilla aprobada en Meta).
+const versionAlta = (codigos) => (codigos.some((c) => c === "REV" || c === "TRAB") ? "t7" : "t7b");
+const plantillaAlta = (version) => (version === "t7" ? plantillaDe("T7_TEMPLATE") : process.env.T7B_TEMPLATE || null);
 // Nombres de pila que en Zoho suelen estar sin tilde (MARIA, ENCARNACION…)
 const TILDES_NOMBRE = { maria: "María", encarnacion: "Encarnación", jose: "José", jesus: "Jesús", ramon: "Ramón", joaquin: "Joaquín", andres: "Andrés", ines: "Inés", angel: "Ángel", angeles: "Ángeles", victor: "Víctor", adrian: "Adrián", ivan: "Iván", ruben: "Rubén", sebastian: "Sebastián", martin: "Martín", fermin: "Fermín", agustin: "Agustín", tomas: "Tomás", nicolas: "Nicolás", lucia: "Lucía", sofia: "Sofía", rocio: "Rocío", monica: "Mónica", veronica: "Verónica", angela: "Ángela", concepcion: "Concepción", asuncion: "Asunción", purificacion: "Purificación", encarna: "Encarna", raul: "Raúl", oscar: "Óscar", alvaro: "Álvaro", ignacio: "Ignacio", gonzalo: "Gonzalo", herminia: "Herminia", maximo: "Máximo", estefania: "Estefanía", natalia: "Natalia", garcia: "García" };
 const conTildes = (nombre) => String(nombre || "").split(" ").map((p) => TILDES_NOMBRE[normalizaTxt(p)] || p).join(" ");
@@ -6346,7 +6358,8 @@ async function leerNotasAlta(desde) {
     let viejas = false;
     for (const n of lote) {
       if (new Date(n.Created_Time).getTime() < limite) { viejas = true; continue; }
-      if (esNotaAlta(`${n.Note_Title || ""} ${n.Note_Content || ""}`)) notas.push(n);
+      const codigos = codigosAlta(`${n.Note_Title || ""} ${n.Note_Content || ""}`);
+      if (codigos.length) { n.codigos = codigos; notas.push(n); }
     }
     if (viejas || !d.info?.more_records || !lote.length) break;
   }
@@ -6417,7 +6430,7 @@ async function altasCasaDiario({ forzar = false, simular = false } = {}) {
       let g = porTel[r.movil] || (porTel[r.movil] = { ...r, notas: [] });
       // Si el mismo móvil sale en un contacto y en un parte, mandan los datos del contacto
       if (g.modulo !== "Contacts" && r.modulo === "Contacts") g = porTel[r.movil] = { ...r, notas: g.notas, optOut: g.optOut };
-      g.notas.push({ id: n.id, fecha: n.Created_Time, texto: String(n.Note_Content || n.Note_Title || "").slice(0, 80) });
+      g.notas.push({ id: n.id, fecha: n.Created_Time, texto: String(n.Note_Content || n.Note_Title || "").slice(0, 80), codigos: n.codigos });
       g.optOut = g.optOut || r.optOut;
     }
     let grupos = Object.values(porTel);
@@ -6454,7 +6467,9 @@ async function altasCasaDiario({ forzar = false, simular = false } = {}) {
 
     for (const g of pendientes) {
       const prev = altasCasa.porTel[g.movil] || {};
-      const fila = { nombre: g.nombre, nombreCompleto: g.nombreCompleto, telefono: g.movil, notas: g.notas.length };
+      const codigos = [...new Set(g.notas.flatMap((x) => x.codigos || []))];
+      const version = versionAlta(codigos);
+      const fila = { nombre: g.nombre, nombreCompleto: g.nombreCompleto, telefono: g.movil, notas: g.notas.length, codigos: codigos.map((c) => `SI-${c}`), plantilla: version === "t7" ? "T7" : "T7b" };
       const reg = (estado, motivo) => {
         if (simular) return;
         altasCasa.porTel[g.movil] = { ...prev, estado, motivo: motivo || null, nombre: g.nombre, nombreCompleto: g.nombreCompleto,
@@ -6480,23 +6495,31 @@ async function altasCasaDiario({ forzar = false, simular = false } = {}) {
         continue;
       }
       if (nocom === null) { resumen.excluidas.push({ ...fila, motivo: "sin_comprobar_factusol (se reintenta mañana)" }); continue; }
-      if (simular) { resumen.enviadas.push({ ...fila, simulado: true, mensaje: rellenarTexto(CAMP_TEXTOS.t7, [g.nombre]) }); continue; }
+      const plantilla = plantillaAlta(version);
+      if (!plantilla) {
+        // SI-ALTA: esperando a que Meta apruebe la T7b (no cuenta como fallo ni va a la agenda)
+        if (!simular) reg("espera_t7b", "falta la variable T7B_TEMPLATE (T7b sin aprobar)");
+        (resumen.esperandoT7b = resumen.esperandoT7b || []).push({ ...fila, mensaje: rellenarTexto(CAMP_TEXTOS.t7b, [g.nombre]) });
+        continue;
+      }
+      if (simular) { resumen.enviadas.push({ ...fila, simulado: true, mensaje: rellenarTexto(CAMP_TEXTOS[version], [g.nombre]) }); continue; }
       if (enviadosHoy() >= CAMP_MAX_DIA) { resumen.avisos.push(`Límite de ${CAMP_MAX_DIA} mensajes al día: el resto, mañana`); break; }
-      const plantilla = plantillaDe("T7_TEMPLATE");
       let res;
       try { res = await enviarPlantillaCampana({ k: g.movil, clave: `34${g.movil}`, nombre: g.nombre }, plantilla, [g.nombre], { ...CAMPANAS_CONFIG["REACT-T7"], campana: "REACT-T7" }); }
       catch (e) { res = { ok: false, detalle: e.message }; }
       if (res.ok) {
         reg("enviada");
         altasCasa.porTel[g.movil].wamid = res.wamid || null;
+        altasCasa.porTel[g.movil].plantilla = fila.plantilla;
         const c = (campanas.contactos[g.movil] = campanas.contactos[g.movil] || { comerciales: [], sinRespuesta: 0 });
         c.casa = Date.now(); guardarCampanas();
-        await notaEnZoho(g.modulo, g.id, "Alta cliente de la casa (Marta)", "Alta cliente de la casa (Marta): T7 enviada");
+        await notaEnZoho(g.modulo, g.id, "Alta cliente de la casa (Marta)", `Alta cliente de la casa (Marta): ${fila.plantilla} enviada`);
         resumen.enviadas.push(fila);
       } else {
         const det = String(res.detalle || "error").slice(0, 160);
         reg("fallida", det);
-        await notaEnZoho(g.modulo, g.id, "Alta cliente de la casa (Marta)", `Alta cliente de la casa (Marta): la T7 NO salió (${det.slice(0, 80)}). Queda en la agenda de las 10:00 para llamar.`);
+        altasCasa.porTel[g.movil].plantilla = fila.plantilla;
+        await notaEnZoho(g.modulo, g.id, "Alta cliente de la casa (Marta)", `Alta cliente de la casa (Marta): la ${fila.plantilla} NO salió (${det.slice(0, 80)}). Queda en la agenda de las 10:00 para llamar.`);
         resumen.fallidas.push({ ...fila, motivo: det });
       }
       guardarAltasCasa();
@@ -6518,19 +6541,20 @@ function marcarAcuseAlta(wamid, tipo) {
   if (!a || a.estado !== "enviada") return false;
   a.estado = "fallida"; a.motivo = "no_entregado"; a.agendaTs = null;
   guardarAltasCasa();
-  notaEnZoho(a.modulo, a.id, "Alta cliente de la casa (Marta)", "Alta cliente de la casa (Marta): WhatsApp avisa de que la T7 NO se entregó. Queda en la agenda de las 10:00 para llamar.");
+  notaEnZoho(a.modulo, a.id, "Alta cliente de la casa (Marta)", `Alta cliente de la casa (Marta): WhatsApp avisa de que la ${a.plantilla || "T7"} NO se entregó. Queda en la agenda de las 10:00 para llamar.`);
   return true;
 }
 
 // Tareas para la agenda de las 10:00: T7 que no salieron (una vez cada una)
 const tareasAgendaAltas = () => Object.entries(altasCasa.porTel)
   .filter(([, a]) => a.estado === "fallida" && !a.agendaTs)
-  .map(([tel, a]) => ({ tel, texto: `${a.nombreCompleto || a.nombre || "Cliente"} ${tel} (alta cliente de la casa: la T7 no salió)` }));
+  .map(([tel, a]) => ({ tel, texto: `${a.nombreCompleto || a.nombre || "Cliente"} ${tel} (alta cliente de la casa: la ${a.plantilla || "T7"} no salió)` }));
 
 app.get("/admin/api/altas-casa", authAdmin, (req, res) => {
   const fecha = (ts) => (ts ? new Date(ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }) : null);
   res.json({ ok: true, activo: ALTAS_ACTIVO(), desde: ALTAS_DESDE, ultimoDia: altasCasa.ultimoDia, comprobarNocom: !!process.env.FACTUSOL_KEY,
-    altas: Object.entries(altasCasa.porTel).map(([tel, a]) => ({ telefono: tel, nombre: a.nombreCompleto || a.nombre, estado: a.estado, motivo: a.motivo, enviada: fecha(a.ts), notas: (a.notas || []).length })) });
+    altas: Object.entries(altasCasa.porTel).map(([tel, a]) => ({ telefono: tel, nombre: a.nombreCompleto || a.nombre, estado: a.estado, plantilla: a.plantilla || null, motivo: a.motivo, enviada: fecha(a.ts), notas: (a.notas || []).length })),
+    t7bAprobada: !!process.env.T7B_TEMPLATE });
 });
 // Vista previa sin enviar nada: qué notas encuentra y qué haría con cada una
 app.get("/admin/api/altas-casa/revisar", authAdmin, async (req, res) => res.json(await altasCasaDiario({ simular: true })));

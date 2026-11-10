@@ -143,9 +143,16 @@ guardia.
 ## Alta «Cliente de la casa» (T7) tras la llamada de Nieves
 
 Cuando un cliente acepta en la llamada, Nieves escribe en Zoho una nota con
-**REACT** y **SI-ALTA** («REACT 9/11 SI-ALTA», «react 6/11 codigo si-alta»…;
+**REACT** y su código: **SI-ALTA**, **SI-REV** o **SI-TRAB** («REACT 9/11 SI-ALTA», «react 6/11 codigo si-alta»…;
 da igual mayúsculas o minúsculas).
 
+- **Qué plantilla, según el código de la nota:**
+  - **SI-ALTA** → **T7b**, sin la revisión ni el técnico. No se envía hasta
+    que esté aprobada en Meta y se ponga su nombre en la variable
+    `T7B_TEMPLATE` de Railway. Mientras, esos clientes esperan («espera_t7b»).
+  - **SI-REV** y **SI-TRAB** → **T7**.
+  - Si una persona tiene notas con varios códigos y alguno es SI-REV o
+    SI-TRAB, recibe la T7. Solo recibe una de las dos, nunca ambas.
 - **Cuándo:** una vez al día, en días laborables, de 10:00 a 10:30. Cuenta
   para el máximo de 60 mensajes al día.
 - **A quién:** al móvil del registro de la nota (si es un parte, el de su
@@ -185,7 +192,8 @@ Marta ya usa por defecto estos nombres: `nav26_puerta_fiestas`, `nav26_recordato
 | `CAMP_CHANNEL_ID` | Opcional. Canal de Woztell de la campaña de Navidad (por defecto el del 674 09 66 10, `6ae487f5a31d9ed1c2354113`) |
 | `NAV_TEMPLATE` | Navidad, principal (marketing, con los 3 botones) |
 | `NAV_TEMPLATE_RECORDATORIO` | Navidad, recordatorio único |
-| `T7_TEMPLATE` | Alta «Cliente de la casa» (utilidad) |
+| `T7_TEMPLATE` | Alta «Cliente de la casa» (utilidad), códigos SI-REV y SI-TRAB |
+| `T7B_TEMPLATE` | Alta «Cliente de la casa» sin revisión ni técnico, código SI-ALTA. **Sin esta variable no se envía a los SI-ALTA** |
 | `T3_TEMPLATE` | Cliente top que no contestó |
 | `T4_TEMPLATE` | Aniversario |
 | `T5_TEMPLATE` | Antes de vacaciones |
