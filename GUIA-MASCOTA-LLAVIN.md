@@ -1,9 +1,8 @@
 # Llavín — la mascota de Ibérica Seguridad en redes
 
-Borrador para aprobar. Llavín es la cara de Ibérica en Instagram, Facebook y
-TikTok. No sustituye al equipo (los reels con personas son los que mejor
-funcionan) ni a Marta (que atiende por WhatsApp e Instagram): Llavín es el
-personaje de los carruseles, gráficos, stickers y respuestas con gracia.
+Llavín es la mascota de Ibérica en los carruseles de Instagram y Facebook.
+No sustituye al equipo (los reels con personas son los que mejor funcionan) ni
+a Marta (que atiende por WhatsApp e Instagram).
 
 ## Por qué una llave
 
@@ -69,12 +68,10 @@ la broma es el envoltorio, nunca el contenido.
 
 ## Dónde sale
 
-- Carruseles de consejos y fechas señaladas (con disfraz o accesorio).
-- «Llavín por Almería»: Alcazaba, Cabo de Gata, Paseo, Roquetas, El Ejido…
-- Stickers para historias y respuestas.
-- Respuestas a comentarios con su tono, siempre aprobadas por la oficina.
-- Reels cortos animados (Higgsfield puede animar las imágenes).
-- Guiño en los reels del equipo, sin quitarles protagonismo.
+**Solo en carruseles** (consejos, fechas señaladas, «Llavín por Almería»…), con
+disfraz o accesorio según el tema. Los reels se hacen con el equipo y vídeo
+real, que es lo que mejor funciona (ver `MATRIZ-VIRALIDAD-IBERICA.md`): Llavín
+no sale en reels.
 
 ## Más respuestas a comentarios
 
