@@ -1725,6 +1725,10 @@ async function agendaPresupuestos({ forzar = false } = {}) {
     tareas.push(...nuevas);
   }
 
+  // Altas de cliente de la casa cuya T7 no salió
+  const altasFallidas = tareasAgendaAltas();
+  for (const t of altasFallidas) tareas.push({ seg: null, alta: t.tel, claves: [], grupo: "llamar", texto: t.texto });
+
   const grupos = [
     ["llamar", "📞 Llamar"],
     ["email", "✉️ Email al tramitador (nunca al asegurado)"],
@@ -1754,6 +1758,7 @@ async function agendaPresupuestos({ forzar = false } = {}) {
       return { ok: false, motivo: "aviso_no_entregado", tareas: tareas.length, texto: partes };
     }
     for (const t of tareas) {
+      if (t.alta) { altasCasa.porTel[t.alta].agendaTs = ahora; guardarAltasCasa(); continue; }
       for (const k of t.claves) t.seg.avisos[k] = ahora;
       if (t.grupo === "cerrar") { t.seg.estado = "cerrado_r6"; registrarResultadoPresu(t.seg.ref, "agenda_cerrar_con_R6"); }
       else registrarResultadoPresu(t.seg.ref, `agenda_${t.claves.at(-1)}`);
@@ -1956,6 +1961,8 @@ async function cargarEstadoDesdeRedis() {
     Object.assign(campanas.conversaciones, campanasGuardadas.conversaciones || {});
     indexarWamidsCampana();
   }
+  const altasGuardadas = await redisGet("iberica:altasCasa");
+  if (altasGuardadas) Object.assign(altasCasa, altasGuardadas);
   const seguimientosGuardados = await redisGet("iberica:seguimientosPresu");
   if (seguimientosGuardados) Object.assign(seguimientosPresu, seguimientosGuardados);
   const presuHistGuardado = await redisGet("iberica:presuHistorial");
@@ -5801,7 +5808,7 @@ const enviadosHoy = () => {
     if (f.ts && diaMadrid(new Date(f.ts)) === hoy && ["enviado", "fallido"].includes(f.estado)) n++;
     if (f.recordatorioTs && diaMadrid(new Date(f.recordatorioTs)) === hoy) n++;
   }
-  return n;
+  return n + enviadosHoyAltas();
 };
 const enviadosHoyCampana = (campana) => {
   const hoy = diaMadrid(new Date());
@@ -5905,7 +5912,7 @@ async function tandaCampanas({ forzar = false, soloLista = null } = {}) {
 // Acuses de las plantillas de campaña (entregado / leído / fallido)
 function marcarAcuseCampana(wamid, tipo) {
   const ref = campWamid.get(wamid);
-  if (!ref) return false;
+  if (!ref) return marcarAcuseAlta(wamid, tipo);
   const f = campanas.listas[ref[0]]?.filas[ref[1]];
   if (!f) return false;
   if (tipo === "DELIVERED" || tipo === "READ") f.entregado = true;
@@ -6277,6 +6284,227 @@ async function manejarClienteDeLaCasa({ telefono, memberId, channelId, texto }) 
   return true;
 }
 
+// ── Altas «Cliente de la casa» (T7) desde las notas de Nieves ────────
+// Nieves llama y, si el cliente acepta, escribe en Zoho una nota con
+// «REACT» y «SI-ALTA» («REACT 9/11 SI-ALTA», «react 6/11 codigo si-alta»…).
+// Una vez al día (laborables, 10:00–10:30) Marta lee esas notas y manda la
+// plantilla T7 al móvil del registro de la nota, con {{1}} = nombre de pila.
+// No se manda si: BAJA, WhatsApp Opt Out en Zoho, [NOCOM] en FactuSOL o ya
+// se le mandó la T7 (por teléfono). Con el envío hecho, nota en Zoho «Alta
+// cliente de la casa (Marta): T7 enviada». Si falla, nota diciendo que NO
+// salió y la tarea va a «Llamar» de la agenda de presupuestos de las 10:00.
+// Si dos registros parecen la misma persona con móviles distintos (mismo
+// apellido y un nombre dentro del otro), se quedan «en revisión» hasta que
+// se confirmen en /admin/api/altas-casa.
+const ALTAS_DESDE = process.env.ALTAS_CASA_DESDE || "2026-11-06";
+const ALTAS_ACTIVO = () => (process.env.ALTAS_CASA || "on").toLowerCase() !== "off";
+const FACTUSOL_URL = (process.env.FACTUSOL_URL || "https://factusol-iberica.gerencia-cd3.workers.dev").replace(/\/$/, "");
+const altasCasa = { porTel: {}, notasVistas: {}, ultimoDia: null, ultimaLectura: null };
+let altasEnCurso = false;
+const guardarAltasCasa = () => redisSet("iberica:altasCasa", altasCasa);
+const esNotaAlta = (texto) => { const t = normalizaTxt(texto || "").toUpperCase(); return /\bREACT/.test(t) && /\bSI[\s-]*ALTA\b/.test(t); };
+const capitaliza = (s) => String(s || "").toLowerCase().replace(/(^|[\s-])([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase());
+const enviadosHoyAltas = () => { const hoy = diaMadrid(new Date()); return Object.values(altasCasa.porTel).filter((a) => a.ts && ["enviada", "fallida"].includes(a.estado) && diaMadrid(new Date(a.ts)) === hoy).length; };
+
+async function zohoGet(ruta, params) {
+  const token = await obtenerTokenZoho();
+  const r = await axios.get(`https://www.zohoapis.eu/crm/v2/${ruta}`, { params, headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+  return r.data || {};
+}
+async function notaEnZoho(modulo, id, titulo, contenido) {
+  try {
+    const token = await obtenerTokenZoho();
+    await axios.post("https://www.zohoapis.eu/crm/v2/Notes",
+      { data: [{ Note_Title: titulo, Note_Content: contenido, Parent_Id: id, se_module: modulo }] },
+      { headers: { Authorization: `Zoho-oauthtoken ${token}`, "Content-Type": "application/json" } });
+    return true;
+  } catch (e) { console.error("[Altas T7] No se pudo escribir la nota:", JSON.stringify(e.response?.data || e.message).slice(0, 200)); return false; }
+}
+
+// Notas de Zoho con «REACT» y «SI-ALTA», de la más nueva a la más antigua,
+// hasta la fecha de inicio.
+async function leerNotasAlta(desde) {
+  const limite = new Date(`${desde}T00:00:00+01:00`).getTime();
+  const notas = [];
+  for (let page = 1; page <= 30; page++) {
+    const d = await zohoGet("Notes", { per_page: 200, page, sort_by: "Created_Time", sort_order: "desc" });
+    const lote = d.data || [];
+    let viejas = false;
+    for (const n of lote) {
+      if (new Date(n.Created_Time).getTime() < limite) { viejas = true; continue; }
+      if (esNotaAlta(`${n.Note_Title || ""} ${n.Note_Content || ""}`)) notas.push(n);
+    }
+    if (viejas || !d.info?.more_records || !lote.length) break;
+  }
+  return notas;
+}
+
+// Registro al que va la nota → nombre, móvil, Opt Out. Si es un parte, se
+// mira su contacto; si el parte no lo tiene, sus propios campos de teléfono.
+async function registroDeNota(n) {
+  const modulo = n.$se_module || n.se_module || "Contacts";
+  const id = n.Parent_Id?.id || n.Parent_Id;
+  let reg = (await zohoGet(`${modulo}/${id}`)).data?.[0] || {};
+  let contacto = modulo === "Contacts" ? reg : null;
+  if (!contacto && reg.Related_To?.id) {
+    try { contacto = (await zohoGet(`Contacts/${reg.Related_To.id}`)).data?.[0] || null; } catch (_) {}
+  }
+  const fuente = contacto || reg;
+  const tels = [fuente.Mobile, fuente.Movil, fuente.M_vil, fuente.Phone, fuente.Telefono, fuente.Tel_fono, reg.Mobile, reg.Phone]
+    .map((t) => claveBaja(t || "")).filter((t) => t.length === 9);
+  const movil = tels.find((t) => /^[67]/.test(t)) || null;
+  const completo = fuente.Full_Name || [fuente.First_Name, fuente.Last_Name].filter(Boolean).join(" ") || n.Parent_Id?.name || "";
+  const pila = capitaliza(fuente.First_Name || String(completo).trim().split(/\s+/)[0] || "");
+  return {
+    modulo, id, contactoId: contacto?.id || null, movil, todosTels: tels, nombreCompleto: capitaliza(completo), nombre: pila,
+    apellido: normalizaTxt(fuente.Last_Name || String(completo).split(/\s+/).slice(1).join(" ")),
+    optOut: (contacto || reg)[CAMPO_OPTOUT] === true,
+  };
+}
+
+// [NOCOM] en FactuSOL (por el Worker). null = no se ha podido comprobar.
+async function nocomFactusol(tels) {
+  if (!process.env.FACTUSOL_KEY) return null;
+  try {
+    const r = await axios.get(`${FACTUSOL_URL}/nocom`, { params: { tels: tels.join(","), k: process.env.FACTUSOL_KEY }, timeout: 60000 });
+    return r.data?.ok ? r.data.resultado || {} : null;
+  } catch (e) { console.error("[Altas T7] FactuSOL /nocom:", e.message); return null; }
+}
+
+// ¿Dos personas con móviles distintos que pueden ser la misma?
+// Mismo apellido y un nombre contenido en el otro (Luis / Juan Luis).
+function posibleMismaPersona(a, b) {
+  if (!a.apellido || a.apellido !== b.apellido) return false;
+  const na = normalizaTxt(a.nombreCompleto), nb = normalizaTxt(b.nombreCompleto);
+  const pa = normalizaTxt(a.nombre), pb = normalizaTxt(b.nombre);
+  return na === nb || (pa && pb && (pa.split(" ").every((x) => pb.includes(x)) || pb.split(" ").every((x) => pa.includes(x))));
+}
+
+async function altasCasaDiario({ forzar = false, simular = false } = {}) {
+  if (!ALTAS_ACTIVO() && !simular) return { ok: false, motivo: "desactivado (ALTAS_CASA=off)" };
+  const hoy = diaMadrid(new Date());
+  if (!forzar && !simular) {
+    if (!esLaborable(new Date()) || !enVentanaCampana()) return { ok: false, motivo: "fuera_de_ventana" };
+    if (altasCasa.ultimoDia === hoy) return { ok: false, motivo: "ya_hecho_hoy" };
+  }
+  if (altasEnCurso) return { ok: false, motivo: "en_curso" };
+  altasEnCurso = true;
+  const resumen = { enviadas: [], fallidas: [], excluidas: [], enRevision: [], yaHechas: 0, notasLeidas: 0, avisos: [] };
+  try {
+    const notas = await leerNotasAlta(ALTAS_DESDE);
+    resumen.notasLeidas = notas.length;
+    // Agrupar por móvil (la misma persona con dos notas → un solo envío)
+    const porTel = {};
+    for (const n of notas) {
+      let r;
+      try { r = await registroDeNota(n); } catch (e) { resumen.avisos.push(`nota ${n.id}: no se pudo leer el registro (${e.message})`); continue; }
+      if (!r.movil) { resumen.excluidas.push({ nombre: r.nombreCompleto, motivo: "sin_movil", telefonos: r.todosTels }); continue; }
+      const g = porTel[r.movil] || (porTel[r.movil] = { ...r, notas: [] });
+      g.notas.push({ id: n.id, fecha: n.Created_Time, texto: String(n.Note_Content || n.Note_Title || "").slice(0, 80) });
+      g.optOut = g.optOut || r.optOut;
+    }
+    const grupos = Object.values(porTel);
+    // Posibles duplicados con móviles distintos
+    for (const a of grupos) for (const b of grupos) {
+      if (a !== b && posibleMismaPersona(a, b)) { a.duplicadoDe = a.duplicadoDe || []; a.duplicadoDe.push(`${b.nombreCompleto} (${b.movil})`); }
+    }
+    const pendientes = grupos.filter((g) => {
+      const prev = altasCasa.porTel[g.movil];
+      // Una T7 que falló no se reintenta sola (va a la agenda para llamar);
+      // con /admin/api/altas-casa/confirmar se puede volver a intentar.
+      if (prev && ["enviada", "descartada", "fallida"].includes(prev.estado)) { if (prev.estado === "fallida") resumen.fallidasAntes = (resumen.fallidasAntes || 0) + 1; else resumen.yaHechas++; return false; }
+      if (campanas.contactos[g.movil]?.casa && !prev) { resumen.yaHechas++; return false; }
+      return true;
+    });
+    const nocom = pendientes.length ? await nocomFactusol(pendientes.map((g) => g.movil)) : {};
+    if (nocom === null && pendientes.length) resumen.avisos.push(process.env.FACTUSOL_KEY ? "No se pudo consultar FactuSOL: no se envía nada hasta poder comprobar el [NOCOM]" : "Falta la variable FACTUSOL_KEY en Railway: sin ella no se puede comprobar el [NOCOM] y no se envía nada");
+
+    for (const g of pendientes) {
+      const prev = altasCasa.porTel[g.movil] || {};
+      const fila = { nombre: g.nombre, nombreCompleto: g.nombreCompleto, telefono: g.movil, notas: g.notas.length };
+      const reg = (estado, motivo) => {
+        if (simular) return;
+        altasCasa.porTel[g.movil] = { ...prev, estado, motivo: motivo || null, nombre: g.nombre, nombreCompleto: g.nombreCompleto,
+          modulo: g.modulo, id: g.id, contactoId: g.contactoId, notas: g.notas.map((x) => x.id), actualizado: Date.now(),
+          ...(estado === "enviada" || estado === "fallida" ? { ts: Date.now() } : {}) };
+      };
+      let motivo = null;
+      if (esBaja(g.movil)) motivo = "baja";
+      else if (g.optOut || (!simular && await optOutEnZoho(g.movil))) motivo = "whatsapp_opt_out_en_zoho";
+      else if (nocom && nocom[g.movil]?.nocom) motivo = "nocom_en_factusol";
+      if (motivo) { reg("excluida", motivo); resumen.excluidas.push({ ...fila, motivo }); continue; }
+      if (g.duplicadoDe && !prev.confirmada) {
+        reg("revision", `posible misma persona que ${g.duplicadoDe.join(", ")}`);
+        resumen.enRevision.push({ ...fila, posibleDuplicado: g.duplicadoDe });
+        continue;
+      }
+      if (nocom === null) { resumen.excluidas.push({ ...fila, motivo: "sin_comprobar_factusol (se reintenta mañana)" }); continue; }
+      if (simular) { resumen.enviadas.push({ ...fila, simulado: true, mensaje: rellenarTexto(CAMP_TEXTOS.t7, [g.nombre]) }); continue; }
+      if (enviadosHoy() >= CAMP_MAX_DIA) { resumen.avisos.push(`Límite de ${CAMP_MAX_DIA} mensajes al día: el resto, mañana`); break; }
+      const plantilla = plantillaDe("T7_TEMPLATE");
+      let res;
+      try { res = await enviarPlantillaCampana({ k: g.movil, clave: `34${g.movil}`, nombre: g.nombre }, plantilla, [g.nombre], { ...CAMPANAS_CONFIG["REACT-T7"], campana: "REACT-T7" }); }
+      catch (e) { res = { ok: false, detalle: e.message }; }
+      if (res.ok) {
+        reg("enviada");
+        altasCasa.porTel[g.movil].wamid = res.wamid || null;
+        const c = (campanas.contactos[g.movil] = campanas.contactos[g.movil] || { comerciales: [], sinRespuesta: 0 });
+        c.casa = Date.now(); guardarCampanas();
+        await notaEnZoho(g.modulo, g.id, "Alta cliente de la casa (Marta)", "Alta cliente de la casa (Marta): T7 enviada");
+        resumen.enviadas.push(fila);
+      } else {
+        const det = String(res.detalle || "error").slice(0, 160);
+        reg("fallida", det);
+        await notaEnZoho(g.modulo, g.id, "Alta cliente de la casa (Marta)", `Alta cliente de la casa (Marta): la T7 NO salió (${det.slice(0, 80)}). Queda en la agenda de las 10:00 para llamar.`);
+        resumen.fallidas.push({ ...fila, motivo: det });
+      }
+      guardarAltasCasa();
+      if (CAMP_PAUSA_ENTRE_MS) await new Promise((r) => setTimeout(r, CAMP_PAUSA_ENTRE_MS));
+    }
+    if (!simular) { altasCasa.ultimoDia = hoy; altasCasa.ultimaLectura = new Date().toISOString(); guardarAltasCasa(); }
+    if (!simular && (resumen.enviadas.length || resumen.fallidas.length || resumen.enRevision.length)) console.log("[Altas T7]", JSON.stringify({ enviadas: resumen.enviadas.length, fallidas: resumen.fallidas.length, revision: resumen.enRevision.length }));
+    return { ok: true, simulado: simular, ...resumen };
+  } catch (e) {
+    console.error("[Altas T7] Falló:", e.message);
+    return { ok: false, motivo: e.message };
+  } finally { altasEnCurso = false; }
+}
+
+// Acuse FAILED de una T7 ya enviada → pasa a fallida (y a la agenda)
+function marcarAcuseAlta(wamid, tipo) {
+  if (tipo !== "FAILED") return false;
+  const a = Object.values(altasCasa.porTel).find((x) => x.wamid === wamid);
+  if (!a || a.estado !== "enviada") return false;
+  a.estado = "fallida"; a.motivo = "no_entregado"; a.agendaTs = null;
+  guardarAltasCasa();
+  notaEnZoho(a.modulo, a.id, "Alta cliente de la casa (Marta)", "Alta cliente de la casa (Marta): WhatsApp avisa de que la T7 NO se entregó. Queda en la agenda de las 10:00 para llamar.");
+  return true;
+}
+
+// Tareas para la agenda de las 10:00: T7 que no salieron (una vez cada una)
+const tareasAgendaAltas = () => Object.entries(altasCasa.porTel)
+  .filter(([, a]) => a.estado === "fallida" && !a.agendaTs)
+  .map(([tel, a]) => ({ tel, texto: `${a.nombreCompleto || a.nombre || "Cliente"} ${tel} (alta cliente de la casa: la T7 no salió)` }));
+
+app.get("/admin/api/altas-casa", authAdmin, (req, res) => {
+  const fecha = (ts) => (ts ? new Date(ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }) : null);
+  res.json({ ok: true, activo: ALTAS_ACTIVO(), desde: ALTAS_DESDE, ultimoDia: altasCasa.ultimoDia, comprobarNocom: !!process.env.FACTUSOL_KEY,
+    altas: Object.entries(altasCasa.porTel).map(([tel, a]) => ({ telefono: tel, nombre: a.nombreCompleto || a.nombre, estado: a.estado, motivo: a.motivo, enviada: fecha(a.ts), notas: (a.notas || []).length })) });
+});
+// Vista previa sin enviar nada: qué notas encuentra y qué haría con cada una
+app.get("/admin/api/altas-casa/revisar", authAdmin, async (req, res) => res.json(await altasCasaDiario({ simular: true })));
+// Confirmar que un móvil «en revisión» es correcto (se envía en la próxima vuelta) o descartarlo
+app.get("/admin/api/altas-casa/confirmar", authAdmin, (req, res) => {
+  const k = claveBaja(req.query.tel || ""); const a = altasCasa.porTel[k];
+  if (!a) return res.json({ ok: false, error: "Ese móvil no está en las altas. Mira /admin/api/altas-casa" });
+  if (req.query.descartar === "1") { a.estado = "descartada"; a.motivo = "descartada a mano"; }
+  else { a.confirmada = true; if (["revision", "fallida"].includes(a.estado)) a.estado = "pendiente"; }
+  altasCasa.ultimoDia = null; guardarAltasCasa();
+  res.json({ ok: true, telefono: k, estado: a.estado, nota: a.estado === "pendiente" ? "Se envía en la próxima ventana (10:00–10:30 de un día laborable)" : undefined });
+});
+// Lanzar a mano (fuera de la ventana): solo para pruebas
+app.get("/admin/api/altas-casa/lanzar", authAdmin, async (req, res) => res.json(await altasCasaDiario({ forzar: true })));
+
 function estadisticasCampanas() {
   const listas = Object.values(campanas.listas).sort((a, b) => b.creada - a.creada).map((l) => {
     const n = (fn) => l.filas.filter(fn).length;
@@ -6619,6 +6847,8 @@ app.listen(PORT, async () => {
   setInterval(barridoToquesPresupuesto, 30 * 60 * 1000);
   // Campañas comerciales: cada minuto se mira si toca tanda (10:00–10:30)
   setInterval(() => tandaCampanas().catch((e) => console.error("[Campañas] Tanda falló:", e.message)), 60 * 1000);
+  // Altas «Cliente de la casa» (T7) desde las notas de Nieves: una vez al día
+  setInterval(() => altasCasaDiario().catch((e) => console.error("[Altas T7] Falló:", e.message)), 5 * 60 * 1000);
 
   // Pre-cargar el token de Zoho al arrancar para detectar errores de configuración
   try {

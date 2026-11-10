@@ -34,6 +34,7 @@
  * VARIABLES opcionales:
  *   ALLOWED_ORIGIN → origen CORS permitido (defecto https://iberica22.github.io)
  *   DIAG_KEY       → si se define, habilita GET /diag?k=<clave>
+ *   MARTA_KEY      → clave de Marta para GET /nocom (si no está, vale DIAG_KEY)
  */
 
 const DELSOL_BASE = 'https://api.sdelsol.com';
@@ -128,6 +129,33 @@ export default {
         sondas.muestra_F_LTA = await consultaSegura(env, token, 'SELECT TOP 3 * FROM F_LTA');
         sondas.cuantos_F_LTA = await consultaSegura(env, token, 'SELECT COUNT(*) AS N FROM F_LTA');
         return json({ ok: true, ...sondas }, 200, cors);
+      }
+
+      // ¿Tienen estos móviles la marca [NOCOM] en FactuSOL? (lo usa Marta
+      // antes de mandar la T7). /nocom?tels=600111222,611222333&k=<clave>
+      // Clave: MARTA_KEY (o DIAG_KEY). Se busca «NOCOM» en toda la ficha.
+      if (url.pathname === '/nocom') {
+        const clave = env.MARTA_KEY || env.DIAG_KEY;
+        if (!clave || url.searchParams.get('k') !== clave) {
+          return json({ ok: false, error: 'Clave incorrecta' }, 403, cors);
+        }
+        const tels = String(url.searchParams.get('tels') || '').split(',').map((t) => soloDigitos(t).slice(-9)).filter((t) => t.length === 9).slice(0, 100);
+        const token = await autenticar(env);
+        const lista = await consulta(env, token, 'SELECT CODCLI, TELCLI, MOVCLI FROM F_CLI');
+        const resultado = {};
+        for (const t of tels) {
+          const codigos = lista.filter((f) => [f.TELCLI, f.MOVCLI].some((c) => soloDigitos(c).slice(-9) === t)).map((f) => Number(f.CODCLI)).filter((n) => n > 0);
+          let nocom = false;
+          const clientes = [];
+          for (const cod of codigos.slice(0, 5)) {
+            const ficha = await consulta(env, token, `SELECT * FROM F_CLI WHERE CODCLI = ${cod}`);
+            const marca = /NOCOM/i.test(JSON.stringify(ficha));
+            nocom = nocom || marca;
+            clientes.push({ codigo: cod, nombre: ficha[0]?.NOFCLI || ficha[0]?.NOCCLI || '', nocom: marca });
+          }
+          resultado[t] = { encontrado: codigos.length > 0, nocom, clientes };
+        }
+        return json({ ok: true, resultado }, 200, cors);
       }
 
       if (url.pathname === '/presupuesto' && request.method === 'POST') {

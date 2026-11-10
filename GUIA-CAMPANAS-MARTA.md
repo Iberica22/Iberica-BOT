@@ -140,6 +140,37 @@ Responde «Recibido, se lo paso a…» y lo pasa a Mari o a Nieves según la
 hora. Fuera de horario va a Mari para primera hora, y si es urgente, a la
 guardia.
 
+## Alta «Cliente de la casa» (T7) tras la llamada de Nieves
+
+Cuando un cliente acepta en la llamada, Nieves escribe en Zoho una nota con
+**REACT** y **SI-ALTA** («REACT 9/11 SI-ALTA», «react 6/11 codigo si-alta»…;
+da igual mayúsculas o minúsculas).
+
+- **Cuándo:** una vez al día, en días laborables, de 10:00 a 10:30. Cuenta
+  para el máximo de 60 mensajes al día.
+- **A quién:** al móvil del registro de la nota (si es un parte, el de su
+  contacto). {{1}} = nombre de pila. Dos notas del mismo móvil = un envío.
+- **No se envía** si tiene BAJA, WhatsApp Opt Out en Zoho, [NOCOM] en
+  FactuSOL o ya se le mandó la T7. Sin móvil, tampoco.
+- **Mismo apellido y un nombre dentro del otro** con móviles distintos (Luis
+  / Juan Luis Vizcaíno): se quedan «en revisión» hasta confirmarlo.
+- **Después:** nota en Zoho «Alta cliente de la casa (Marta): T7 enviada».
+  Si falla, la nota dice que NO salió, no se reintenta sola y sale en
+  «📞 Llamar» de la agenda de presupuestos de las 10:00.
+- Empieza con las notas desde el 6 de noviembre (`ALTAS_CASA_DESDE`).
+
+Enlaces:
+- `/admin/api/altas-casa/revisar`: vista previa, **no envía nada**.
+- `/admin/api/altas-casa`: estado de cada alta.
+- `/admin/api/altas-casa/confirmar?tel=6XXXXXXXX`: confirmar uno en
+  revisión (o reintentar uno fallido); con `&descartar=1`, descartarlo.
+- `/admin/api/altas-casa/lanzar`: lanzarlo a mano fuera de la ventana.
+
+Para comprobar el [NOCOM] hace falta la misma clave en los dos sitios:
+`FACTUSOL_KEY` en Railway y `MARTA_KEY` en el Worker de Cloudflare (o la
+`DIAG_KEY` que ya tiene). Sin ella Marta no envía ninguna T7.
+`ALTAS_CASA=off` lo apaga.
+
 ## Variables de Railway (solo si una plantilla se llama distinto)
 
 Marta ya usa por defecto estos nombres: `nav26_puerta_fiestas`, `nav26_recordatorio`, `t7_cliente_casa`, `t3_top_sin_contestar`, `t4_aniversario`, `t5_vacaciones` y `t6_inquilinos`. Las variables solo hacen falta si en Meta se crean con otro nombre.
