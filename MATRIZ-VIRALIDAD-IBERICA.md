@@ -42,3 +42,58 @@ Gancho de **aviso o dato que sorprende** («el 80 %…», «si tienes una llave 
 Hora de publicación, miniatura, edición, duración y si algunos se subieron como reel de
 prueba (p. ej. 8 nov, 29 views). Faltan referencias externas (otras cuentas) para
 comparar; eso necesita Apify.
+
+---
+
+# Comparativa con referencias (Apify, 10 nov 2026)
+
+Últimos 40 reels de cada cuenta. Coste real: 0,18 $ del crédito gratis de Apify.
+El rendimiento compara cada cuenta consigo misma (vídeo ÷ su propia mediana).
+
+| Cuenta | Mediana de views | Por encima de 1,5x | Duración típica |
+|---|---|---|---|
+| @ibericaseguridad | 569 | 11 de 36 | s/d |
+| @elcerrajerodetiktok (Zaragoza) | 98.607 | 16 de 40 | ~66 s |
+| @bainba_es (mobiliario infantil) | 24.011 | 12 de 40 | ~37 s |
+
+## @elcerrajerodetiktok
+
+- **Funciona:** producto estrella enseñado en acción (puerta acorazada Thor grado 3:
+  9,8 M, 99x); avisos sobre un tipo de llave o bombín concreto («si tienes este tipo
+  de llave, cámbiala»: 1,9 M, 19x; «el bombín que más robos sufre»: 1,5 M, 16x); una
+  historia propia («la semana pasada me intentaron robar el coche»: 4x).
+- **También funciona, pero Ibérica no lo copia:** las demostraciones de apertura
+  (ganzúas, candados). Enseñan a abrir cerraduras, y eso queda fuera de los límites de
+  marca.
+- **No funciona:** textos con tono de anuncio de marca («La evolución de la seguridad
+  ha llegado»: 0,25x), fichas de producto sin historia (kit de alarma: 0,13x) y
+  contenido patrocinado.
+- **Cómo pide el contacto:** casi nunca (5 de 40 textos). Cuando lo hace, manda a su
+  tienda online. Vende a toda España; no es un modelo de llamadas locales.
+
+## @bainba_es
+
+- **Funciona:** historia real de una familia que compró («Llevábamos tiempo pensando
+  en dar este paso…»: 16,6x) y, sobre todo, **resolver dudas de compra**: «Seguro que
+  tú también tienes estas dudas» (4,3x), «Lo más preguntado: ¿A o B?» (3,5x), «A o B…
+  la GRAN DUDA» (3,1x), «Preguntas que debes hacerte» (2,8x), «El error que más
+  solemos cometer» (2,5x), «Ejemplos según lo que buscas» (1,8x).
+- **No funciona:** Halloween (0,23x), sorteo (0,36x), directo largo (0,54x),
+  publicaciones de ambiente («llega el otoño»: 0,56x).
+- **Cómo pide el contacto:** al final de los vídeos de dudas, sin presión:
+  «Contacta con nosotros si necesitas más ayuda», «escríbenos y te ayudamos»,
+  «guarda este vídeo para cuando…». Así convierte: ayuda a decidir y ofrece la mano.
+
+## Qué copiar para Ibérica (objetivo: llamadas de Almería capital y Poniente)
+
+1. **«La gran duda»**: comparativas para elegir (ya funcionó con Foxeo S vs HIS, 2,6x).
+2. **«Si tienes esta llave/cerradura…»**: el aviso concreto que hace mirar tu puerta
+   (es vuestro patrón ganador y también el de El cerrajero de TikTok).
+3. **Historia real de un cliente de la zona**, con su permiso (el número 1 de Bainba).
+4. **El producto estrella en acción**, con sonido (Fichet ya hizo 11x).
+5. **«El error que más se comete»** al cambiar cerradura o puerta.
+6. **Cierre que convierte**: ofrecer ayuda concreta y local por privado, con foto
+   («mándanos una foto de tu cerradura y te decimos si es de las vulnerables»).
+
+Evitar: anuncios genéricos de urgencias, tono de nota de prensa, sorteos y
+contenido solo de fechas (Halloween no funcionó ni en Bainba).
