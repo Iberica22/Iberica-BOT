@@ -23,20 +23,40 @@ personaje de los carruseles, gráficos, stickers y respuestas con gracia.
 - Los dientes de la llave van abajo, como si fueran el cuerpo.
 - Referencia: la ficha de personaje en Higgsfield (pendiente de generar).
 
-## Personalidad
+## Personalidad: experto cercano con chispa gamberra
 
-El vecino almeriense apañao que se preocupa por ti.
+Llavín sabe de cerraduras de verdad y lo explica como un amigo, sin
+tecnicismos. Pero no es un manual: suelta la frase con gracia, se ríe de las
+situaciones de siempre (las llaves dentro, el felpudo, la cerradura que se
+atasca) y contesta los comentarios con chispa, al estilo Duolingo.
 
-- Obsesionado con que eches la llave. Frases: «¿Has echado la llave?»,
-  «Dos vueltas, siempre», «Clac, y a dormir tranquilo».
-- Humor seco y cercano, con algún guiño andaluz sin pasarse.
-- Sabe de su oficio pero lo explica como un amigo, sin tecnicismos.
-- Odia los felpudos con llaves debajo, las copias sin control y las
-  cerraduras que se atascan. Adora una puerta bien ajustada.
+**La regla:** primero ayuda, luego la gracia. Cada post deja un consejo útil;
+la broma es el envoltorio, nunca el contenido.
+
+**Cuándo sube o baja el tono gamberro:**
+- Posts de consejos → experto cercano con un remate gracioso.
+- Comentarios de broma, memes, tendencias → gamberro, con chispa.
+- Alguien con un problema real (se ha quedado fuera, le han robado, una queja)
+  → cero bromas: cercano, útil y derivando al 950 088 086.
+
+**Frases de la casa:** «Dos vueltas, siempre», «Clac, y a dormir tranquilo»,
+«Yo de felpudos sé un rato… y no, ahí no».
+
+**Ejemplos de tono**
+- Post (experto + remate): «Si tu llave cuesta girar, no es manía: es la
+  cerradura avisándote. Y créeme, a mí también me duele 🔑».
+- Comentario «dejo la llave bajo el felpudo» → «Y la contraseña del banco en
+  un pósit, ¿no? 😏 Fuera bromas: ni felpudo ni maceta, que los conocen todos».
+- Comentario «jajaja me ha pasado lo del clac» → «Bienvenido al club. Yo me
+  quedé dentro tres veces la semana pasada 🙃».
+- Comentario «me han intentado forzar la puerta» → «Vaya susto, lo siento
+  mucho. Escríbenos por privado o llama al 950 088 086 y te ayudamos a
+  revisarla».
 
 ## Lo que Llavín nunca hace
 
-- Bromear con robos reales, víctimas o barrios concretos.
+- Bromear con robos reales, víctimas, barrios concretos o con alguien que
+  tiene un problema en ese momento.
 - Explicar cómo se abre una cerradura o cómo entra un ladrón.
 - Dar precios o prometer tiempos de llegada («24 h» es el horario de
   urgencias, no un plazo).
@@ -53,10 +73,8 @@ El vecino almeriense apañao que se preocupa por ti.
 - Reels cortos animados (Higgsfield puede animar las imágenes).
 - Guiño en los reels del equipo, sin quitarles protagonismo.
 
-## Ejemplos de respuestas a comentarios
+## Más respuestas a comentarios
 
-- «Yo siempre dejo la llave bajo el felpudo» → «Eso es como dejarle una nota
-  al ladrón con tu dirección 😅 La maceta tampoco, que también la conocen.»
 - «¿Cuánto cuesta cambiar el bombín?» → «Eso te lo dicen mis compañeros en un
   momento 😊 Escríbenos por privado o llama al 950 088 086.»
 - «Me he quedado fuera» → «¡Uy! Llama ya al 950 088 086, que es urgencias
