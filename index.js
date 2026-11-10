@@ -1571,16 +1571,21 @@ async function presupuestoSigueEnviado(seg) {
   }
 }
 
+// Devuelve true solo si el aviso ha salido de verdad. Va con la plantilla
+// de avisos internos («Aviso de Marta para el equipo…»), que se entiende
+// mejor que la de «Nuevo parte creado»; si falla, usa esa de respaldo.
 async function avisarPresu(seg, descripcion) {
   try {
     const dest = destinatarioPresupuestos();
     const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
-    await enviarNotificacionAgente(dest, {
-      nombre: seg.nombre || `Cliente ${String(seg.clave || "").slice(-9)}`,
-      telefono: String(seg.clave || "—").slice(-9),
-      direccion: "—", descripcion, apertura: ahoraStr, refParte: seg.ref, agente: "Seguimiento presupuestos",
-    });
-  } catch (e) { console.error("[Presupuestos] Aviso falló:", e.message); }
+    const cliente = seg.nombre || `Cliente ${String(seg.clave || "").slice(-9)}`;
+    const telefono = String(seg.clave || "—").slice(-9);
+    const ok = await enviarAvisoInterno(dest,
+      { origen: `Seguimiento de presupuestos (${seg.ref})`, cliente, telefono, que: descripcion },
+      { nombre: cliente, telefono, direccion: "—", descripcion, apertura: ahoraStr, refParte: seg.ref, agente: "Seguimiento presupuestos" });
+    if (!ok) console.error(`[Presupuestos] ❌ El aviso a ${dest?.nombre} NO salió: ${seg.ref}`);
+    return !!ok;
+  } catch (e) { console.error("[Presupuestos] Aviso falló:", e.message); return false; }
 }
 
 // Barrido de los mensajes de Marta: cada 30 min, en ventana comercial.
@@ -1626,8 +1631,14 @@ async function barridoToquesPresupuesto(forzarVentana) {
         guardarSeguimientosPresu();
         resumen.cierres++;
         registrarResultadoPresu(seg.ref, `no_enviable_aviso_al_equipo (${ultimoMotivo})`);
-        await avisarPresu(seg, `Presupuesto ${seg.ref}: Marta no pudo enviar su mensaje ${n + 1} por WhatsApp (${ultimoMotivo}) — conviene llamar`);
-        crearNotaParte(seg.caseId, `Seguimiento presupuesto (Marta): no se pudo enviar el mensaje ${n + 1} por WhatsApp (${ultimoMotivo}). Avisada la responsable para llamar.`);
+        const avisada = await avisarPresu(seg, `Presupuesto ${seg.ref}: Marta no pudo enviar su mensaje ${n + 1} por WhatsApp (${ultimoMotivo}). Conviene llamar.`);
+        // Si el aviso sale, no se repite en la agenda; si no sale, la agenda
+        // de las 10:00 lo vuelve a poner en «Llamar».
+        if (avisada) seg.avisos.no_enviable = Date.now();
+        guardarSeguimientosPresu();
+        crearNotaParte(seg.caseId, avisada
+          ? `Seguimiento presupuesto (Marta): no se pudo enviar el mensaje ${n + 1} por WhatsApp (${ultimoMotivo}). Avisada la responsable para llamar.`
+          : `Seguimiento presupuesto (Marta): no se pudo enviar el mensaje ${n + 1} por WhatsApp (${ultimoMotivo}). El aviso a la responsable tampoco salió: queda en la agenda de presupuestos de las 10:00 para llamar.`);
         continue;
       }
 
@@ -1705,6 +1716,7 @@ async function agendaPresupuestos({ forzar = false } = {}) {
       if (seg.estado === "fin_marta" && ahora >= (seg.ultimoMensajeTs || seg.enviadoTs) + PRESU_DIAS_LLAMADA_FIN * dia) {
         add("llamada_fin", "llamar", `no contestó a ${seg.enviados || 0} mensajes de Marta`);
       }
+      if (seg.estado === "no_enviable") add("no_enviable", "llamar", "Marta no pudo enviarle el WhatsApp");
       if (seg.volverLlamarTs && ahora >= seg.volverLlamarTs) add("volver", "llamar", "volver a llamar, lo acordó con Marta");
       if (seg.juntaTs && ahora >= seg.juntaTs + dia) add("junta", "llamar", "al administrador, tras la junta");
     }
@@ -1728,11 +1740,18 @@ async function agendaPresupuestos({ forzar = false } = {}) {
     // línea, y troceado si es largo.
     const texto = partes.join(" ");
     const trozos = texto.match(/.{1,900}(\s|$)/g) || [texto];
+    let todosOk = true;
     for (const [i, trozo] of trozos.entries()) {
-      await avisarPresu(
+      todosOk = (await avisarPresu(
         { nombre: `AGENDA DE PRESUPUESTOS ${hoy}${trozos.length > 1 ? ` (${i + 1}/${trozos.length})` : ""}`, ref: `${tareas.length} tareas`, clave: "—" },
         trozo.trim()
-      );
+      )) && todosOk;
+    }
+    // Si la agenda no ha llegado, no se da por enviada: se reintenta en el
+    // siguiente barrido (cada 30 min) en vez de perder las tareas del día.
+    if (!todosOk) {
+      console.error(`[Presupuestos] ❌ La agenda de ${hoy} no llegó a la responsable: se reintenta en el próximo barrido`);
+      return { ok: false, motivo: "aviso_no_entregado", tareas: tareas.length, texto: partes };
     }
     for (const t of tareas) {
       for (const k of t.claves) t.seg.avisos[k] = ahora;
@@ -1794,7 +1813,7 @@ function determinarDestinatarioNotificacion() {
 async function enviarNotificacionAgente(destinatario, datos) {
   if (!destinatario.memberId) {
     console.warn(`[Notificación] ⚠️ Sin memberId para ${destinatario.nombre}`);
-    return;
+    return false;
   }
   // Meta rechaza parámetros de plantilla con saltos de línea, tabuladores o
   // más de 4 espacios seguidos (p. ej. una respuesta de cliente citada).
@@ -1838,7 +1857,7 @@ async function enviarNotificacionAgente(destinatario, datos) {
 
     if (res.data?.ok === 1 && templateOk) {
       console.log(`[Notificación] ✅ Plantilla enviada a ${destinatario.nombre}`);
-      return;
+      return true;
     }
 
     // Plantilla no soportada por este endpoint — fallback a texto normal
@@ -1862,12 +1881,14 @@ async function enviarNotificacionAgente(destinatario, datos) {
     registrarWamidsEnvio(res2.data);
     if (res2.data?.ok === 1) {
       console.log(`[Notificación] ✅ Texto plano enviado a ${destinatario.nombre}`);
+      return true;
     } else {
       console.error(`[Notificación] ❌ Fallback también falló:`, JSON.stringify(res2.data));
     }
   } catch (err) {
     console.error(`[Notificación] ❌ Error enviando a ${destinatario.nombre}:`, err.response?.data || err.message);
   }
+  return false;
 }
 
 // ── Token de Zoho en memoria ────────────────────────────────
@@ -6009,8 +6030,7 @@ async function enviarAvisoInterno(destino, { origen, cliente, telefono, que }, d
       console.warn("[Avisos] aviso_interno_marta rechazada, uso la plantilla de siempre:", JSON.stringify(res.data?.sendResult?.result?.[0]?.error || res.data).slice(0, 200));
     } catch (e) { console.warn("[Avisos] aviso_interno_marta falló, uso la plantilla de siempre:", e.message); }
   }
-  await enviarNotificacionAgente(destino, datosRespaldo);
-  return false;
+  return await enviarNotificacionAgente(destino, datosRespaldo);
 }
 
 async function avisarNievesCampana(telefono, conv, descripcion, prioridad = false) {

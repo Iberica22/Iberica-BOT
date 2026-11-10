@@ -215,3 +215,11 @@ sobre el presupuesto: ¿has decidido aparcarlo? Si es así, con un simple
 - `GET /admin/api/test-presupuestos?forzar=1` — lanza sondeo + barrido a
   mano (forzar=1 se salta la ventana comercial; `&agenda=1` manda la agenda
   de María aunque ya haya salido hoy; PRESU_AUTO debe estar on).
+
+
+## Si Marta no puede enviar un mensaje o no llega un aviso
+
+- Si un mensaje de Marta no sale en 3 días, el presupuesto queda «no enviable», se avisa a la responsable y se escribe una nota en el parte.
+- La nota solo dice «Avisada la responsable para llamar» si el aviso salió de verdad. Si no salió, la nota lo dice y el presupuesto aparece en **📞 Llamar** de la agenda de las 10:00 («Marta no pudo enviarle el WhatsApp»).
+- Si la agenda de las 10:00 no llega, no se da por enviada: Marta la reintenta cada 30 minutos ese mismo día.
+- Los avisos de presupuestos salen con la plantilla de avisos internos («Aviso de Marta para el equipo…»). Si falla, sale la de siempre («Nuevo parte creado»).
