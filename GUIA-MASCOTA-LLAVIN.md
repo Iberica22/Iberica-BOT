@@ -21,7 +21,10 @@ personaje de los carruseles, gráficos, stickers y respuestas con gracia.
 - Seña de identidad: una anilla con un llavero verde (#4fa845) en forma de
   casita, como la del logo, colgada del agujero de la cabeza.
 - Los dientes de la llave van abajo, como si fueran el cuerpo.
-- Referencia: la ficha de personaje en Higgsfield (pendiente de generar).
+- Referencia fija (Higgsfield, pásalas siempre como imagen de referencia):
+  - Vistas de frente, 3/4, lado y espalda: generación `56599013-537d-4f10-992f-c3c6612a8ceb`.
+  - Expresiones (contento, preocupado, guiño, sorprendido, receloso, orgulloso):
+    generación `495e3aeb-ce4c-4317-ac07-3bc29000bbd9`.
 
 ## Personalidad: experto cercano con chispa gamberra
 
