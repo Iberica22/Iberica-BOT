@@ -152,8 +152,12 @@ da igual mayúsculas o minúsculas).
   contacto). {{1}} = nombre de pila. Dos notas del mismo móvil = un envío.
 - **No se envía** si tiene BAJA, WhatsApp Opt Out en Zoho, [NOCOM] en
   FactuSOL o ya se le mandó la T7. Sin móvil, tampoco.
-- **Mismo apellido y un nombre dentro del otro** con móviles distintos (Luis
-  / Juan Luis Vizcaíno): se quedan «en revisión» hasta confirmarlo.
+- **Mismo apellido y un nombre dentro del otro** con móviles distintos: se
+  quedan «en revisión» hasta confirmarlo. Juan Luis Vizcaíno (padre) y Luis
+  Vizcaíno (hijo) ya están marcados como personas distintas.
+- **Nombre raro** («ROSARIO (HIJO)», una empresa, un parte sin contacto):
+  en revisión hasta que alguien confirme a quién va.
+- Los nombres en mayúsculas salen bien escritos («Hola Cecilio»).
 - **Después:** nota en Zoho «Alta cliente de la casa (Marta): T7 enviada».
   Si falla, la nota dice que NO salió, no se reintenta sola y sale en
   «📞 Llamar» de la agenda de presupuestos de las 10:00.
@@ -186,7 +190,7 @@ Marta ya usa por defecto estos nombres: `nav26_puerta_fiestas`, `nav26_recordato
 | `T4_TEMPLATE` | Aniversario |
 | `T5_TEMPLATE` | Antes de vacaciones |
 | `T6_TEMPLATE` | Cambio de inquilino |
-| `ZOHO_CAMPO_OPTOUT` | Opcional. Nombre API de la casilla «WhatsApp Opt Out» (por defecto `WhatsApp_Opt_Out`) |
+| `ZOHO_CAMPO_OPTOUT` | Opcional. Nombre API de la casilla «WhatsApp Opt Out» (por defecto `woztellplatformintegration__WhatsApp_Opt_Out`, el real de Zoho) |
 | `CAMP_TEXTO_PRECIO_WEB` | Opcional. Texto del precio para las entradas web |
 
 Si la plantilla no está aprobada en Meta, el primer envío falla, la lista se para sola y se avisa a Nieves y a Mari.

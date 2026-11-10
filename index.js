@@ -766,7 +766,7 @@ async function registrarBaja(telefono, motivo, texto, { origen = "whatsapp" } = 
   }
   // Campañas: se cierra su conversación y se marca en Zoho (WhatsApp Opt Out)
   if (campanas.conversaciones[k]) { campanas.conversaciones[k].cerrada = Date.now(); guardarCampanas(); }
-  if (nueva) marcarOptOutZoho(k).then((r) => { if (bajas[k]) { bajas[k].zohoOptOut = r; guardarBajas(); } });
+  if (nueva) marcarOptOutZoho(k).then((r) => { if (bajas[k]) { bajas[k].zohoOptOut = r; bajas[k].campoOptOut = CAMPO_OPTOUT; guardarBajas(); } });
   if (nueva) {
     console.log(`[Bajas] ${k} dado de baja (${motivo}, ${origen})`);
     const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
@@ -5742,7 +5742,10 @@ function motivoNoEnviar(cfg, f, { recordatorio = false, prueba = false } = {}) {
 }
 
 // Zoho: casilla «WhatsApp Opt Out» del contacto (si existe)
-const CAMPO_OPTOUT = process.env.ZOHO_CAMPO_OPTOUT || "WhatsApp_Opt_Out";
+// Nombre API real de la casilla en Zoho (la crea la integración de Woztell).
+// Al leer se acepta cualquier campo que acabe en WhatsApp_Opt_Out.
+const CAMPO_OPTOUT = process.env.ZOHO_CAMPO_OPTOUT || "woztellplatformintegration__WhatsApp_Opt_Out";
+const tieneOptOut = (obj) => Object.keys(obj || {}).some((k) => (k === CAMPO_OPTOUT || /whatsapp_opt_out$/i.test(k)) && obj[k] === true);
 async function contactoZohoPorTelefono(k) {
   const token = await obtenerTokenZoho();
   const r = await axios.get(`https://www.zohoapis.eu/crm/v2/Contacts/search?phone=${k}`, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
@@ -5751,16 +5754,21 @@ async function contactoZohoPorTelefono(k) {
 async function optOutEnZoho(k) {
   try {
     const { contactos } = await contactoZohoPorTelefono(k);
-    return contactos.some((c) => c[CAMPO_OPTOUT] === true);
+    return contactos.some(tieneOptOut);
   } catch (_) { return false; }
 }
 async function marcarOptOutZoho(k) {
   try {
     const { token, contactos } = await contactoZohoPorTelefono(k);
     if (!contactos.length) return "sin_contacto_en_zoho";
-    await axios.put("https://www.zohoapis.eu/crm/v2/Contacts", { data: contactos.map((c) => ({ id: c.id, [CAMPO_OPTOUT]: true })) },
+    const r = await axios.put("https://www.zohoapis.eu/crm/v2/Contacts", { data: contactos.map((c) => ({ id: c.id, [CAMPO_OPTOUT]: true })) },
       { headers: { Authorization: `Zoho-oauthtoken ${token}`, "Content-Type": "application/json" } });
-    return "ok";
+    const malos = (r.data?.data || []).filter((d) => d.status !== "success");
+    if (malos.length) { console.error("[Bajas] Zoho no marcó WhatsApp Opt Out:", JSON.stringify(malos).slice(0, 200)); return "error"; }
+    // Comprobar que de verdad ha quedado marcada (un nombre de campo
+    // equivocado no da error: Zoho lo ignora sin decir nada).
+    const { contactos: despues } = await contactoZohoPorTelefono(k);
+    return despues.length && despues.every(tieneOptOut) ? "ok" : "no_quedo_marcada";
   } catch (e) {
     console.error("[Bajas] No se pudo marcar WhatsApp Opt Out en Zoho:", JSON.stringify(e.response?.data || e.message).slice(0, 200));
     return "error";
@@ -6300,6 +6308,9 @@ const ALTAS_DESDE = process.env.ALTAS_CASA_DESDE || "2026-11-06";
 const ALTAS_ACTIVO = () => (process.env.ALTAS_CASA || "on").toLowerCase() !== "off";
 const FACTUSOL_URL = (process.env.FACTUSOL_URL || "https://factusol-iberica.gerencia-cd3.workers.dev").replace(/\/$/, "");
 const altasCasa = { porTel: {}, notasVistas: {}, ultimoDia: null, ultimaLectura: null };
+// Comprobado con Nieves/FactuSOL: mismo apellido pero personas distintas
+// (Juan Luis Vizcaíno Verdejo, padre, y Luis Vizcaíno Expósito, hijo).
+const ALTAS_PERSONAS_DISTINTAS = ["639829007", "619386243", ...String(process.env.ALTAS_PERSONAS_DISTINTAS || "").split(/[\s,;]+/).map((t) => claveBaja(t)).filter((t) => t.length === 9)];
 let altasEnCurso = false;
 const guardarAltasCasa = () => redisSet("iberica:altasCasa", altasCasa);
 const esNotaAlta = (texto) => { const t = normalizaTxt(texto || "").toUpperCase(); return /\bREACT/.test(t) && /\bSI[\s-]*ALTA\b/.test(t); };
@@ -6356,9 +6367,10 @@ async function registroDeNota(n) {
   const completo = fuente.Full_Name || [fuente.First_Name, fuente.Last_Name].filter(Boolean).join(" ") || n.Parent_Id?.name || "";
   const pila = capitaliza(fuente.First_Name || String(completo).trim().split(/\s+/)[0] || "");
   return {
+    nombreFiable: !!(fuente.First_Name || fuente.Last_Name || fuente.Full_Name),
     modulo, id, contactoId: contacto?.id || null, movil, todosTels: tels, nombreCompleto: capitaliza(completo), nombre: pila,
     apellido: normalizaTxt(fuente.Last_Name || String(completo).split(/\s+/).slice(1).join(" ")),
-    optOut: (contacto || reg)[CAMPO_OPTOUT] === true,
+    optOut: tieneOptOut(contacto || reg),
   };
 }
 
@@ -6399,11 +6411,29 @@ async function altasCasaDiario({ forzar = false, simular = false } = {}) {
       let r;
       try { r = await registroDeNota(n); } catch (e) { resumen.avisos.push(`nota ${n.id}: no se pudo leer el registro (${e.message})`); continue; }
       if (!r.movil) { resumen.excluidas.push({ nombre: r.nombreCompleto, motivo: "sin_movil", telefonos: r.todosTels }); continue; }
-      const g = porTel[r.movil] || (porTel[r.movil] = { ...r, notas: [] });
+      let g = porTel[r.movil] || (porTel[r.movil] = { ...r, notas: [] });
+      // Si el mismo móvil sale en un contacto y en un parte, mandan los datos del contacto
+      if (g.modulo !== "Contacts" && r.modulo === "Contacts") g = porTel[r.movil] = { ...r, notas: g.notas, optOut: g.optOut };
       g.notas.push({ id: n.id, fecha: n.Created_Time, texto: String(n.Note_Content || n.Note_Title || "").slice(0, 80) });
       g.optOut = g.optOut || r.optOut;
     }
-    const grupos = Object.values(porTel);
+    let grupos = Object.values(porTel);
+    // Mismo nombre completo con otro teléfono (p. ej. una nota en el
+    // contacto y otra en un parte con otro número): una sola vez, con el
+    // móvil del contacto.
+    const porNombre = {};
+    for (const g of grupos) {
+      const n = normalizaTxt(g.nombreCompleto);
+      if (!n) continue;
+      const otro = porNombre[n];
+      if (!otro) { porNombre[n] = g; continue; }
+      const [queda, sobra] = otro.modulo === "Contacts" || g.modulo !== "Contacts" ? [otro, g] : [g, otro];
+      queda.notas.push(...sobra.notas);
+      sobra.sobra = `mismo nombre que ${queda.movil}`;
+      porNombre[n] = queda;
+    }
+    for (const g of grupos.filter((x) => x.sobra)) resumen.excluidas.push({ nombre: g.nombreCompleto, telefono: g.movil, motivo: `duplicado (${g.sobra})` });
+    grupos = grupos.filter((x) => !x.sobra);
     // Posibles duplicados con móviles distintos
     for (const a of grupos) for (const b of grupos) {
       if (a !== b && posibleMismaPersona(a, b)) { a.duplicadoDe = a.duplicadoDe || []; a.duplicadoDe.push(`${b.nombreCompleto} (${b.movil})`); }
@@ -6433,7 +6463,15 @@ async function altasCasaDiario({ forzar = false, simular = false } = {}) {
       else if (g.optOut || (!simular && await optOutEnZoho(g.movil))) motivo = "whatsapp_opt_out_en_zoho";
       else if (nocom && nocom[g.movil]?.nocom) motivo = "nocom_en_factusol";
       if (motivo) { reg("excluida", motivo); resumen.excluidas.push({ ...fila, motivo }); continue; }
-      if (g.duplicadoDe && !prev.confirmada) {
+      // Nombre de pila raro («ROSARIO (HIJO)», una empresa…): que lo mire una persona
+      const rarezaNombre = !g.nombre || !g.nombreFiable || /[()\d/]|\bhij[oa]\b|\bpadre\b|\bmadre\b/i.test(g.nombre) || NO_PARTICULAR.test(g.nombreCompleto) || NO_PARTICULAR.test(g.nombre)
+        ? `nombre a revisar («${g.nombre}» / «${g.nombreCompleto}»): confirmar a quién va` : null;
+      if (rarezaNombre && !prev.confirmada) {
+        reg("revision", rarezaNombre);
+        resumen.enRevision.push({ ...fila, motivo: rarezaNombre });
+        continue;
+      }
+      if (g.duplicadoDe && !prev.confirmada && !ALTAS_PERSONAS_DISTINTAS.includes(g.movil)) {
         reg("revision", `posible misma persona que ${g.duplicadoDe.join(", ")}`);
         resumen.enRevision.push({ ...fila, posibleDuplicado: g.duplicadoDe });
         continue;
@@ -6618,7 +6656,7 @@ async function generarListaDesdeZoho(campana, excluirTexto = "") {
     if (!movil) { fuera("sin_movil"); continue; }
     const k = claveBaja(movil);
     if (excluir.has(k)) { fuera("en_la_lista_de_excluidos"); continue; }
-    if (contacto[CAMPO_OPTOUT] === true) { fuera("whatsapp_opt_out_en_zoho"); continue; }
+    if (tieneOptOut(contacto)) { fuera("whatsapp_opt_out_en_zoho"); continue; }
     if (contacto.Account_Name?.name) { fuera("contacto_de_empresa"); continue; }
     const nombre = contacto.First_Name || contacto.Full_Name || ultimo.Related_To?.name || "";
     filas.push(`${k}\t${nombre}\t${ddmmaaaa(fecha)}\t${String(ultimo.Subject || "").replace(/[\t\r\n]+/g, " ")}`);
@@ -6850,6 +6888,19 @@ app.listen(PORT, async () => {
   setInterval(barridoToquesPresupuesto, 30 * 60 * 1000);
   // Campañas comerciales: cada minuto se mira si toca tanda (10:00–10:30)
   setInterval(() => tandaCampanas().catch((e) => console.error("[Campañas] Tanda falló:", e.message)), 60 * 1000);
+  // BAJAs anteriores marcadas en Zoho con un nombre de campo equivocado:
+  // se vuelven a marcar con la casilla real (una vez por BAJA).
+  setTimeout(async () => {
+    for (const [k, b] of Object.entries(bajas)) {
+      if (b.campoOptOut === CAMPO_OPTOUT && b.zohoOptOut === "ok") continue;
+      const r = await marcarOptOutZoho(k).catch(() => "error");
+      if (r === "error") continue; // se reintenta en el siguiente arranque
+      b.zohoOptOut = r; b.campoOptOut = CAMPO_OPTOUT;
+      await new Promise((ok) => setTimeout(ok, 1500));
+    }
+    guardarBajas();
+    console.log("[Bajas] Repaso de WhatsApp Opt Out en Zoho hecho");
+  }, 4 * 60 * 1000);
   // Altas «Cliente de la casa» (T7) desde las notas de Nieves: una vez al día
   setInterval(() => altasCasaDiario().catch((e) => console.error("[Altas T7] Falló:", e.message)), 5 * 60 * 1000);
 
