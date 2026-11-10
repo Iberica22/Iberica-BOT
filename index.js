@@ -6313,7 +6313,10 @@ const altasCasa = { porTel: {}, notasVistas: {}, ultimoDia: null, ultimaLectura:
 const ALTAS_PERSONAS_DISTINTAS = ["639829007", "619386243", ...String(process.env.ALTAS_PERSONAS_DISTINTAS || "").split(/[\s,;]+/).map((t) => claveBaja(t)).filter((t) => t.length === 9)];
 let altasEnCurso = false;
 const guardarAltasCasa = () => redisSet("iberica:altasCasa", altasCasa);
-const esNotaAlta = (texto) => { const t = normalizaTxt(texto || "").toUpperCase(); return /\bREACT/.test(t) && /\bSI[\s-]*ALTA\b/.test(t); };
+const esNotaAlta = (texto) => { const t = normalizaTxt(texto || "").toUpperCase(); return /\bREACT/.test(t) && /\bSI[^A-Z0-9]{0,3}ALTA\b/.test(t); };
+// Nombres de pila que en Zoho suelen estar sin tilde (MARIA, ENCARNACION…)
+const TILDES_NOMBRE = { maria: "María", encarnacion: "Encarnación", jose: "José", jesus: "Jesús", ramon: "Ramón", joaquin: "Joaquín", andres: "Andrés", ines: "Inés", angel: "Ángel", angeles: "Ángeles", victor: "Víctor", adrian: "Adrián", ivan: "Iván", ruben: "Rubén", sebastian: "Sebastián", martin: "Martín", fermin: "Fermín", agustin: "Agustín", tomas: "Tomás", nicolas: "Nicolás", lucia: "Lucía", sofia: "Sofía", rocio: "Rocío", monica: "Mónica", veronica: "Verónica", angela: "Ángela", concepcion: "Concepción", asuncion: "Asunción", purificacion: "Purificación", encarna: "Encarna", raul: "Raúl", oscar: "Óscar", alvaro: "Álvaro", ignacio: "Ignacio", gonzalo: "Gonzalo", herminia: "Herminia", maximo: "Máximo", estefania: "Estefanía", natalia: "Natalia", garcia: "García" };
+const conTildes = (nombre) => String(nombre || "").split(" ").map((p) => TILDES_NOMBRE[normalizaTxt(p)] || p).join(" ");
 const capitaliza = (s) => String(s || "").toLowerCase().replace(/(^|[\s-])([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase());
 const enviadosHoyAltas = () => { const hoy = diaMadrid(new Date()); return Object.values(altasCasa.porTel).filter((a) => a.ts && ["enviada", "fallida"].includes(a.estado) && diaMadrid(new Date(a.ts)) === hoy).length; };
 
@@ -6365,7 +6368,7 @@ async function registroDeNota(n) {
     .map((t) => claveBaja(t || "")).filter((t) => t.length === 9);
   const movil = tels.find((t) => /^[67]/.test(t)) || null;
   const completo = fuente.Full_Name || [fuente.First_Name, fuente.Last_Name].filter(Boolean).join(" ") || n.Parent_Id?.name || "";
-  const pila = capitaliza(fuente.First_Name || String(completo).trim().split(/\s+/)[0] || "");
+  const pila = conTildes(capitaliza(fuente.First_Name || String(completo).trim().split(/\s+/)[0] || ""));
   return {
     nombreFiable: !!(fuente.First_Name || fuente.Last_Name || fuente.Full_Name),
     modulo, id, contactoId: contacto?.id || null, movil, todosTels: tels, nombreCompleto: capitaliza(completo), nombre: pila,
