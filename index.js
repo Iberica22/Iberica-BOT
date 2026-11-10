@@ -325,6 +325,11 @@ const CHECKLIST_MENSAJE =
   "Si marcas algo en «Revisar», mándanos una foto por WhatsApp al 670 71 02 02 " +
   "y te orientamos gratis y sin compromiso.\n\nIbérica Seguridad · Almería";
 const pideChecklist = (texto) => /\b(check ?list|lista|guia)\b/.test(normalizaTxt(texto));
+// Publicaciones donde comentar «checklist» manda el PDF (ID de Instagram del
+// post o reel, separados por comas). Por defecto, el reel del checklist.
+const CHECKLIST_POSTS = String(process.env.CHECKLIST_POSTS || "17872193199648243")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+const CHECKLIST_RESPUESTA_PUBLICA = "¡Te lo acabamos de mandar por mensaje privado! 📩";
 
 // ── Horarios de activación del bot por canal ──────────────────
 // El bot solo responde automáticamente en las franjas indicadas.
@@ -3929,10 +3934,24 @@ async function manejarComentarioIG(body) {
   const commentId = body?.comment_id || body?.data?.id;
   if (!usuario || !canal || !memberId || !commentId) return;
   if (usuario === body?.to) return;               // comentario de la propia cuenta
-  // El checklist por comentario lo manda HeyMark (respuesta pública + DM);
-  // si Marta también contestara, el cliente recibiría el mensaje dos veces.
+  // Checklist: en las publicaciones de CHECKLIST_POSTS, quien comenta
+  // «checklist», «lista» o «guía» recibe el PDF por privado y una respuesta
+  // pública. No abre la cualificación de captación.
   if (pideChecklist(texto)) {
-    console.log(`[Comentarios] @${username} pide el checklist — lo atiende HeyMark`);
+    const mediaId = String(body?.data?.media?.id || "");
+    if (!CHECKLIST_POSTS.includes(mediaId)) {
+      console.log(`[Comentarios] @${username} pide el checklist en otra publicación (${mediaId || "sin id"}) — no se envía`);
+      return;
+    }
+    if (comentariosRespondidos[commentId]) return;
+    comentariosRespondidos[commentId] = Date.now();
+    if (botPausado(`${canal}_${usuario}`)) {
+      console.log(`[Comentarios] @${username} pide el checklist, pero el chat lo lleva una persona — no se envía`);
+      return;
+    }
+    console.log(`[Comentarios] @${username} pide el checklist — enviando enlace`);
+    await enviarCap({ telefono: usuario, channelId: canal, memberId }, CHECKLIST_MENSAJE);
+    await responderComentarioIG(commentId, username, CHECKLIST_RESPUESTA_PUBLICA);
     return;
   }
   if (comentariosRespondidos[commentId]) return;  // ya respondido
@@ -3974,23 +3993,23 @@ async function manejarComentarioIG(body) {
     ? `${regla.mensaje}${regla.enlace ? " 👉 " + regla.enlace : ""}`
     : CAP.bienvenida;
   await enviarCap(captacionLeads[usuario], mensajeDM);
+  await responderComentarioIG(commentId, username,
+    (regla?.publica || "").trim() || "¡Te hemos escrito por privado! 📩 Revisa tus mensajes 😊");
+}
 
-  // Respuesta pública bajo el comentario (texto fijo, nunca IA en público).
-  // Requiere INSTAGRAM_TOKEN en Railway: el Access Token del canal de
-  // Instagram que muestra Woztell en Canales → Instagram → Plataforma.
-  if (process.env.INSTAGRAM_TOKEN) {
-    try {
-      await axios.post(`https://graph.facebook.com/${commentId}/replies`, null, {
-        params: {
-          message: (regla?.publica || "").trim() || "¡Te hemos escrito por privado! 📩 Revisa tus mensajes 😊",
-          access_token: process.env.INSTAGRAM_TOKEN,
-        },
-        timeout: 10000,
-      });
-      console.log(`[Comentarios] ✅ Respuesta pública publicada bajo el comentario de @${username}`);
-    } catch (e) {
-      console.error("[Comentarios] ❌ No se pudo responder públicamente:", JSON.stringify(e.response?.data || e.message).slice(0, 300));
-    }
+// Respuesta pública bajo el comentario (texto fijo, nunca IA en público).
+// Requiere INSTAGRAM_TOKEN en Railway: el Access Token del canal de
+// Instagram que muestra Woztell en Canales → Instagram → Plataforma.
+async function responderComentarioIG(commentId, username, mensaje) {
+  if (!process.env.INSTAGRAM_TOKEN) return;
+  try {
+    await axios.post(`https://graph.facebook.com/${commentId}/replies`, null, {
+      params: { message: mensaje, access_token: process.env.INSTAGRAM_TOKEN },
+      timeout: 10000,
+    });
+    console.log(`[Comentarios] ✅ Respuesta pública publicada bajo el comentario de @${username}`);
+  } catch (e) {
+    console.error("[Comentarios] ❌ No se pudo responder públicamente:", JSON.stringify(e.response?.data || e.message).slice(0, 300));
   }
 }
 
