@@ -6495,8 +6495,11 @@ app.get("/admin/api/altas-casa", authAdmin, (req, res) => {
 app.get("/admin/api/altas-casa/revisar", authAdmin, async (req, res) => res.json(await altasCasaDiario({ simular: true })));
 // Confirmar que un móvil «en revisión» es correcto (se envía en la próxima vuelta) o descartarlo
 app.get("/admin/api/altas-casa/confirmar", authAdmin, (req, res) => {
-  const k = claveBaja(req.query.tel || ""); const a = altasCasa.porTel[k];
-  if (!a) return res.json({ ok: false, error: "Ese móvil no está en las altas. Mira /admin/api/altas-casa" });
+  const k = claveBaja(req.query.tel || "");
+  if (k.length !== 9) return res.json({ ok: false, error: "Pon el móvil: ?tel=6XXXXXXXX" });
+  // Se puede confirmar antes de que Marta lo vea (p. ej. padre e hijo con el
+  // mismo apellido: son personas distintas y los dos reciben la T7).
+  const a = altasCasa.porTel[k] || (altasCasa.porTel[k] = { estado: "pendiente", confirmadaAntes: true });
   if (req.query.descartar === "1") { a.estado = "descartada"; a.motivo = "descartada a mano"; }
   else { a.confirmada = true; if (["revision", "fallida"].includes(a.estado)) a.estado = "pendiente"; }
   altasCasa.ultimoDia = null; guardarAltasCasa();
