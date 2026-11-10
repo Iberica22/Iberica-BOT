@@ -35,15 +35,23 @@ Foto o vídeo corto del viento desde la tienda o una ventana. Texto: «Hoy sopla
 en Almería 🌬️ ¿Ventanas cerradas y persianas bajadas del todo?». Pegatina de
 encuesta: «¿Tu ventana silba?» Sí / No. Pegatina de enlace o mención al carrusel.
 
-## Reel opcional (equipo, 20–30 s, móvil en vertical)
+## Reel para grabar el día del aviso (~30 s, la dueña a cámara)
 
-1. (0–2 s) Un técnico junto a una ventana, en primer plano. Texto en pantalla:
-   «Aviso amarillo por viento en Almería». Dice: «Mañana sopla fuerte en Almería.
-   Antes de irte a dormir, mira esto».
-2. (2–15 s) Cierra una ventana con la manilla hasta abajo y baja la persiana del
-   todo. «Manilla hasta abajo. Persiana del todo, no a medias: a medias, el viento la
-   sacude».
-3. (15–22 s) Pasa la mano por el marco. «Si al cerrar entra aire o silba, la junta o
-   el cierre piden revisión».
-4. (22–28 s) A cámara: «Mándanos una foto por privado y te decimos qué necesita».
-Subtítulos siempre. Ubicación «Almería».
+Vertical, móvil, en una ventana de casa o de la tienda, **siempre desde dentro**
+(nada de balcones con rachas fuertes). Grabar cada bloque por separado.
+
+| Tiempo | Plano | Qué se dice | Texto en pantalla |
+|---|---|---|---|
+| 0–3 s | Persiana a medio bajar moviéndose con el viento, tú al lado | «Hoy hay aviso amarillo por viento en Almería. Si tu persiana está así… mal.» | VIENTO HOY EN ALMERÍA 🌬️ |
+| 3–10 s | Bajas la persiana del todo | «Persiana abajo del todo. A medias, el viento la sacude y se puede salir de las guías.» | Persiana: del todo, nunca a medias |
+| 10–16 s | Cierras la ventana y bajas la manilla (o echas el pestillo si es corredera) | «Ventana bien cerrada: manilla hasta abajo o pestillo echado.» | Manilla abajo o pestillo echado |
+| 16–23 s | Pasas la mano por el marco, acercas la oreja | «¿Y si al cerrar silba o entra aire? Es la junta o el cierre pidiendo revisión.» | ¿Silba o entra aire? |
+| 23–30 s | A cámara, plano medio | «Mándanos una foto por privado, dinos tu zona y te decimos qué necesita. Y si te quedas en la calle, urgencias 24 horas.» | 📩 Foto por privado · Urgencias 24 h 950 088 086 |
+
+Pie de foto: «Hoy sopla fuerte en Almería 🌬️ Persianas del todo, ventanas bien cerradas
+y, si algo silba o no cierra, mándanos una foto por privado con tu zona. 📞 Urgencias
+24 h: 950 088 086 · 📍 Almería capital y Poniente #AvisoAmarillo #VientoAlmeria
+#Almeria #RoquetasDeMar #ElEjido #CerrajerosAlmeria #IbericaSeguridad»
+
+Antes de publicar: subtítulos activados, ubicación «Almería», portada con el texto del
+primer plano. Publicar por la mañana.
