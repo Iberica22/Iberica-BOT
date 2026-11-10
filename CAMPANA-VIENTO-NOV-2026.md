@@ -35,23 +35,42 @@ Foto o vídeo corto del viento desde la tienda o una ventana. Texto: «Hoy sopla
 en Almería 🌬️ ¿Ventanas cerradas y persianas bajadas del todo?». Pegatina de
 encuesta: «¿Tu ventana silba?» Sí / No. Pegatina de enlace o mención al carrusel.
 
-## Reel para grabar el día del aviso (~30 s, la dueña a cámara)
+## Reel «La prueba del folio» (día del aviso, ~30 s, la dueña a cámara)
 
-Vertical, móvil, en una ventana de casa o de la tienda, **siempre desde dentro**
-(nada de balcones con rachas fuertes). Grabar cada bloque por separado.
+Escrito por el agente de contenido con los patrones de la matriz (gancho sonoro como
+«Así suena una Fichet», aviso que hace mirar lo tuyo, test casero y comparativa A/B).
+No repite los consejos del carrusel. Grabar siempre desde dentro de casa.
 
-| Tiempo | Plano | Qué se dice | Texto en pantalla |
-|---|---|---|---|
-| 0–3 s | Persiana a medio bajar moviéndose con el viento, tú al lado | «Hoy hay aviso amarillo por viento en Almería. Si tu persiana está así… mal.» | VIENTO HOY EN ALMERÍA 🌬️ |
-| 3–10 s | Bajas la persiana del todo | «Persiana abajo del todo. A medias, el viento la sacude y se puede salir de las guías.» | Persiana: del todo, nunca a medias |
-| 10–16 s | Cierras la ventana y bajas la manilla (o echas el pestillo si es corredera) | «Ventana bien cerrada: manilla hasta abajo o pestillo echado.» | Manilla abajo o pestillo echado |
-| 16–23 s | Pasas la mano por el marco, acercas la oreja | «¿Y si al cerrar silba o entra aire? Es la junta o el cierre pidiendo revisión.» | ¿Silba o entra aire? |
-| 23–30 s | A cámara, plano medio | «Mándanos una foto por privado, dinos tu zona y te decimos qué necesita. Y si te quedas en la calle, urgencias 24 horas.» | 📩 Foto por privado · Urgencias 24 h 950 088 086 |
+| Tiempo | Plano | Lo que dice | Texto en pantalla | Sonido |
+|---|---|---|---|---|
+| 0–2 s | Primerísimo plano del canto de una ventana cerrada, desde dentro, móvil pegado al marco | (1 s de silencio, luego bajito) «Almería, ¿oyes eso?» | 🌬️ ¿TU VENTANA HACE ESTO HOY EN ALMERÍA? | Silbido real del viento, sin música |
+| 2–6 s | Plano medio, ella junto a la ventana | «Hoy hay aviso amarillo por viento. Y eso no es un fantasma: es tu ventana diciéndote que no cierra.» | Aviso amarillo · Almería y Poniente | Silbido más bajo |
+| 6–14 s | Detalle: mete un folio entre hoja y marco, cierra con la manilla y tira; sale sin resistencia | «Prueba de diez segundos. Un folio, cierras y tiras. Si sale así de fácil… ahí no aprieta nada.» | PRUEBA DEL FOLIO 📄 Si sale solo = no ajusta | El papel al salir |
+| 14–20 s | Mismo plano en una ventana que sí ajusta: el folio se resiste o se rompe | «Y así es cuando cierra bien. Ni se mueve.» | ❌ No ajusta vs ✅ Ajusta | Tirón del papel |
+| 20–25 s | Plano medio, a cámara, media sonrisa | «El error más típico: meter una toalla en la rendija y a correr. Tapa el ruido, pero no arregla nada. Muchas veces es un ajuste o la junta.» | El error: la toalla 🙃 | Voz sola |
+| 25–30 s | Señala hacia abajo | «Hazla ahora en tus ventanas. Si el folio se te escapa, mándame una foto, dime si estás en Almería, Roquetas, El Ejido… y te digo qué necesita.» | 📸 Foto + tu zona por privado · Urgencias 24 h 950 088 086 | 1 s de silbido y corte seco |
 
-Pie de foto: «Hoy sopla fuerte en Almería 🌬️ Persianas del todo, ventanas bien cerradas
-y, si algo silba o no cierra, mándanos una foto por privado con tu zona. 📞 Urgencias
-24 h: 950 088 086 · 📍 Almería capital y Poniente #AvisoAmarillo #VientoAlmeria
-#Almeria #RoquetasDeMar #ElEjido #CerrajerosAlmeria #IbericaSeguridad»
+Opcional en el segundo 20, solo si ha pasado de verdad: «La semana pasada una clienta
+de Aguadulce pensaba que tenía un fantasma en el salón…».
 
-Antes de publicar: subtítulos activados, ubicación «Almería», portada con el texto del
-primer plano. Publicar por la mañana.
+Gancho alternativo (0–3 s): con un folio delante de la cámara, «Con este folio sabes en
+diez segundos si tu ventana aguanta el viento de hoy en Almería». Texto: «📄 1 folio =
+1 diagnóstico».
+
+Pie de foto: «Hoy hay aviso amarillo por viento en Almería 🌬️ Hazle la prueba del
+folio a tus ventanas: si el papel sale solo, no está cerrando bien. ¿Se te ha escapado?
+Mándanos una foto por privado con tu zona y te decimos qué necesita. 📞 Urgencias 24 h:
+950 088 086. Guarda el vídeo para el próximo levante 👇
+#Almería #AlmeríaCapital #RoquetasDeMar #ElEjido #PonienteAlmeriense #Aguadulce
+#VientoAlmeria #IbericaSeguridad». Ubicación: Almería.
+
+Grabación (una persona con el móvil):
+- Siempre dentro. El silbido se graba con el móvil pegado al canto de la ventana. Si
+  no silba ninguna, no se simula: se usa el gancho alternativo.
+- Audio: en los planos hablados, apartarse de la ventana para que el viento no tape la
+  voz; móvil a 30–40 cm.
+- Encuadre vertical a la altura de los ojos, móvil apoyado o con trípode de pinza; en
+  los detalles del folio, muy cerca y con el enfoque fijado tocando la pantalla.
+- Luz de cara a la ventana, nunca a contraluz; mejor a media mañana.
+- Cada fila, un clip. Empezar a hablar 1 s después de grabar y quedarse quieta 1 s al
+  acabar. Subtítulos automáticos de Instagram o CapCut, revisados.
