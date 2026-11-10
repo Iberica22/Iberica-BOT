@@ -47,7 +47,7 @@ comparar; eso necesita Apify.
 
 # Comparativa con referencias (Apify, 10 nov 2026)
 
-Últimos 40 reels de cada cuenta. Coste real: 0,18 $ del crédito gratis de Apify.
+Últimos 40 reels de cada cuenta. Coste real: 0,28 $ del crédito gratis de Apify.
 El rendimiento compara cada cuenta consigo misma (vídeo ÷ su propia mediana).
 
 | Cuenta | Mediana de views | Por encima de 1,5x | Duración típica |
@@ -55,6 +55,7 @@ El rendimiento compara cada cuenta consigo misma (vídeo ÷ su propia mediana).
 | @ibericaseguridad | 569 | 11 de 36 | s/d |
 | @elcerrajerodetiktok (Zaragoza) | 98.607 | 16 de 40 | ~66 s |
 | @bainba_es (mobiliario infantil) | 24.011 | 12 de 40 | ~37 s |
+| @cefibaseguridad (Valencia) | 1.115 | 16 de 40 | ~31 s |
 
 ## @elcerrajerodetiktok
 
@@ -83,6 +84,23 @@ El rendimiento compara cada cuenta consigo misma (vídeo ÷ su propia mediana).
 - **Cómo pide el contacto:** al final de los vídeos de dudas, sin presión:
   «Contacta con nosotros si necesitas más ayuda», «escríbenos y te ayudamos»,
   «guarda este vídeo para cuando…». Así convierte: ayuda a decidir y ofrece la mano.
+
+## @cefibaseguridad (la más parecida a Ibérica)
+
+Cerrajería de Valencia, tamaño cercano al vuestro (mediana 1.115 views, el doble que
+Ibérica). Publica casi a diario desde finales de octubre, reels de ~30 s.
+
+- **Funciona:** avisos concretos sobre la puerta del espectador: «Si tu bombillo se ve
+  desde fuera, te lo pueden romper en 30 segundos» (22x), «¿Tu puerta acorazada tiene
+  esta llave?» (5x, contado desde un trabajo real en una comunidad con robos),
+  «¿Tu puerta blindada tiene una llave así?» (3,6x), «La mayoría de bombines en España
+  se abren en…» (3,5x); noticias de robos con solución («Están atacando cerraduras con
+  ácido», con la Policía Nacional como fuente: 14x; «Las bandas siguen marcando
+  puertas»: 2,7x); cajas fuertes por tramos de precio (11x); y el consejo gratis de
+  echar la llave («Inviertes en seguridad y no la usas»: 3,7x).
+- **No funciona:** chistes sueltos y ganchos que no hablan de tu puerta (0,12x–0,15x).
+- **Cómo pide el contacto:** en el texto, nunca (0 de 40). Cierra con una pregunta
+  («¿Qué te parece? 👇», «¿Cuál elegirías?») o con «guárdalo y compártelo».
 
 ## Qué copiar para Ibérica (objetivo: llamadas de Almería capital y Poniente)
 
