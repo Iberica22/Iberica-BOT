@@ -1,6 +1,8 @@
 # Colaboración EVVA (ICS y MCS): guiones de reel
 
-**Versión vigente (v5):** `guiones/2026-11-12-evva-ics/`, `guiones/2026-11-12-evva-mcs/` y
+**Versión vigente (v6, sencilla):** `guiones/2026-11-12-evva/GUIONES.md`.
+
+**Versión anterior (v5, rechazada por no entenderse):** `guiones/2026-11-12-evva-ics/`, `guiones/2026-11-12-evva-mcs/` y
 `guiones/2026-11-12-evva-escalera/`. Escritos con la skill `guion` (.claude/skills/guion) sobre el
 método de `contenido-viral`, con 3 ganchos y 2 cuerpos por reel, y pasados por su comprobador sin
 avisos. Cada carpeta tiene `hablado.html` para leer al grabar. Lo de abajo es la versión anterior (v4).

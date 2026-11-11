@@ -219,3 +219,9 @@ desde 1996; urgencias 24 h 950 088 086; tienda en C/ San Leonardo 34, Almería. 
 - 2026-11-11. Gancho del MCS flojo; el suyo: «la llave que no has visto nunca».
 - 2026-11-11. La impresora 3D: la gente ni sabe ni cree que se pueda copiar así. Va en un reel aparte.
 - 2026-11-11. No decir que el MCS se usa en hospitales o negocios: el cliente piensa que no es para su casa.
+- 2026-11-11. Rechazó TODOS los guiones de la estructura de seis partes: «no se entienden ni tienen sentido».
+  Lo que funcionó: habla ella, natural, como en el mostrador; una sola idea por reel; frases de cliente
+  (nada de «código», «rotores», «bombín» sin necesidad: «lo que hace que abra», «cerradura»); el producto en
+  la mano en cada plano; un cierre que invita a preguntar el precio («¿cuánto costaría en tu puerta?
+  escríbeme»), sin darlo. Antes de entregar, pasar el guion por un lector que no sabe nada del tema.
+  Formato de entrega: tabla de dos columnas, «qué se ve» y «qué dices», sin etiquetas técnicas.
