@@ -147,9 +147,9 @@ Cuando un cliente acepta en la llamada, Nieves escribe en Zoho una nota con
 da igual mayúsculas o minúsculas).
 
 - **Qué plantilla, según el código de la nota:**
-  - **SI-ALTA** → **T7b**, sin la revisión ni el técnico. No se envía hasta
-    que esté aprobada en Meta y se ponga su nombre en la variable
-    `T7B_TEMPLATE` de Railway. Mientras, esos clientes esperan («espera_t7b»).
+  - **SI-ALTA** → **T7b** (`t7b_cliente_casa`), sin la revisión ni el
+    técnico. Si Meta la rechaza o no la encuentra, no se envía nada más ese
+    día, nadie pasa a «fallida» y se avisa en el resultado.
   - **SI-REV** y **SI-TRAB** → **T7**.
   - Si una persona tiene notas con varios códigos y alguno es SI-REV o
     SI-TRAB, recibe la T7. Solo recibe una de las dos, nunca ambas.
@@ -184,7 +184,7 @@ Para comprobar el [NOCOM] hace falta la misma clave en los dos sitios:
 
 ## Variables de Railway (solo si una plantilla se llama distinto)
 
-Marta ya usa por defecto estos nombres: `nav26_puerta_fiestas`, `nav26_recordatorio`, `t7_cliente_casa`, `t3_top_sin_contestar`, `t4_aniversario`, `t5_vacaciones` y `t6_inquilinos`. Las variables solo hacen falta si en Meta se crean con otro nombre.
+Marta ya usa por defecto estos nombres: `nav26_puerta_fiestas`, `nav26_recordatorio`, `t7_cliente_casa`, `t7b_cliente_casa`, `t3_top_sin_contestar`, `t4_aniversario`, `t5_vacaciones` y `t6_inquilinos`. Las variables solo hacen falta si en Meta se crean con otro nombre.
 
 
 | Variable | Plantilla |
@@ -193,7 +193,7 @@ Marta ya usa por defecto estos nombres: `nav26_puerta_fiestas`, `nav26_recordato
 | `NAV_TEMPLATE` | Navidad, principal (marketing, con los 3 botones) |
 | `NAV_TEMPLATE_RECORDATORIO` | Navidad, recordatorio único |
 | `T7_TEMPLATE` | Alta «Cliente de la casa» (utilidad), códigos SI-REV y SI-TRAB |
-| `T7B_TEMPLATE` | Alta «Cliente de la casa» sin revisión ni técnico, código SI-ALTA. **Sin esta variable no se envía a los SI-ALTA** |
+| `T7B_TEMPLATE` | Opcional. Alta «Cliente de la casa» sin revisión ni técnico, código SI-ALTA (por defecto `t7b_cliente_casa`; `off` la para) |
 | `T3_TEMPLATE` | Cliente top que no contestó |
 | `T4_TEMPLATE` | Aniversario |
 | `T5_TEMPLATE` | Antes de vacaciones |

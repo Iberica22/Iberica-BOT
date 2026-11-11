@@ -6325,7 +6325,13 @@ const esNotaAlta = (texto) => codigosAlta(texto).length > 0;
 // Qué plantilla le toca: T7 si alguna nota dice SI-REV o SI-TRAB; si solo SI-ALTA, T7b.
 // La T7b no se envía hasta que exista la variable T7B_TEMPLATE (plantilla aprobada en Meta).
 const versionAlta = (codigos) => (codigos.some((c) => c === "REV" || c === "TRAB") ? "t7" : "t7b");
-const plantillaAlta = (version) => (version === "t7" ? plantillaDe("T7_TEMPLATE") : process.env.T7B_TEMPLATE || null);
+// T7b aprobada en Meta (11/11/2026): por defecto «t7b_cliente_casa»; T7B_TEMPLATE
+// cambia el nombre y T7B_TEMPLATE=off la vuelve a parar.
+const plantillaAlta = (version) => {
+  if (version === "t7") return plantillaDe("T7_TEMPLATE");
+  const n = process.env.T7B_TEMPLATE || "t7b_cliente_casa";
+  return n.toLowerCase() === "off" ? null : n;
+};
 // Nombres de pila que en Zoho suelen estar sin tilde (MARIA, ENCARNACION…)
 const TILDES_NOMBRE = { maria: "María", encarnacion: "Encarnación", jose: "José", jesus: "Jesús", ramon: "Ramón", joaquin: "Joaquín", andres: "Andrés", ines: "Inés", angel: "Ángel", angeles: "Ángeles", victor: "Víctor", adrian: "Adrián", ivan: "Iván", ruben: "Rubén", sebastian: "Sebastián", martin: "Martín", fermin: "Fermín", agustin: "Agustín", tomas: "Tomás", nicolas: "Nicolás", lucia: "Lucía", sofia: "Sofía", rocio: "Rocío", monica: "Mónica", veronica: "Verónica", angela: "Ángela", concepcion: "Concepción", asuncion: "Asunción", purificacion: "Purificación", encarna: "Encarna", raul: "Raúl", oscar: "Óscar", alvaro: "Álvaro", ignacio: "Ignacio", gonzalo: "Gonzalo", herminia: "Herminia", maximo: "Máximo", estefania: "Estefanía", natalia: "Natalia", garcia: "García" };
 const conTildes = (nombre) => String(nombre || "").split(" ").map((p) => TILDES_NOMBRE[normalizaTxt(p)] || p).join(" ");
@@ -6517,6 +6523,15 @@ async function altasCasaDiario({ forzar = false, simular = false } = {}) {
         resumen.enviadas.push(fila);
       } else {
         const det = String(res.detalle || "error").slice(0, 160);
+        // La plantilla no existe o no está aprobada en Meta (132xxx): no es
+        // culpa del cliente. Sigue en espera, sin nota ni agenda, y se para
+        // la tanda para no repetir el fallo con todos.
+        if (/\b132\d{3}\b/.test(det)) {
+          reg(version === "t7b" ? "espera_t7b" : "pendiente", `la plantilla ${plantilla} no funciona en Meta (${det.slice(0, 60)})`);
+          resumen.avisos.push(`La plantilla ${plantilla} no funciona en Meta: no se ha enviado nada más. Revisar el nombre o la aprobación.`);
+          guardarAltasCasa();
+          break;
+        }
         reg("fallida", det);
         altasCasa.porTel[g.movil].plantilla = fila.plantilla;
         await notaEnZoho(g.modulo, g.id, "Alta cliente de la casa (Marta)", `Alta cliente de la casa (Marta): la ${fila.plantilla} NO salió (${det.slice(0, 80)}). Queda en la agenda de las 10:00 para llamar.`);
@@ -6554,7 +6569,7 @@ app.get("/admin/api/altas-casa", authAdmin, (req, res) => {
   const fecha = (ts) => (ts ? new Date(ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }) : null);
   res.json({ ok: true, activo: ALTAS_ACTIVO(), desde: ALTAS_DESDE, ultimoDia: altasCasa.ultimoDia, comprobarNocom: !!process.env.FACTUSOL_KEY,
     altas: Object.entries(altasCasa.porTel).map(([tel, a]) => ({ telefono: tel, nombre: a.nombreCompleto || a.nombre, estado: a.estado, plantilla: a.plantilla || null, motivo: a.motivo, enviada: fecha(a.ts), notas: (a.notas || []).length })),
-    t7bAprobada: !!process.env.T7B_TEMPLATE });
+    plantillaT7b: plantillaAlta("t7b") || "parada (T7B_TEMPLATE=off)" });
 });
 // Vista previa sin enviar nada: qué notas encuentra y qué haría con cada una
 app.get("/admin/api/altas-casa/revisar", authAdmin, async (req, res) => res.json(await altasCasaDiario({ simular: true })));
