@@ -1,4 +1,4 @@
-# Colaboración EVVA (ICS y MCS) — guiones de reel (v2)
+# Colaboración EVVA (ICS y MCS) — guiones de reel (v3)
 
 Reescritos por el agente de contenido tras las críticas de la dueña (v1 «básico y no
 diferenciador»; chiste sin sentido). Estructura viral en cada guion: GANCHO (0–2 s) →
@@ -6,89 +6,75 @@ BUCLE abierto → DESARROLLO (cambio cada 2–3 s) → PAYOFF → CTA distinto e
 Sin aperturas, sin precios, sin «imposible»; afirmaciones de seguridad «según EVVA».
 Fuentes al final.
 
-## 1) ICS — «La llave que esconde su propio código» (~32 s)
-Patrón: noticia + solución de Cefiba (14x) + «si tienes una llave así» de Ibérica (5,7x).
+## Cambios v3 (correcciones de la dueña)
+
+- ICS: «cortes escondidos» no se entendía → se explica como «un código tallado por
+  dentro de la llave». Fuera la tarjeta (la tienen todos los de gama alta). Cierre
+  coherente con el tema (fotos de llaves).
+- MCS: gancho «la llave que no has visto nunca»; el bucle es «lo que pasa dentro»;
+  fuera la impresora 3D (queda como idea de reel aparte) y fuera hospitales/aeropuertos
+  (alejaba al cliente de casa).
+- Gran duda: se decide por lo que quiere cada uno (día a día cómodo vs lo máximo), no
+  por piso/negocio.
+
+## 1) ICS — «La llave que una foto no puede copiar entera» (~31 s)
 
 | Tiempo | Fase | Plano | Se dice | Texto en pantalla |
 |---|---|---|---|---|
-| 0–2 | Gancho | Cenital: una mano hace una foto con el móvil a un llavero en el mostrador (clic de cámara) | «Almería: deja de subir fotos de tus llaves.» | SE HAN COPIADO LLAVES CON UNA FOTO 📸 |
-| 2–5 | Bucle | Dueña a cámara con la ICS cerrada en el puño | «Y hay una llave que ni siquiera enseña todo su código. Te la enseño al final.» | Lo raro viene al final 👀 |
-| 5–8 | Desarrollo | Móvil con los titulares de Scientific American y Xataka | «No lo digo yo: lo han contado Scientific American y Xataka.» | Fuente: Scientific American · Xataka |
-| 8–11 | Desarrollo | Dueña, plano medio | «Hasta criminólogos lo recomiendan: no publiques fotos de tus llaves.» | «No publiques fotos de tus llaves» |
-| 11–14 | Desarrollo | Técnico enseña una llave normal de perfil | «En una llave normal, todo el código está aquí. A la vista.» | TODO A LA VISTA |
-| 14–17 | Desarrollo | Cambia a la ICS y la gira despacio (clic metálico) | «Esta es la EVVA ICS.» | EVVA ICS |
-| 17–23 | Payoff | Macro del perfil de la ICS, enfoque lento | «Según EVVA, parte de los cortes van escondidos dentro de la llave. Desde fuera no se ven.» | PARTE DEL CÓDIGO: OCULTO |
-| 23–26 | Payoff | Tarjeta de propiedad junto a la llave (código tapado) | «La original solo la fabrica EVVA. Las copias, solo con esta tarjeta.» | Copias = solo con tarjeta |
-| 26–28 | Payoff | Mete la llave, la saca, le da la vuelta y la vuelve a meter | «Y entra por los dos lados.» | Reversible ↔️ |
-| 28–33 | CTA | Dueña a cámara | «¿Quieres saber qué bombín tienes? Mándanos una foto por privado con tu zona, de Almería capital o del Poniente, y te lo decimos.» | 📩 Foto + tu zona por privado |
+| 0–2 | Gancho | Una mano hace una foto con el móvil a un llavero (clic de cámara) | «Almería: deja de subir fotos de tus llaves.» | SE HAN COPIADO LLAVES DESDE UNA FOTO 📸 |
+| 2–5 | Bucle | Dueña con la ICS cerrada en el puño | «Ahora te enseño una llave que una foto no puede enseñar entera.» | Mira esta 👇 |
+| 5–9 | Desarrollo | Móvil con los titulares | «Lo han contado Scientific American y Xataka: con una foto se han llegado a copiar llaves.» | Fuente: Scientific American · Xataka |
+| 9–13 | Desarrollo | Técnico enseña una llave normal de lado | «En una llave normal, todo el código son estos dientes. Salen en cualquier foto.» | TODO A LA VISTA |
+| 13–19 | Payoff | La ICS muy de cerca; el dedo recorre el canto de la llave | «Esta es la EVVA ICS. Tiene sus dientes… y además un código tallado por dentro de la llave. Escondido. Lo que la foto no ve.» | CÓDIGO OCULTO DENTRO 🔒 |
+| 19–22 | Payoff | Dueña | «Según EVVA, eso la hace casi imposible de copiar sin autorización.» | Según EVVA |
+| 22–26 | Extra | Mete la llave, la saca, le da la vuelta y la vuelve a meter | «Y entra por los dos lados: se acabó buscar la posición a oscuras.» | Reversible ↔️ |
+| 26–31 | CTA | Dueña a cámara | «¿Alguna vez has subido una foto de tus llaves? Dímelo en comentarios. Y si quieres verla en mano, estamos en San Leonardo.» | 👇 ¿Has subido alguna? |
 
-Ganchos A/B: (A) la dueña tapa con el dedo la foto de un llavero en una publicación:
-«¿Esta foto en Almería? Bórrala.» — TU LLAVE EN REDES = RIESGO. (B) macro de la ICS:
-«Esta llave esconde parte de su código. Literal.» — UNA LLAVE CON SECRETOS 🤫.
+Pie: «#publi · Colaboración con @[EVVA España]. ¿Has subido alguna vez una foto de tus
+llaves? 📸 Investigadores y medios como Xataka han documentado copias de llaves hechas
+desde una foto. La EVVA ICS lleva, además de sus dientes, un código tallado por dentro
+que no se ve. Ven a verla a la tienda (C/ San Leonardo 34, Almería) o escríbenos.»
+#EVVA #CerrajerosAlmeria #Almeria #PonienteAlmeriense #ElEjido #RoquetasDeMar #SeguridadHogar
 
-Pie: «#publi · Colaboración con @[EVVA España, comprobar el @]. ¿Alguna vez has subido
-una foto de tus llaves? 📸 Investigadores y medios como Xataka lo han documentado: con una
-foto se han llegado a copiar llaves. Según EVVA, la ICS esconde parte de su código dentro
-de la llave. 📩 Escríbenos por privado con tu zona y te decimos qué bombín tienes.
-Urgencias 24 h: 950 088 086.» #EVVA #CerrajerosAlmeria #Almeria #PonienteAlmeriense
-#ElEjido #RoquetasDeMar #SeguridadHogar
-
-## 2) MCS — «Así suena una llave de hospital» (~33 s)
-Patrón: «Así suena una Fichet» de Ibérica (11x) + producto estrella en acción de
-@elcerrajerodetiktok.
+## 2) MCS — «La llave que no has visto nunca» (~30 s)
 
 | Tiempo | Fase | Plano | Se dice | Texto en pantalla |
 |---|---|---|---|---|
-| 0–2 | Gancho | Macro del bombín MCS: se saca la llave, fondo oscuro | «Esta llave lleva cuatro imanes. Y la tenemos en Almería.» | 🔊 ASÍ SUENA UNA LLAVE CON 4 IMANES |
-| 2–5 | Bucle | Dueña con la llave junto a la oreja | «Lo que suena al sacarla te lo explico al final. Sube el volumen.» | Sube el volumen 🔊 |
-| 5–8 | Desarrollo | Dueña, plano medio | «Es la EVVA MCS. Según EVVA, se usa en hospitales, aeropuertos y edificios del Gobierno.» | 🏥 ✈️ 🏛️ |
-| 8–11 | Desarrollo | Macro de la llave señalando los imanes | «Cuatro imanes y dos códigos mecánicos. EVVA lo llama triple seguridad.» | 4 imanes + 2 códigos |
-| 11–14 | Desarrollo | Técnico señala el cilindro | «Dentro hay ocho rotores magnéticos.» | 8 ROTORES |
-| 14–17 | Desarrollo (golpe) | Técnico enseña una imagen de una llave impresa en 3D (solo imagen o atrezo; nunca se prueba en un bombín) | «¿Una copia con impresora 3D? Según EVVA, por los imanes, no.» | ¿IMPRESIÓN 3D? ❌ (según EVVA) |
-| 17–20 | Desarrollo | Técnico señala el canal de la llave | «Y los rotores van separados de este canal: por aquí no se escanea el código magnético.» | Código magnético: aparte |
-| 20–25 | Payoff | Macro sin voz: entra la llave, gira y sale | (silencio) | 👂 Escucha… |
-| 25–28 | Payoff | Dueña | «Eso eran los rotores reordenándose. Cada vez que la sacas.» | Se reordenan al sacarla |
-| 28–30 | Payoff | Caja del producto | «Hecha en Austria, desarrollada con la Universidad Técnica de Viena. Más de 40 años en el mercado.» | 🇦🇹 +40 años |
-| 30–33 | CTA | Dueña a cámara | «¿La quieres oír en persona? Comenta IMÁN y te escribimos.» | Comenta 🧲 IMÁN |
+| 0–2 | Gancho | La llave MCS girando en la mano, muy de cerca | «Esta es la llave que no has visto nunca.» | LA LLAVE QUE NO HAS VISTO NUNCA 🔑 · ALMERÍA |
+| 2–5 | Bucle | Dueña con la llave en alto | «Y lo raro no es cómo es. Es lo que pasa dentro cuando la metes.» | Lo raro está dentro 👀 |
+| 5–9 | Desarrollo | Dedo sobre los círculos de la llave | «¿Ves estos círculos? Son imanes. Cuatro.» | 4 IMANES 🧲 |
+| 9–17 | Desarrollo | Bombín en la mano (o un dibujo sencillo en la edición) | «Dentro del bombín hay ocho ruedecitas magnéticas. Cuando metes la llave, los imanes las giran a su sitio. Si no son los imanes correctos, no abre.» | 8 ruedas magnéticas → giran con los imanes |
+| 17–21 | Payoff | Se saca la llave del bombín de muestra (si se oye algo, sin voz) | «Y al sacarla, se vuelven a descolocar.» | Al sacarla: se descolocan |
+| 21–25 | Payoff | Dueña | «Además lleva su código mecánico, como cualquier llave. EVVA lo llama triple seguridad.» | Imanes + código mecánico |
+| 25–30 | CTA | Dueña a cámara | «Es la EVVA MCS, lo más alto de EVVA para la puerta de tu casa. Escríbenos MCS por privado y te decimos si encaja en tu puerta.» | 📩 Escribe MCS |
 
-Antes de montarlo: comprobar que el giro se oye (móvil pegado al bombín, tienda en
-silencio). Si no se oye, usar el gancho A con otro plano. Para el CTA «IMÁN», crear la
-regla en /admin/comentarios (palabra «imán») o responder a mano.
+Pie: «#publi · Colaboración con @[EVVA España]. La llave que no has visto nunca 🔑🧲
+4 imanes que giran 8 ruedecitas dentro del bombín. Si no son los imanes correctos, no
+abre. Escríbenos MCS por privado y te decimos si encaja en tu puerta.» #EVVA #EVVAMCS
+#CerrajerosAlmeria #Almeria #ElEjido #Vicar #SeguridadHogar #Cerrajeria
 
-Ganchos A/B: (A) 1 s de pantalla negra solo con el sonido y luego la llave —
-ADIVINA QUÉ ES ESTE SONIDO 🔊 (Almería). (B) dueña con la llave en alto: «La llave de
-los aeropuertos… en una puerta de Almería.» — DE AEROPUERTO A TU PUERTA.
-
-Pie: «#publi · Colaboración con @[EVVA España]. 🔊 Con volumen: así suena la EVVA MCS.
-4 imanes, 2 códigos mecánicos y, según EVVA, se usa en hospitales y aeropuertos.
-🧲 Comenta IMÁN y te escribimos para verla en tienda. Urgencias 24 h: 950 088 086.»
-#EVVA #EVVAMCS #CerrajerosAlmeria #Almeria #ElEjido #Vicar #SeguridadNegocio #Cerrajeria
-
-## 3) «La gran duda: ICS o MCS» con datos curiosos (~34 s)
-Patrón: «la gran duda A o B» de Bainba + cierre con pregunta de Cefiba. No es una lista
-plana: cada dato empuja a un caso y el bucle se cierra con sonido y un dato sorpresa.
+## 3) «La gran duda: ICS o MCS» con datos curiosos (~33 s)
 
 | Tiempo | Fase | Plano | Se dice | Texto en pantalla |
 |---|---|---|---|---|
-| 0–2 | Gancho | Dueña alza de golpe una llave en cada mano | «Piso, chalet o negocio en Almería: una de estas dos es la tuya.» | ICS 🆚 MCS ¿CUÁL ES LA TUYA? |
-| 2–5 | Bucle | Dueña | «Cuatro datos curiosos y lo sabrás. El último no lo sabe casi nadie.» | 4 datos · el último 🤯 |
-| 5–9 | Dato 1 → ICS | Macro de la ICS | «Uno: la ICS esconde parte de su código dentro de la llave.» | Dato 1: código oculto |
-| 9–12 | Dato 1 | Tarjeta de propiedad | «Y las copias, solo con tarjeta. Ideal si en tu piso tienen llave la familia o quien limpia.» | → 🏢 PISO |
-| 12–15 | Dato 2 → MCS | Macro de la MCS | «Dos: la MCS lleva cuatro imanes. Según EVVA, va en hospitales y aeropuertos.» | Dato 2: 4 imanes |
-| 15–18 | Dato 2 | Técnico señala el cilindro | «Y lleva metal duro contra el taladro. Si tu negocio guarda mercancía de valor, mira esta.» | → 🏪 NEGOCIO |
-| 18–21 | Dato 3 | Las dos llaves en la palma | «¿Chalet? Depende de la puerta y de cuánta gente tenga llave. Por eso te lo miramos.» | → 🏡 CHALET: depende |
-| 21–26 | Dato 4 (sonido) | Técnico mete cada llave en su bombín de muestra | «Y escucha la diferencia.» | ICS 🔊 / MCS 🔊 |
-| 26–30 | Payoff | Dueña, primer plano | «Lo que casi nadie sabe: EVVA es una sigla. Algo así como "instituto de invención, ensayo y aprovechamiento". Viena, 1919.» | EVVA = Erfindungs-Versuchs-Verwertungs-Anstalt 🤯 |
-| 30–34 | CTA | Dueña a cámara | «¿Tu puerta es de piso, chalet o negocio? Dínoslo en comentarios y te decimos cuál.» | 👇 ¿Piso, chalet o negocio? |
+| 0–2 | Gancho | Dueña alza una llave en cada mano | «Dos llaves austriacas para tu casa en Almería. Solo una es para ti.» | ICS 🆚 MCS |
+| 2–5 | Bucle | Dueña | «Tres datos que casi nadie sabe, y al final eliges.» | 3 datos 🤯 |
+| 5–11 | Dato 1 | La ICS muy de cerca | «Uno: la ICS tiene un código escondido por dentro de la llave. Una foto no lo enseña entero.» | Dato 1: código oculto |
+| 11–17 | Dato 2 | La MCS muy de cerca, dedo sobre los imanes | «Dos: la MCS no tiene solo dientes. Lleva cuatro imanes que giran ruedecitas dentro del bombín.» | Dato 2: 4 imanes 🧲 |
+| 17–22 | Dato 3 | Las dos llaves en la palma | «Tres: las dos son de EVVA, una empresa familiar de Viena desde 1919. Su nombre es una sigla: algo así como "instituto de invención".» | Dato 3: Viena, 1919 🇦🇹 |
+| 22–29 | Decisión | Levanta una y luego la otra | «¿Quieres alta seguridad para el día a día, cómoda, que entra por los dos lados? ICS. ¿Quieres lo máximo que hace EVVA en tu puerta? MCS.» | Día a día → ICS · Lo máximo → MCS |
+| 29–33 | CTA | Dueña a cámara | «¿Tú cuál pondrías? Dímelo en comentarios.» | 👇 ¿ICS o MCS? |
 
-Ganchos A/B: (A) «Dos llaves austriacas, una sola pregunta, en Almería.» — LA GRAN
-DUDA. (B) primer plano de las dos llaves: «Esta se usa en aeropuertos. Esta esconde su
-código. ¿Cuál para tu casa?» — ¿ICS O MCS? (Almería).
+Pie: «#publi · Colaboración con @[EVVA España]. ¿ICS o MCS? 🔑 Una lleva un código
+escondido dentro de la llave; la otra, 4 imanes. 👇 ¿Cuál pondrías tú? Si tienes dudas
+con tu puerta, escríbenos por privado.» #EVVA #CerrajerosAlmeria #Almeria
+#PonienteAlmeriense #RoquetasDeMar #SeguridadHogar #Cerrajeria
 
-Pie: «#publi · Colaboración con @[EVVA España]. La gran duda: ¿ICS o MCS? 🔑 Una
-esconde parte de su código y la otra lleva 4 imanes. 👇 Cuéntanos si es para piso,
-chalet o negocio y te decimos cuál encaja. Urgencias 24 h: 950 088 086.» #EVVA
-#CerrajerosAlmeria #Almeria #PonienteAlmeriense #RoquetasDeMar #SeguridadHogar #Cerrajeria
+## Idea para otro reel
+
+«¿Se puede copiar una llave con una impresora 3D?» — la mayoría no lo sabe ni se lo
+cree; según EVVA, la MCS no se puede copiar así por los imanes. Necesita su propio
+guion (sin enseñar cómo se hace).
 
 ## Grabación (sesión de ~1 h)
 
