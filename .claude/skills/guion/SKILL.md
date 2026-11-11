@@ -225,3 +225,9 @@ desde 1996; urgencias 24 h 950 088 086; tienda en C/ San Leonardo 34, Almería. 
   la mano en cada plano; un cierre que invita a preguntar el precio («¿cuánto costaría en tu puerta?
   escríbeme»), sin darlo. Antes de entregar, pasar el guion por un lector que no sabe nada del tema.
   Formato de entrega: tabla de dos columnas, «qué se ve» y «qué dices», sin etiquetas técnicas.
+
+**Correcciones EVVA (12-nov-2026):**
+- Nunca vender como diferencia el control de copias ni la tarjeta: lo tienen todos los bombines de alta seguridad.
+- El formato «tres llaves de menos a más» ya está grabado dos veces: no repetirlo.
+- Para la MCS, la brújula es la app del móvil, no una brújula de verdad.
+- Primera frase de cinco palabras o menos, sobre algo que se ve.
