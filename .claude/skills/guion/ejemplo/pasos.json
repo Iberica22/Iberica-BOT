@@ -1,0 +1,94 @@
+{
+  "nombre": "ejemplo-ia-escribe-como-tu",
+  "tema": "Cómo hacer que la IA escriba como tú, en tres pasos",
+  "molde": "base",
+  "cta": {
+    "palabra": "VOZ",
+    "manda": "El prompt entero para sacar tus reglas de escritura de tus propios textos"
+  },
+  "ganchos": [
+    {
+      "forma": "prueba-en-pantalla",
+      "para": "imposible",
+      "dicho": "Este guion que estoy diciendo lo ha escrito la IA. Y suena a mí.",
+      "pantalla": "LO HA ESCRITO|LA IA",
+      "dolor": "Porque si se lo pides tal cual, te devuelve un texto que huele a IA."
+    },
+    {
+      "forma": "deja-de",
+      "para": "perdida",
+      "dicho": "Deja de pedirle a la IA que escriba «más natural».",
+      "pantalla": "DEJA DE PEDIRLE|«MÁS NATURAL»",
+      "dolor": "Por mucho que se lo pidas, te sigue sacando frases que nadie dice."
+    },
+    {
+      "forma": "cuando-empece",
+      "para": "secreto",
+      "dicho": "Cuando empecé con la IA, lo difícil no era que escribiera bien. Era que sonara a mí.",
+      "pantalla": "LO DIFÍCIL|ERA SONAR A MÍ",
+      "dolor": "Y seguro que te pasa: todo lo que te da se nota que es de IA."
+    }
+  ],
+  "tomas": [
+    {
+      "parte": "autoridad",
+      "texto": "Así escribo 4 guiones a la semana sin que se note.",
+      "titular": "Cuatro a la semana",
+      "pantalla": "Tú a cámara; cuatro guiones en fila detrás"
+    },
+    {
+      "parte": "rehook",
+      "texto": "Son tres pasos, y te llevan diez minutos.",
+      "titular": "En diez minutos",
+      "pantalla": "Un 1, un 2 y un 3"
+    },
+    {
+      "parte": "cuerpo",
+      "texto": "Primero, pásale diez textos tuyos: mensajes, correos o guiones que ya hayas grabado.",
+      "titular": "Tus textos, primero",
+      "pantalla": "Diez documentos que caen en el chat"
+    },
+    {
+      "parte": "cuerpo",
+      "texto": "Ahora que los tiene, pídele: «sácame mis reglas de escritura: cómo empiezo, qué palabras repito y cuáles no uso nunca».",
+      "titular": "Tus reglas",
+      "pantalla": "El prompt tecleándose y la lista de reglas que devuelve"
+    },
+    {
+      "parte": "cuerpo",
+      "texto": "Y por último, pega esas reglas en las instrucciones de tu proyecto. Así las lee antes de cada texto, sin que se las repitas.",
+      "titular": "Que las lea siempre",
+      "pantalla": "Las reglas pegándose en las instrucciones del proyecto"
+    },
+    {
+      "parte": "cuerpo",
+      "texto": "Por ejemplo, si tú nunca dices «sin lugar a dudas», la regla lo dice. Y deja de escribirlo.",
+      "titular": "Tu forma de hablar",
+      "pantalla": "«Sin lugar a dudas» tachado"
+    },
+    {
+      "parte": "conclusion",
+      "texto": "Si la IA lee cómo escribes, escribe como tú.",
+      "titular": "Suena a ti",
+      "pantalla": "Tú a cámara"
+    },
+    {
+      "parte": "iman",
+      "texto": "Te dejo el prompt entero para sacar tus reglas en un minuto.",
+      "titular": "Te lo mando",
+      "pantalla": "El prompt en un documento"
+    },
+    {
+      "parte": "cta",
+      "texto": "Sígueme, comenta VOZ y te lo envío por privado.",
+      "titular": "Comenta «VOZ»",
+      "pantalla": "La caja de comentario que se teclea sola"
+    }
+  ],
+  "fuentes": [
+    "Tuyo: 4 guiones a la semana. En tu guion, tu cifra de verdad",
+    "Tuyo, y solo si es verdad: que este guion lo ha escrito la IA con tus reglas",
+    "El prompt de los tres pasos: probado antes de grabar, con los textos de quien lo graba"
+  ],
+  "pie": "Cómo hacer que la IA escriba como tú, en tres pasos.\n\nSígueme y comenta VOZ y te envío el prompt por privado."
+}

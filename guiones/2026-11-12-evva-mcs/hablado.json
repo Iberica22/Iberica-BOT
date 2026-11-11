@@ -1,0 +1,134 @@
+{
+ "nombre": "2026-11-12-evva-mcs",
+ "tema": "La EVVA MCS abre con imanes que colocan una combinación dentro del bombín",
+ "molde": "base",
+ "cta": {
+  "palabra": "",
+  "manda": ""
+ },
+ "ganchos": [
+  {
+   "forma": "mira-esto",
+   "para": "imposible",
+   "dicho": "Mira esta llave. No has visto una igual en tu vida.",
+   "pantalla": "LA LLAVE QUE|NO HAS VISTO",
+   "dolor": "Parece una llave normal. Pero no abre solo con los dientes."
+  },
+  {
+   "forma": "sabias-que",
+   "para": "secreto",
+   "dicho": "¿Sabías que hay llaves de casa que abren con imanes?",
+   "pantalla": "LLAVES QUE ABREN|CON IMANES",
+   "dolor": "Y no es un truco de mago: se pone en una puerta normal."
+  },
+  {
+   "forma": "si-eres",
+   "para": "perdida",
+   "dicho": "Si crees que todas las llaves son iguales, mira esta.",
+   "pantalla": "TODAS IGUALES|NO",
+   "dolor": "Esta guarda la mitad de su secreto en unos círculos que casi nadie mira."
+  }
+ ],
+ "tomas": [
+  {
+   "parte": "autoridad",
+   "texto": "EVVA la fabrica en Austria desde hace más de 40 años.",
+   "titular": "Hecha en Austria",
+   "pantalla": "La llave MCS girando en la mano"
+  },
+  {
+   "parte": "rehook",
+   "texto": "Y lo raro de verdad pasa dentro de la cerradura.",
+   "titular": "Lo raro está dentro",
+   "pantalla": "Tú con la llave en alto"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "Fíjate en estos círculos de la llave. No son adorno: son cuatro imanes.",
+   "titular": "Mira los círculos",
+   "pantalla": "El dedo sobre los círculos, zoom rápido"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "Dentro del bombín hay ocho ruedecitas, como las de un candado de maleta.",
+   "titular": "Una combinación dentro",
+   "pantalla": "Un candado de maleta en la otra mano"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "Pero esas ruedecitas no las giras tú. Las giran los imanes al meter la llave.",
+   "titular": "Tú no haces nada",
+   "pantalla": "Metes la llave en el bombín de muestra"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "Si los imanes no son los correctos, no se colocan. Así que no abre.",
+   "titular": "Sin sus imanes, no abre",
+   "pantalla": "Tú a cámara, gesto de no"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "Y al sacarla, la combinación se descoloca sola.",
+   "titular": "Vuelve a cero",
+   "pantalla": "Sacas la llave despacio, sin hablar"
+  },
+  {
+   "parte": "conclusion",
+   "texto": "Una llave que no has visto nunca, con una combinación que nadie ve. Es la EVVA MCS.",
+   "titular": "Seguridad que no se ve",
+   "pantalla": "Tú a cámara con la llave"
+  },
+  {
+   "parte": "cta",
+   "texto": "Sígueme, que en el próximo te cuento si se puede copiar con una impresora 3D.",
+   "titular": "El próximo: impresora 3D",
+   "pantalla": "Tú señalando abajo"
+  }
+ ],
+ "cuerpo2": [
+  {
+   "parte": "autoridad",
+   "texto": "La hacen en Austria, y lleva más de 40 años en el mercado.",
+   "titular": "Hecha en Austria",
+   "pantalla": "La caja del producto"
+  },
+  {
+   "parte": "rehook",
+   "texto": "Lo que la hace distinta está en el bombín, no en la llave.",
+   "titular": "Mira el bombín",
+   "pantalla": "El bombín en la mano"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "¿Conoces los candados de maleta con ruedas de números? Imagínate uno con ocho.",
+   "titular": "Un candado de ocho",
+   "pantalla": "El candado de maleta girando"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "En este bombín, esas ocho ruedas las mueve la llave con sus cuatro imanes.",
+   "titular": "La llave las mueve",
+   "pantalla": "Los círculos de la llave, muy cerca"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "Con otros imanes, las ruedas no llegan a su sitio. Por lo tanto, no gira.",
+   "titular": "Otros imanes, no gira",
+   "pantalla": "Tú negando con la cabeza"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "Al sacar la llave, todo se vuelve a mezclar. EVVA lo llama triple seguridad: imanes y código mecánico.",
+   "titular": "Dos códigos en uno",
+   "pantalla": "Sacas la llave despacio"
+  }
+ ],
+ "fuentes": [
+  "EVVA MCS: más de 40 años en el mercado (EVVA, evva.com/since1919, MCS de 1979; otras fuentes dicen desde 1975), consultado 11-nov-2026",
+  "EVVA MCS: 4 imanes en la llave, 8 rotores magnéticos que se colocan con la llave y se reposicionan al sacarla; codificación magnética más mecánica, «triple seguridad» según EVVA (securityinformed.com, lockwiki.com/EVVA_MCS), consultado 11-nov-2026",
+  "Fabricada en Austria: EVVA y distribuidores, consultado 11-nov-2026",
+  "Comparación con el candado de maleta: explicación propia, pendiente del visto bueno de EVVA",
+  "«3D» de «impresora 3D» es el nombre de la tecnología, no una cifra"
+ ],
+ "pie": "La llave que no has visto nunca: cuatro imanes que colocan ocho ruedecitas dentro del bombín. #publi, colaboración con EVVA.\n\nSígueme, que en el próximo te cuento si se puede copiar con una impresora 3D."
+}

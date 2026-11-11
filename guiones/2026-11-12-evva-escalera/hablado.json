@@ -1,0 +1,101 @@
+{
+ "nombre": "2026-11-12-evva-escalera",
+ "tema": "Tres niveles de llave: la de toda la vida, la EVVA ICS y la EVVA MCS",
+ "molde": "base",
+ "cta": {
+  "palabra": "NIVEL",
+  "manda": "Por privado: le decimos en qué nivel está su puerta a partir de una foto del bombín (no de la llave)"
+ },
+ "ganchos": [
+  {
+   "forma": "lista-que-escala",
+   "para": "secreto",
+   "dicho": "Tres llaves de casa, de menos a más seguras. Empecemos por la tuya.",
+   "pantalla": "TRES LLAVES|EMPIEZA LA TUYA",
+   "dolor": "Porque casi seguro que la tuya es la de abajo del todo."
+  },
+  {
+   "forma": "novato-pro",
+   "para": "perdida",
+   "dicho": "Llave con los dientes a la vista: nivel uno. Llave con imanes: nivel tres.",
+   "pantalla": "¿EN QUÉ NIVEL|ESTÁ TU LLAVE?",
+   "dolor": "Y en medio hay una que guarda parte de su código por dentro."
+  },
+  {
+   "forma": "mira-esto",
+   "para": "imposible",
+   "dicho": "Mira: tres llaves, y solo una se copia en cualquier ferretería.",
+   "pantalla": "SOLO UNA|SE COPIA FÁCIL",
+   "dolor": "Las otras dos esconden algo que no se ve a simple vista."
+  }
+ ],
+ "tomas": [
+  {
+   "parte": "autoridad",
+   "texto": "Las dos buenas son de EVVA, que hace cerraduras en Viena desde 1919.",
+   "titular": "Viena, 1919",
+   "pantalla": "Tres llaves en fila sobre el mostrador"
+  },
+  {
+   "parte": "rehook",
+   "texto": "Son tres niveles, y el tercero no abre solo con dientes.",
+   "titular": "Del 1 al 3",
+   "pantalla": "Un 1, un 2 y un 3 sobre las llaves"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "Nivel uno: la de toda la vida. Todo su código son los dientes, a la vista.",
+   "titular": "La de siempre",
+   "pantalla": "La llave normal de lado"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "Por eso se puede copiar en casi cualquier sitio.",
+   "titular": "Se copia en cualquier sitio",
+   "pantalla": "Tú a cámara"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "Nivel dos: la EVVA ICS. Tiene dientes, pero además un código tallado por dentro de la llave.",
+   "titular": "Código escondido",
+   "pantalla": "La ICS muy cerca"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "Nivel tres: la EVVA MCS. Lleva cuatro imanes que colocan ocho ruedecitas dentro del bombín.",
+   "titular": "Con imanes",
+   "pantalla": "El dedo sobre los imanes de la MCS"
+  },
+  {
+   "parte": "cuerpo",
+   "texto": "Y un dato que casi nadie sabe: EVVA es una sigla en alemán. Significa algo así como instituto de invención.",
+   "titular": "Dato curioso",
+   "pantalla": "Rótulo: Erfindungs-Versuchs-Verwertungs-Anstalt"
+  },
+  {
+   "parte": "conclusion",
+   "texto": "Tres llaves, tres niveles. Ahora ya sabes en cuál está la tuya.",
+   "titular": "¿Cuál es la tuya?",
+   "pantalla": "Señalas las tres llaves"
+  },
+  {
+   "parte": "iman",
+   "texto": "Mándame una foto de tu bombín, no de la llave, y te digo su nivel.",
+   "titular": "Foto del bombín",
+   "pantalla": "Un bombín en una puerta"
+  },
+  {
+   "parte": "cta",
+   "texto": "Sígueme, comenta NIVEL y te escribo por privado.",
+   "titular": "Te lo miramos",
+   "pantalla": "Un comentario escrito: NIVEL"
+  }
+ ],
+ "fuentes": [
+  "EVVA: fundada en Viena en 1919, sigla de Erfindungs-Versuchs-Verwertungs-Anstalt (austria-forum.org, liquidfrontiers.com), consultado 11-nov-2026",
+  "EVVA ICS: código interno oculto en la llave (securityinformed.com, lockshop-warehouse.co.uk), consultado 11-nov-2026",
+  "EVVA MCS: 4 imanes en la llave y 8 rotores magnéticos (securityinformed.com, lockwiki.com/EVVA_MCS), consultado 11-nov-2026",
+  "Llave convencional: se copia sin restricción en cualquier duplicador; conocimiento del oficio (Ibérica)"
+ ],
+ "pie": "Tres llaves, tres niveles: la de toda la vida, la EVVA ICS con su código por dentro y la EVVA MCS con imanes. #publi, colaboración con EVVA.\n\nSígueme y comenta NIVEL y te lo envío por privado."
+}

@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guion · Tres niveles de llave: la de toda la vida, la EVVA ICS y la EVVA MCS</title>
+<style>
+  :root { --fondo:#f6f5f2; --panel:#fff; --linea:#e7e4dd; --texto:#1d1b18; --gris:#8a857c; --acento:#d6336c; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:20px 24px 40px; background:var(--fondo); color:var(--texto);
+    font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
+  .ancho { max-width:900px; margin:0 auto; }
+  header { display:flex; align-items:center; gap:14px; margin-bottom:14px; flex-wrap:wrap; }
+  h1 { font-size:20px; margin:0; }
+  .chip { font-size:12px; color:var(--gris); border:1px solid var(--linea); border-radius:99px; padding:3px 10px; background:var(--panel); white-space:nowrap; }
+  .chip b { color:var(--texto); }
+  .chip.mal b { color:#c92a2a; }
+  .hueco { flex:1; }
+  button { font:inherit; font-weight:600; white-space:nowrap; border-radius:8px; padding:8px 14px; cursor:pointer; border:1px solid var(--texto); background:var(--texto); color:#fff; }
+  h2 { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--gris); margin:22px 0 8px; }
+  .ganchos { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; }
+  .gancho { background:var(--panel); border:2px solid var(--linea); border-radius:12px; padding:12px; cursor:pointer; }
+  .gancho.elegido { border-color:var(--acento); }
+  .pantalla { background:#22201c; color:#fff; border-radius:8px; padding:16px 8px; text-align:center;
+    font:800 19px/1.15 "Arial Narrow","Helvetica Neue",sans-serif; text-transform:uppercase; letter-spacing:.01em; }
+  .dicho, .frase2 { margin-top:10px; font-size:16px; }
+  .frase2 { margin-top:6px; }
+  .motivo { font-size:11px; color:var(--gris); margin-bottom:8px; }
+  .motivo b { color:var(--acento); text-transform:uppercase; letter-spacing:.06em; }
+  .toma { background:var(--panel); border:1px solid var(--linea); border-radius:12px; padding:12px 14px; margin-bottom:8px;
+    display:grid; grid-template-columns:130px 1fr; gap:4px 14px; }
+  .parte { font-size:12px; color:var(--gris); padding-top:5px; }
+  .parte b { display:block; color:var(--texto); font-size:13px; }
+  .texto { font-size:20px; line-height:1.35; outline:none; border-radius:6px; padding:2px 4px; margin:-2px -4px; }
+  .texto:focus { background:#fff7fa; box-shadow:0 0 0 2px #f3c1d2; }
+  .gancho [contenteditable]:focus { outline:2px solid #f3c1d2; border-radius:6px; }
+  .edit { grid-column:2; display:flex; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--gris); }
+  .edit span { border:1px dashed var(--linea); border-radius:6px; padding:2px 8px; }
+  .edit i { font-style:normal; color:var(--texto); outline:none; }
+  .edit i:focus { background:#fff7fa; }
+  .larga { color:#c92a2a; }
+  .pie { background:var(--panel); border:1px solid var(--linea); border-radius:12px; padding:12px 14px; white-space:pre-wrap; outline:none; }
+  #guion { display:flex; flex-direction:column; }
+  #tomas, #cuerpo2 { display:contents; }   /* los dos cuerpos van en una columna, con el cierre debajo */
+  .toma[hidden] { display:none; }
+  .cuerpos { display:flex; align-items:center; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+  .cuerpos button { background:var(--panel); color:var(--texto); border-color:var(--linea); }
+  .cuerpos button.activo { background:var(--texto); color:#fff; border-color:var(--texto); }
+  textarea { display:none; width:100%; height:160px; margin-top:12px; font:12px/1.4 ui-monospace,Menlo,monospace; }
+  @media (max-width:600px) { .toma { grid-template-columns:1fr; } .edit { grid-column:1; } }
+</style></head><body><div class="ancho">
+<header>
+  <h1>Tres niveles de llave: la de toda la vida, la EVVA ICS y la EVVA MCS</h1><span class="chip">molde <b>base</b></span>
+  <span class="chip" id="dur"></span><span class="hueco"></span>
+  <button id="copiar">Copiar</button>
+</header>
+<h2>Graba cada gancho seguido de su frase 2 · el marcado va en el reel · arriba lo que se ve, abajo lo que dices</h2>
+<div class="ganchos" id="ganchos"></div>
+<h2>El guion · toca cualquier frase y cámbiala · una frase que vacías se quita</h2>
+<div class="cuerpos" id="cuerpos"><button data-cuerpo="1" class="activo">Cuerpo 1</button><button data-cuerpo="2">Cuerpo 2</button>
+  <span class="chip">el 2: lo mismo, con otras palabras y en otro orden · se graba al final, sin el cierre</span></div>
+<div id="guion"><div id="tomas"></div><div id="cuerpo2"></div></div>
+<h2>El pie del reel</h2>
+<div class="pie" id="pie" contenteditable="true"></div>
+<textarea id="copia" readonly></textarea>
+</div>
+<script>
+const G = {"nombre": "2026-11-12-evva-escalera", "tema": "Tres niveles de llave: la de toda la vida, la EVVA ICS y la EVVA MCS", "molde": "base", "cta": {"palabra": "NIVEL", "manda": "Por privado: le decimos en qué nivel está su puerta a partir de una foto del bombín (no de la llave)"}, "ganchos": [{"forma": "lista-que-escala", "para": "secreto", "dicho": "Tres llaves de casa, de menos a más seguras. Empecemos por la tuya.", "pantalla": "TRES LLAVES|EMPIEZA LA TUYA", "dolor": "Porque casi seguro que la tuya es la de abajo del todo."}, {"forma": "novato-pro", "para": "perdida", "dicho": "Llave con los dientes a la vista: nivel uno. Llave con imanes: nivel tres.", "pantalla": "¿EN QUÉ NIVEL|ESTÁ TU LLAVE?", "dolor": "Y en medio hay una que guarda parte de su código por dentro."}, {"forma": "mira-esto", "para": "imposible", "dicho": "Mira: tres llaves, y solo una se copia en cualquier ferretería.", "pantalla": "SOLO UNA|SE COPIA FÁCIL", "dolor": "Las otras dos esconden algo que no se ve a simple vista."}], "tomas": [{"parte": "autoridad", "texto": "Las dos buenas son de EVVA, que hace cerraduras en Viena desde 1919.", "titular": "Viena, 1919", "pantalla": "Tres llaves en fila sobre el mostrador"}, {"parte": "rehook", "texto": "Son tres niveles, y el tercero no abre solo con dientes.", "titular": "Del 1 al 3", "pantalla": "Un 1, un 2 y un 3 sobre las llaves"}, {"parte": "cuerpo", "texto": "Nivel uno: la de toda la vida. Todo su código son los dientes, a la vista.", "titular": "La de siempre", "pantalla": "La llave normal de lado"}, {"parte": "cuerpo", "texto": "Por eso se puede copiar en casi cualquier sitio.", "titular": "Se copia en cualquier sitio", "pantalla": "Tú a cámara"}, {"parte": "cuerpo", "texto": "Nivel dos: la EVVA ICS. Tiene dientes, pero además un código tallado por dentro de la llave.", "titular": "Código escondido", "pantalla": "La ICS muy cerca"}, {"parte": "cuerpo", "texto": "Nivel tres: la EVVA MCS. Lleva cuatro imanes que colocan ocho ruedecitas dentro del bombín.", "titular": "Con imanes", "pantalla": "El dedo sobre los imanes de la MCS"}, {"parte": "cuerpo", "texto": "Y un dato que casi nadie sabe: EVVA es una sigla en alemán. Significa algo así como instituto de invención.", "titular": "Dato curioso", "pantalla": "Rótulo: Erfindungs-Versuchs-Verwertungs-Anstalt"}, {"parte": "conclusion", "texto": "Tres llaves, tres niveles. Ahora ya sabes en cuál está la tuya.", "titular": "¿Cuál es la tuya?", "pantalla": "Señalas las tres llaves"}, {"parte": "iman", "texto": "Mándame una foto de tu bombín, no de la llave, y te digo su nivel.", "titular": "Foto del bombín", "pantalla": "Un bombín en una puerta"}, {"parte": "cta", "texto": "Sígueme, comenta NIVEL y te escribo por privado.", "titular": "Te lo miramos", "pantalla": "Un comentario escrito: NIVEL"}], "fuentes": ["EVVA: fundada en Viena en 1919, sigla de Erfindungs-Versuchs-Verwertungs-Anstalt (austria-forum.org, liquidfrontiers.com), consultado 11-nov-2026", "EVVA ICS: código interno oculto en la llave (securityinformed.com, lockshop-warehouse.co.uk), consultado 11-nov-2026", "EVVA MCS: 4 imanes en la llave y 8 rotores magnéticos (securityinformed.com, lockwiki.com/EVVA_MCS), consultado 11-nov-2026", "Llave convencional: se copia sin restricción en cualquier duplicador; conocimiento del oficio (Ibérica)"], "pie": "Tres llaves, tres niveles: la de toda la vida, la EVVA ICS con su código por dentro y la EVVA MCS con imanes. #publi, colaboración con EVVA.\n\nSígueme y comenta NIVEL y te lo envío por privado."}, PPS = 4.4, FRASE_MAX = 20, RANGO = [30, 60], PARTE = {"autoridad": "Autoridad", "rehook": "Rehook", "cuerpo": "Cuerpo", "conclusion": "La idea que se lleva", "iman": "Lo que mandas", "cta": "CTA"}, MOTIVO = {"imposible": "algo que no sabías que ya se puede", "dinero": "dinero ganado, ahorrado o quemado", "gratis": "regalan algo que cuesta", "identidad": "una frase sobre ti que no se espera", "perdida": "te estás quedando atrás o lo haces mal", "drama": "una pelea o un giro entre grandes", "secreto": "algo que casi nadie cuenta"};
+const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x !== undefined) n.textContent = x; return n; };
+const cuenta = (t) => t.trim().split(/\s+/).filter(Boolean).length;
+const plano = (n) => n.innerText.replace(/\s+/g, " ").trim();
+let elegido = 0;
+
+// Cada gancho, con lo que se ve arriba, lo que dices y su frase 2 pegada: se graban seguidos
+const ganchos = document.getElementById("ganchos");
+G.ganchos.forEach((h, i) => {
+  const caja = el("div", "gancho" + (i === 0 ? " elegido" : ""));
+  const motivo = el("div", "motivo");
+  motivo.append(el("b", "", h.para ?? ""), document.createTextNode((MOTIVO[h.para] ? " · " + MOTIVO[h.para] : "") + (h.forma ? " · " + h.forma : "")));
+  const pantalla = el("div", "pantalla");
+  (h.pantalla ?? "").split("|").forEach((linea) => pantalla.append(el("div", "", linea.trim())));
+  const dicho = el("div", "dicho", h.dicho ?? "");
+  const frase2 = el("div", "frase2", h.dolor ?? "");
+  for (const n of [pantalla, dicho, frase2]) { n.contentEditable = "true"; n.addEventListener("input", medir); }
+  caja.append(motivo, pantalla, dicho, frase2);
+  caja.addEventListener("click", () => {
+    if (i === elegido) return;
+    elegido = i;
+    [...ganchos.children].forEach((c, j) => c.classList.toggle("elegido", j === i));
+    medir();
+  });
+  ganchos.append(caja);
+});
+
+const tomas = document.getElementById("tomas"), cuerpo2 = document.getElementById("cuerpo2");
+if (!G.cuerpo2?.length) document.getElementById("cuerpos").remove();
+// Con dos cuerpos se ve el reel entero con uno u otro, y el cierre siempre abajo
+const CIERRE = ["conclusion", "iman", "cta"];
+const pintar = (t, donde) => {
+  const caja = el("div", "toma");
+  const parte = el("div", "parte");
+  parte.append(el("b", "", PARTE[t.parte] ?? t.parte), el("span"));
+  const texto = el("div", "texto", t.texto);
+  texto.contentEditable = "true";
+  texto.addEventListener("input", medir);
+  const edit = el("div", "edit");
+  const campo = (etiqueta, valor) => {
+    const v = el("i", "", valor);
+    v.contentEditable = "true";
+    const chip = el("span", "", etiqueta + ": ");
+    chip.append(v);
+    return chip;
+  };
+  if (t.titular) edit.append(campo("arriba", t.titular));
+  if (t.pantalla) edit.append(campo("se ve", t.pantalla));
+  caja.append(parte, texto, edit);
+  const cierre = CIERRE.includes(t.parte);
+  caja.style.order = cierre ? 2 : 1;
+  if (G.cuerpo2?.length && !cierre) caja.dataset.cuerpo = donde === cuerpo2 ? "2" : "1";
+  donde.append(caja);
+};
+G.tomas.forEach((t) => pintar(t, tomas));
+(G.cuerpo2 ?? []).forEach((t) => pintar(t, cuerpo2));
+document.getElementById("pie").textContent = G.pie ?? "";
+
+function medir() {
+  const tarjeta = ganchos.children[elegido];
+  let total = cuenta(tarjeta.querySelector(".dicho").textContent) + cuenta(tarjeta.querySelector(".frase2").textContent);
+  for (const caja of [...tomas.children, ...cuerpo2.children]) {
+    const texto = caja.querySelector(".texto").textContent;
+    const n = cuenta(texto);
+    if (!caja.hidden) total += n;   // lo que dura el reel con el cuerpo que se ve
+    const larga = texto.split(/(?<=[.!?…:])\s+/).some((f) => cuenta(f) > FRASE_MAX);
+    const nota = caja.querySelector(".parte span");
+    nota.textContent = (n / PPS).toFixed(1) + " s" + (larga ? " · frase larga" : "");
+    nota.className = larga ? "larga" : "";
+  }
+  const s = total / PPS, dur = document.getElementById("dur");
+  dur.innerHTML = "<b>" + Math.round(s) + " s</b> · " + total + " palabras · lo suyo, de " + RANGO[0] + " a " + RANGO[1];
+  dur.className = "chip" + (s > RANGO[1] || s < RANGO[0] ? " mal" : "");
+}
+medir();
+const verCuerpo = (n) => {
+  document.querySelectorAll(".toma[data-cuerpo]").forEach((c) => (c.hidden = c.dataset.cuerpo !== n));
+  document.querySelectorAll("#cuerpos button").forEach((b) => b.classList.toggle("activo", b.dataset.cuerpo === n));
+  medir();
+};
+document.querySelectorAll("#cuerpos button").forEach((b) => b.addEventListener("click", () => verCuerpo(b.dataset.cuerpo)));
+if (G.cuerpo2?.length) verCuerpo("1");
+
+// «Copiar»: el guion como lo has dejado, para pegárselo a Claude o tenerlo en el móvil al grabar
+const boton = document.getElementById("copiar");
+boton.addEventListener("click", async () => {
+  const orden = [elegido, ...G.ganchos.map((_, i) => i).filter((i) => i !== elegido)];
+  const lineaGancho = (i) => {
+    const caja = ganchos.children[i];
+    const p = caja.querySelector(".pantalla");   // una línea por cada div que hay dentro
+    const pantalla = (p.children.length ? [...p.children].map((n) => n.textContent.trim()) : [p.textContent.trim()]).filter(Boolean).join(" / ");
+    return "Gancho " + (i + 1) + (i === elegido ? " (el del reel)" : "") + ": " + plano(caja.querySelector(".dicho"))
+      + " " + plano(caja.querySelector(".frase2")) + " [pantalla: " + pantalla + "]";
+  };
+  const dichas = (lista) => [...lista.children].map((c) => plano(c.querySelector(".texto"))).filter(Boolean);
+  const lineas = [
+    "Guion de «" + (G.tema ?? G.nombre) + "», como lo dejo:",
+    ...orden.map(lineaGancho),
+    ...dichas(tomas).map((t, i) => (i + 1) + ". " + t),
+    ...dichas(cuerpo2).map((t, i) => "Cuerpo 2, " + (i + 1) + ". " + t),
+    "Pie: " + document.getElementById("pie").innerText.trim(),
+  ];
+  const texto = lineas.join("\n");
+  try {
+    await navigator.clipboard.writeText(texto);
+    boton.textContent = "Copiado";
+    setTimeout(() => (boton.textContent = "Copiar"), 1500);
+  } catch {
+    const copia = document.getElementById("copia");
+    copia.value = texto; copia.style.display = "block"; copia.select();
+  }
+});
+</script></body></html>

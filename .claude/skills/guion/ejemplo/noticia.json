@@ -1,0 +1,83 @@
+{
+  "nombre": "2024-10-09-nobel-alphafold",
+  "tema": "El Nobel de Química para AlphaFold, la IA de Google, contado como noticia",
+  "molde": "noticia",
+  "cta": {
+    "palabra": ""
+  },
+  "ganchos": [
+    {
+      "forma": "acaba-de-cambiar",
+      "para": "drama",
+      "dicho": "Dos científicos de Google acaban de ganar el Nobel con una IA.",
+      "pantalla": "UNA IA|GANA EL NOBEL",
+      "dolor": "Y aunque no seas científico, te toca: de esto salen tus medicinas."
+    },
+    {
+      "forma": "antes-ahora",
+      "para": "imposible",
+      "dicho": "Antes, ver la forma de una proteína costaba años de laboratorio. Ahora, minutos.",
+      "pantalla": "DE AÑOS|A MINUTOS",
+      "dolor": "Y de esa forma dependen casi todas las medicinas que tomas."
+    },
+    {
+      "forma": "palabra-nueva",
+      "para": "secreto",
+      "dicho": "Hay una palabra que vas a oír mucho: AlphaFold.",
+      "pantalla": "APÚNTATE|ESTA PALABRA",
+      "dolor": "Es la IA por la que acaban de dar el Nobel de Química."
+    }
+  ],
+  "tomas": [
+    {
+      "parte": "autoridad",
+      "texto": "Comparten el Nobel de Química Demis Hassabis y John Jumper, de Google DeepMind, por AlphaFold.",
+      "titular": "El Nobel, para AlphaFold",
+      "pantalla": "La foto del anuncio del Nobel"
+    },
+    {
+      "parte": "rehook",
+      "texto": "¿Y qué tiene que ver contigo?",
+      "titular": "¿Y a ti qué?",
+      "pantalla": "Tú a cámara, primer plano"
+    },
+    {
+      "parte": "cuerpo",
+      "texto": "Casi todas las medicinas funcionan encajando en una proteína, como una llave en su cerradura.",
+      "titular": "Llave y cerradura",
+      "pantalla": "Una llave que entra en una cerradura con forma de proteína"
+    },
+    {
+      "parte": "cuerpo",
+      "texto": "Para hacer la llave, primero hay que ver la cerradura. Y verla podía costarle a un investigador su doctorado entero.",
+      "titular": "Un doctorado por proteína",
+      "pantalla": "Un laboratorio y un calendario que pasa años"
+    },
+    {
+      "parte": "cuerpo",
+      "texto": "AlphaFold la saca en minutos. Y ya ha sacado la de más de 200 millones de proteínas.",
+      "titular": "200 millones ya",
+      "pantalla": "La base de datos de AlphaFold, con un contador que sube"
+    },
+    {
+      "parte": "conclusion",
+      "texto": "Lo que costaba un doctorado entero, ahora lo hace una IA en minutos.",
+      "titular": "De años a minutos",
+      "pantalla": "Tú a cámara"
+    },
+    {
+      "parte": "cta",
+      "texto": "Sígueme para estar al día de la IA.",
+      "titular": "Lo nuevo, aquí",
+      "pantalla": "Tú a cámara"
+    }
+  ],
+  "fuentes": [
+    "Nobel de Química 2024 (nobelprize.org, 9-oct-2024): la mitad para David Baker; la otra mitad, compartida por Demis Hassabis y John Jumper, de Google DeepMind, por AlphaFold",
+    "Más de 200 millones de estructuras de proteínas en la base de datos de AlphaFold (Google DeepMind y EMBL-EBI, 2022)",
+    "En minutos: AlphaFold predice la forma de una proteína en minutos (Google DeepMind)",
+    "Un doctorado entero por proteína: Demis Hassabis, en sus entrevistas sobre AlphaFold",
+    "Casi todas las medicinas actúan sobre una proteína: la gran mayoría de las dianas de los fármacos son proteínas"
+  ],
+  "pie": "Antes, ver una proteína costaba años. Ahora lo hace una IA en minutos, y le han dado el Nobel.\n\nSígueme para estar al día de la IA."
+}

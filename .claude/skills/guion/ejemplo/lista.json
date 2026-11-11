@@ -1,0 +1,119 @@
+{
+  "nombre": "ejemplo-ia-no-inventa",
+  "tema": "Tres reglas para que la IA no se invente nada",
+  "molde": "base",
+  "cta": {
+    "palabra": "REGLAS",
+    "manda": "Las tres reglas escritas, listas para pegar en las instrucciones de tu IA"
+  },
+  "ganchos": [
+    {
+      "forma": "lo-usas-mal",
+      "para": "perdida",
+      "dicho": "Si tu IA se inventa cosas, la estás usando mal.",
+      "pantalla": "TU IA|SE INVENTA COSAS",
+      "dolor": "Le pides algo largo y al rato ya no se acuerda de lo que le dijiste."
+    },
+    {
+      "forma": "opinion",
+      "para": "drama",
+      "dicho": "Pedirle las cosas a la IA por chat ya es el pasado.",
+      "pantalla": "EL CHAT|YA ES EL PASADO",
+      "dolor": "Cada chat empieza de cero, y cada vez te contesta algo distinto."
+    },
+    {
+      "forma": "sabias-que",
+      "para": "secreto",
+      "dicho": "¿Sabías que tu IA olvida tus instrucciones a la media hora?",
+      "pantalla": "TU IA|SE OLVIDA",
+      "dolor": "Y entonces rellena el hueco con lo primero que se le ocurre."
+    }
+  ],
+  "tomas": [
+    {
+      "parte": "autoridad",
+      "texto": "La uso 8 horas al día y no se inventa nada.",
+      "titular": "Ocho horas al día",
+      "pantalla": "Tú a cámara; la IA abierta detrás"
+    },
+    {
+      "parte": "rehook",
+      "texto": "Son tres reglas, y la tercera es la que más cambia.",
+      "titular": "De menos a más",
+      "pantalla": "Un 1, un 2 y un 3 que entran de uno en uno"
+    },
+    {
+      "parte": "cuerpo",
+      "texto": "Uno: lo importante, por escrito y una sola vez. Va en las instrucciones del proyecto, no en el chat. Así lo lee al empezar cada conversación, y no se le olvida.",
+      "titular": "Escríbelo una vez",
+      "pantalla": "Las instrucciones del proyecto abiertas, con tres líneas escritas"
+    },
+    {
+      "parte": "cuerpo",
+      "texto": "Dos: prohíbele adivinar. Escríbele tal cual: «si no lo sabes, pregúntame o búscalo». Así, en vez de rellenar el hueco, te pregunta.",
+      "titular": "Que no adivine",
+      "pantalla": "La frase tecleándose en las instrucciones"
+    },
+    {
+      "parte": "cuerpo",
+      "texto": "Y tres, la que más cambia: una tarea por conversación. Cuando cambias de tema, abre otra. Lo que arrastra de antes es lo que le hace mezclar.",
+      "titular": "Una tarea, un chat",
+      "pantalla": "Un chat largo que se parte en tres cortos"
+    },
+    {
+      "parte": "conclusion",
+      "texto": "Menos chat y más reglas: así tu IA deja de inventarse cosas.",
+      "titular": "Reglas, no chat",
+      "pantalla": "Tú a cámara"
+    },
+    {
+      "parte": "iman",
+      "texto": "Te dejo las tres reglas escritas, listas para pegar en tu IA.",
+      "titular": "Te las mando",
+      "pantalla": "El documento con las tres reglas"
+    },
+    {
+      "parte": "cta",
+      "texto": "Sígueme, comenta REGLAS y te las envío por privado.",
+      "titular": "Comenta «REGLAS»",
+      "pantalla": "La caja de comentario que se teclea sola"
+    }
+  ],
+  "cuerpo2": [
+    {
+      "parte": "autoridad",
+      "texto": "Yo la tengo abierta 8 horas al día, y ni un invento.",
+      "titular": "Cero inventos",
+      "pantalla": "Tú a cámara, primer plano"
+    },
+    {
+      "parte": "rehook",
+      "texto": "Son tres cambios, y ninguno te lleva más de un minuto.",
+      "titular": "Un minuto cada uno",
+      "pantalla": "Un reloj que marca un minuto"
+    },
+    {
+      "parte": "cuerpo",
+      "texto": "Primero, que no adivine nunca. Dile: «si te falta un dato, pregúntamelo antes de seguir». Te pregunta en vez de inventar.",
+      "titular": "Prohibido adivinar",
+      "pantalla": "La frase pegándose en las instrucciones"
+    },
+    {
+      "parte": "cuerpo",
+      "texto": "Después, lo que tiene que saber siempre, escrito en las instrucciones. El chat se le olvida; las instrucciones las relee cada vez.",
+      "titular": "Lo fijo, por escrito",
+      "pantalla": "Las instrucciones del proyecto abiertas"
+    },
+    {
+      "parte": "cuerpo",
+      "texto": "Y el que más se nota: cada tarea, en su conversación. Si mezclas temas en el mismo chat, te mezcla las respuestas.",
+      "titular": "Cada tarea, su chat",
+      "pantalla": "Tres chats cortos, uno por tarea"
+    }
+  ],
+  "fuentes": [
+    "Tuyo: 8 horas al día. En tu guion, tu cifra de verdad; si no tienes una, la autoridad sale de la herramienta",
+    "Las tres reglas: probadas antes de grabar, en la IA que se enseña en pantalla"
+  ],
+  "pie": "Tres reglas para que tu IA deje de inventarse cosas.\n\nSígueme y comenta REGLAS y te las envío por privado."
+}

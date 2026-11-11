@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guion · La EVVA MCS abre con imanes que colocan una combinación dentro del bombín</title>
+<style>
+  :root { --fondo:#f6f5f2; --panel:#fff; --linea:#e7e4dd; --texto:#1d1b18; --gris:#8a857c; --acento:#d6336c; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:20px 24px 40px; background:var(--fondo); color:var(--texto);
+    font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
+  .ancho { max-width:900px; margin:0 auto; }
+  header { display:flex; align-items:center; gap:14px; margin-bottom:14px; flex-wrap:wrap; }
+  h1 { font-size:20px; margin:0; }
+  .chip { font-size:12px; color:var(--gris); border:1px solid var(--linea); border-radius:99px; padding:3px 10px; background:var(--panel); white-space:nowrap; }
+  .chip b { color:var(--texto); }
+  .chip.mal b { color:#c92a2a; }
+  .hueco { flex:1; }
+  button { font:inherit; font-weight:600; white-space:nowrap; border-radius:8px; padding:8px 14px; cursor:pointer; border:1px solid var(--texto); background:var(--texto); color:#fff; }
+  h2 { font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--gris); margin:22px 0 8px; }
+  .ganchos { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; }
+  .gancho { background:var(--panel); border:2px solid var(--linea); border-radius:12px; padding:12px; cursor:pointer; }
+  .gancho.elegido { border-color:var(--acento); }
+  .pantalla { background:#22201c; color:#fff; border-radius:8px; padding:16px 8px; text-align:center;
+    font:800 19px/1.15 "Arial Narrow","Helvetica Neue",sans-serif; text-transform:uppercase; letter-spacing:.01em; }
+  .dicho, .frase2 { margin-top:10px; font-size:16px; }
+  .frase2 { margin-top:6px; }
+  .motivo { font-size:11px; color:var(--gris); margin-bottom:8px; }
+  .motivo b { color:var(--acento); text-transform:uppercase; letter-spacing:.06em; }
+  .toma { background:var(--panel); border:1px solid var(--linea); border-radius:12px; padding:12px 14px; margin-bottom:8px;
+    display:grid; grid-template-columns:130px 1fr; gap:4px 14px; }
+  .parte { font-size:12px; color:var(--gris); padding-top:5px; }
+  .parte b { display:block; color:var(--texto); font-size:13px; }
+  .texto { font-size:20px; line-height:1.35; outline:none; border-radius:6px; padding:2px 4px; margin:-2px -4px; }
+  .texto:focus { background:#fff7fa; box-shadow:0 0 0 2px #f3c1d2; }
+  .gancho [contenteditable]:focus { outline:2px solid #f3c1d2; border-radius:6px; }
+  .edit { grid-column:2; display:flex; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--gris); }
+  .edit span { border:1px dashed var(--linea); border-radius:6px; padding:2px 8px; }
+  .edit i { font-style:normal; color:var(--texto); outline:none; }
+  .edit i:focus { background:#fff7fa; }
+  .larga { color:#c92a2a; }
+  .pie { background:var(--panel); border:1px solid var(--linea); border-radius:12px; padding:12px 14px; white-space:pre-wrap; outline:none; }
+  #guion { display:flex; flex-direction:column; }
+  #tomas, #cuerpo2 { display:contents; }   /* los dos cuerpos van en una columna, con el cierre debajo */
+  .toma[hidden] { display:none; }
+  .cuerpos { display:flex; align-items:center; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+  .cuerpos button { background:var(--panel); color:var(--texto); border-color:var(--linea); }
+  .cuerpos button.activo { background:var(--texto); color:#fff; border-color:var(--texto); }
+  textarea { display:none; width:100%; height:160px; margin-top:12px; font:12px/1.4 ui-monospace,Menlo,monospace; }
+  @media (max-width:600px) { .toma { grid-template-columns:1fr; } .edit { grid-column:1; } }
+</style></head><body><div class="ancho">
+<header>
+  <h1>La EVVA MCS abre con imanes que colocan una combinación dentro del bombín</h1><span class="chip">molde <b>base</b></span>
+  <span class="chip" id="dur"></span><span class="hueco"></span>
+  <button id="copiar">Copiar</button>
+</header>
+<h2>Graba cada gancho seguido de su frase 2 · el marcado va en el reel · arriba lo que se ve, abajo lo que dices</h2>
+<div class="ganchos" id="ganchos"></div>
+<h2>El guion · toca cualquier frase y cámbiala · una frase que vacías se quita</h2>
+<div class="cuerpos" id="cuerpos"><button data-cuerpo="1" class="activo">Cuerpo 1</button><button data-cuerpo="2">Cuerpo 2</button>
+  <span class="chip">el 2: lo mismo, con otras palabras y en otro orden · se graba al final, sin el cierre</span></div>
+<div id="guion"><div id="tomas"></div><div id="cuerpo2"></div></div>
+<h2>El pie del reel</h2>
+<div class="pie" id="pie" contenteditable="true"></div>
+<textarea id="copia" readonly></textarea>
+</div>
+<script>
+const G = {"nombre": "2026-11-12-evva-mcs", "tema": "La EVVA MCS abre con imanes que colocan una combinación dentro del bombín", "molde": "base", "cta": {"palabra": "", "manda": ""}, "ganchos": [{"forma": "mira-esto", "para": "imposible", "dicho": "Mira esta llave. No has visto una igual en tu vida.", "pantalla": "LA LLAVE QUE|NO HAS VISTO", "dolor": "Parece una llave normal. Pero no abre solo con los dientes."}, {"forma": "sabias-que", "para": "secreto", "dicho": "¿Sabías que hay llaves de casa que abren con imanes?", "pantalla": "LLAVES QUE ABREN|CON IMANES", "dolor": "Y no es un truco de mago: se pone en una puerta normal."}, {"forma": "si-eres", "para": "perdida", "dicho": "Si crees que todas las llaves son iguales, mira esta.", "pantalla": "TODAS IGUALES|NO", "dolor": "Esta guarda la mitad de su secreto en unos círculos que casi nadie mira."}], "tomas": [{"parte": "autoridad", "texto": "EVVA la fabrica en Austria desde hace más de 40 años.", "titular": "Hecha en Austria", "pantalla": "La llave MCS girando en la mano"}, {"parte": "rehook", "texto": "Y lo raro de verdad pasa dentro de la cerradura.", "titular": "Lo raro está dentro", "pantalla": "Tú con la llave en alto"}, {"parte": "cuerpo", "texto": "Fíjate en estos círculos de la llave. No son adorno: son cuatro imanes.", "titular": "Mira los círculos", "pantalla": "El dedo sobre los círculos, zoom rápido"}, {"parte": "cuerpo", "texto": "Dentro del bombín hay ocho ruedecitas, como las de un candado de maleta.", "titular": "Una combinación dentro", "pantalla": "Un candado de maleta en la otra mano"}, {"parte": "cuerpo", "texto": "Pero esas ruedecitas no las giras tú. Las giran los imanes al meter la llave.", "titular": "Tú no haces nada", "pantalla": "Metes la llave en el bombín de muestra"}, {"parte": "cuerpo", "texto": "Si los imanes no son los correctos, no se colocan. Así que no abre.", "titular": "Sin sus imanes, no abre", "pantalla": "Tú a cámara, gesto de no"}, {"parte": "cuerpo", "texto": "Y al sacarla, la combinación se descoloca sola.", "titular": "Vuelve a cero", "pantalla": "Sacas la llave despacio, sin hablar"}, {"parte": "conclusion", "texto": "Una llave que no has visto nunca, con una combinación que nadie ve. Es la EVVA MCS.", "titular": "Seguridad que no se ve", "pantalla": "Tú a cámara con la llave"}, {"parte": "cta", "texto": "Sígueme, que en el próximo te cuento si se puede copiar con una impresora 3D.", "titular": "El próximo: impresora 3D", "pantalla": "Tú señalando abajo"}], "cuerpo2": [{"parte": "autoridad", "texto": "La hacen en Austria, y lleva más de 40 años en el mercado.", "titular": "Hecha en Austria", "pantalla": "La caja del producto"}, {"parte": "rehook", "texto": "Lo que la hace distinta está en el bombín, no en la llave.", "titular": "Mira el bombín", "pantalla": "El bombín en la mano"}, {"parte": "cuerpo", "texto": "¿Conoces los candados de maleta con ruedas de números? Imagínate uno con ocho.", "titular": "Un candado de ocho", "pantalla": "El candado de maleta girando"}, {"parte": "cuerpo", "texto": "En este bombín, esas ocho ruedas las mueve la llave con sus cuatro imanes.", "titular": "La llave las mueve", "pantalla": "Los círculos de la llave, muy cerca"}, {"parte": "cuerpo", "texto": "Con otros imanes, las ruedas no llegan a su sitio. Por lo tanto, no gira.", "titular": "Otros imanes, no gira", "pantalla": "Tú negando con la cabeza"}, {"parte": "cuerpo", "texto": "Al sacar la llave, todo se vuelve a mezclar. EVVA lo llama triple seguridad: imanes y código mecánico.", "titular": "Dos códigos en uno", "pantalla": "Sacas la llave despacio"}], "fuentes": ["EVVA MCS: más de 40 años en el mercado (EVVA, evva.com/since1919, MCS de 1979; otras fuentes dicen desde 1975), consultado 11-nov-2026", "EVVA MCS: 4 imanes en la llave, 8 rotores magnéticos que se colocan con la llave y se reposicionan al sacarla; codificación magnética más mecánica, «triple seguridad» según EVVA (securityinformed.com, lockwiki.com/EVVA_MCS), consultado 11-nov-2026", "Fabricada en Austria: EVVA y distribuidores, consultado 11-nov-2026", "Comparación con el candado de maleta: explicación propia, pendiente del visto bueno de EVVA", "«3D» de «impresora 3D» es el nombre de la tecnología, no una cifra"], "pie": "La llave que no has visto nunca: cuatro imanes que colocan ocho ruedecitas dentro del bombín. #publi, colaboración con EVVA.\n\nSígueme, que en el próximo te cuento si se puede copiar con una impresora 3D."}, PPS = 4.4, FRASE_MAX = 20, RANGO = [30, 60], PARTE = {"autoridad": "Autoridad", "rehook": "Rehook", "cuerpo": "Cuerpo", "conclusion": "La idea que se lleva", "iman": "Lo que mandas", "cta": "CTA"}, MOTIVO = {"imposible": "algo que no sabías que ya se puede", "dinero": "dinero ganado, ahorrado o quemado", "gratis": "regalan algo que cuesta", "identidad": "una frase sobre ti que no se espera", "perdida": "te estás quedando atrás o lo haces mal", "drama": "una pelea o un giro entre grandes", "secreto": "algo que casi nadie cuenta"};
+const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x !== undefined) n.textContent = x; return n; };
+const cuenta = (t) => t.trim().split(/\s+/).filter(Boolean).length;
+const plano = (n) => n.innerText.replace(/\s+/g, " ").trim();
+let elegido = 0;
+
+// Cada gancho, con lo que se ve arriba, lo que dices y su frase 2 pegada: se graban seguidos
+const ganchos = document.getElementById("ganchos");
+G.ganchos.forEach((h, i) => {
+  const caja = el("div", "gancho" + (i === 0 ? " elegido" : ""));
+  const motivo = el("div", "motivo");
+  motivo.append(el("b", "", h.para ?? ""), document.createTextNode((MOTIVO[h.para] ? " · " + MOTIVO[h.para] : "") + (h.forma ? " · " + h.forma : "")));
+  const pantalla = el("div", "pantalla");
+  (h.pantalla ?? "").split("|").forEach((linea) => pantalla.append(el("div", "", linea.trim())));
+  const dicho = el("div", "dicho", h.dicho ?? "");
+  const frase2 = el("div", "frase2", h.dolor ?? "");
+  for (const n of [pantalla, dicho, frase2]) { n.contentEditable = "true"; n.addEventListener("input", medir); }
+  caja.append(motivo, pantalla, dicho, frase2);
+  caja.addEventListener("click", () => {
+    if (i === elegido) return;
+    elegido = i;
+    [...ganchos.children].forEach((c, j) => c.classList.toggle("elegido", j === i));
+    medir();
+  });
+  ganchos.append(caja);
+});
+
+const tomas = document.getElementById("tomas"), cuerpo2 = document.getElementById("cuerpo2");
+if (!G.cuerpo2?.length) document.getElementById("cuerpos").remove();
+// Con dos cuerpos se ve el reel entero con uno u otro, y el cierre siempre abajo
+const CIERRE = ["conclusion", "iman", "cta"];
+const pintar = (t, donde) => {
+  const caja = el("div", "toma");
+  const parte = el("div", "parte");
+  parte.append(el("b", "", PARTE[t.parte] ?? t.parte), el("span"));
+  const texto = el("div", "texto", t.texto);
+  texto.contentEditable = "true";
+  texto.addEventListener("input", medir);
+  const edit = el("div", "edit");
+  const campo = (etiqueta, valor) => {
+    const v = el("i", "", valor);
+    v.contentEditable = "true";
+    const chip = el("span", "", etiqueta + ": ");
+    chip.append(v);
+    return chip;
+  };
+  if (t.titular) edit.append(campo("arriba", t.titular));
+  if (t.pantalla) edit.append(campo("se ve", t.pantalla));
+  caja.append(parte, texto, edit);
+  const cierre = CIERRE.includes(t.parte);
+  caja.style.order = cierre ? 2 : 1;
+  if (G.cuerpo2?.length && !cierre) caja.dataset.cuerpo = donde === cuerpo2 ? "2" : "1";
+  donde.append(caja);
+};
+G.tomas.forEach((t) => pintar(t, tomas));
+(G.cuerpo2 ?? []).forEach((t) => pintar(t, cuerpo2));
+document.getElementById("pie").textContent = G.pie ?? "";
+
+function medir() {
+  const tarjeta = ganchos.children[elegido];
+  let total = cuenta(tarjeta.querySelector(".dicho").textContent) + cuenta(tarjeta.querySelector(".frase2").textContent);
+  for (const caja of [...tomas.children, ...cuerpo2.children]) {
+    const texto = caja.querySelector(".texto").textContent;
+    const n = cuenta(texto);
+    if (!caja.hidden) total += n;   // lo que dura el reel con el cuerpo que se ve
+    const larga = texto.split(/(?<=[.!?…:])\s+/).some((f) => cuenta(f) > FRASE_MAX);
+    const nota = caja.querySelector(".parte span");
+    nota.textContent = (n / PPS).toFixed(1) + " s" + (larga ? " · frase larga" : "");
+    nota.className = larga ? "larga" : "";
+  }
+  const s = total / PPS, dur = document.getElementById("dur");
+  dur.innerHTML = "<b>" + Math.round(s) + " s</b> · " + total + " palabras · lo suyo, de " + RANGO[0] + " a " + RANGO[1];
+  dur.className = "chip" + (s > RANGO[1] || s < RANGO[0] ? " mal" : "");
+}
+medir();
+const verCuerpo = (n) => {
+  document.querySelectorAll(".toma[data-cuerpo]").forEach((c) => (c.hidden = c.dataset.cuerpo !== n));
+  document.querySelectorAll("#cuerpos button").forEach((b) => b.classList.toggle("activo", b.dataset.cuerpo === n));
+  medir();
+};
+document.querySelectorAll("#cuerpos button").forEach((b) => b.addEventListener("click", () => verCuerpo(b.dataset.cuerpo)));
+if (G.cuerpo2?.length) verCuerpo("1");
+
+// «Copiar»: el guion como lo has dejado, para pegárselo a Claude o tenerlo en el móvil al grabar
+const boton = document.getElementById("copiar");
+boton.addEventListener("click", async () => {
+  const orden = [elegido, ...G.ganchos.map((_, i) => i).filter((i) => i !== elegido)];
+  const lineaGancho = (i) => {
+    const caja = ganchos.children[i];
+    const p = caja.querySelector(".pantalla");   // una línea por cada div que hay dentro
+    const pantalla = (p.children.length ? [...p.children].map((n) => n.textContent.trim()) : [p.textContent.trim()]).filter(Boolean).join(" / ");
+    return "Gancho " + (i + 1) + (i === elegido ? " (el del reel)" : "") + ": " + plano(caja.querySelector(".dicho"))
+      + " " + plano(caja.querySelector(".frase2")) + " [pantalla: " + pantalla + "]";
+  };
+  const dichas = (lista) => [...lista.children].map((c) => plano(c.querySelector(".texto"))).filter(Boolean);
+  const lineas = [
+    "Guion de «" + (G.tema ?? G.nombre) + "», como lo dejo:",
+    ...orden.map(lineaGancho),
+    ...dichas(tomas).map((t, i) => (i + 1) + ". " + t),
+    ...dichas(cuerpo2).map((t, i) => "Cuerpo 2, " + (i + 1) + ". " + t),
+    "Pie: " + document.getElementById("pie").innerText.trim(),
+  ];
+  const texto = lineas.join("\n");
+  try {
+    await navigator.clipboard.writeText(texto);
+    boton.textContent = "Copiado";
+    setTimeout(() => (boton.textContent = "Copiar"), 1500);
+  } catch {
+    const copia = document.getElementById("copia");
+    copia.value = texto; copia.style.display = "block"; copia.select();
+  }
+});
+</script></body></html>
