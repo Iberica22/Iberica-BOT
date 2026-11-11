@@ -1,63 +1,79 @@
-# Guiones EVVA para grabar (versión sencilla)
+# Guiones EVVA para grabar (v7)
 
-Habla la dueña, natural, como en el mostrador. Una sola idea por reel, frases cortas,
-sin palabras técnicas. Objetivo: que la gente pregunte por privado y que se conozca la
-cuenta. Pasados por un lector sin conocimientos de cerrajería y corregidos con sus notas.
-Sustituyen a las versiones anteriores (carpetas evva-ics, evva-mcs y evva-escalera).
+Estructura de la dueña: Inicio (el objeto, problema o resultado junto al gancho),
+Desarrollo (explicación breve apoyada en algo visible), Recompensa (la respuesta a lo
+prometido) y Cierre (conclusión o razón natural para mandárselo a alguien).
+Habla ella, natural. Ganchos sacados de lo que DICEN los reels que más funcionaron
+(transcripciones abajo) y puntuados por un lector sin conocimientos de cerrajería.
 
-Grabar en vertical, móvil apoyado, con el producto siempre en la mano y cerca de la
-cámara. Subtítulos siempre. Ubicación: Almería. #publi y colaboración con EVVA.
+## Reel 1 · La brújula (EVVA MCS), ~25 s
 
-## Reel 1. La llave con imanes (EVVA MCS), ~25 s
+ANTES DE GRABAR: probar que la aguja de una brújula se mueve al acercar la llave MCS.
+Si no se mueve, este reel no se graba así (usar el gancho alternativo).
 
-| Qué se ve | Qué dices |
-|---|---|
-| La llave muy cerca de la cámara | «Esta llave tiene imanes.» |
-| Señalas los circulitos de la llave | «Mira estos circulitos: son cuatro imanes.» |
-| Metes la llave en el bombín de muestra | «Cuando la metes, los imanes colocan unas piezas que hay dentro de la cerradura. Y entonces gira.» |
-| A cámara | «Si alguien mete otra llave, aunque sea igualita por fuera, sin esos imanes no gira.» |
-| La llave en alto | «Es la EVVA MCS, lo más seguro que tiene EVVA, una marca austriaca que hace cerraduras desde 1919.» |
-| A cámara | «¿Cuánto costaría ponerla en tu puerta? Escríbeme por privado y te lo digo.» |
+| Parte | Qué se ve | Qué dices |
+|---|---|---|
+| Inicio | Una brújula en el mostrador. Acercas la llave y la aguja empieza a girar. Un solo plano, sin cortes | «Mira lo que le pasa a esta brújula cuando le acerco esta llave.» |
+| Desarrollo | Señalas los circulitos de la llave; luego la metes en el bombín de muestra | «Esta llave lleva cuatro imanes, aquí. Cuando la metes, esos imanes colocan unas piezas que hay dentro de la cerradura, como una combinación.» |
+| Recompensa | A cámara, con la llave en alto | «Por eso, aunque alguien te haga una llave igualita por fuera, sin estos imanes no gira. Es la EVVA MCS.» |
+| Cierre | A cámara, sonriendo | «Mándaselo a quien dice que todas las llaves son iguales.» |
 
-Texto en pantalla al empezar: UNA LLAVE CON IMANES
-Otros comienzos para probar: «¿Has visto alguna vez una llave con imanes?» · «Esta llave no abre solo con los dientes.»
-Pie: «Una llave con imanes: si no son los suyos, no gira. Es la EVVA MCS. ¿Cuánto costaría en tu puerta? Escríbenos por privado. #publi»
+Texto en pantalla al empezar: ¿POR QUÉ SE MUEVE?
+Gancho alternativo (sin brújula): «Esta llave no abre con los dientes. Abre con imanes.»
+Pie: «Una llave con imanes: si no son los suyos, no gira. ¿Cuánto costaría en tu puerta? Escríbenos por privado. #publi»
 
-## Reel 2. Ojo con las fotos de tus llaves (EVVA ICS), ~30 s
+## Reel 2 · ¿Quién tiene llave de tu casa? (EVVA ICS), ~30 s
 
-| Qué se ve | Qué dices |
-|---|---|
-| Haces una foto con el móvil a un llavero | «Ojo con subir fotos de tus llaves a redes: se han llegado a copiar llaves solo con una foto.» |
-| Una llave normal de lado, cerca | «Con una llave normal es fácil, porque todo lo que la hace abrir son estos dientes. Y en la foto se ven.» |
-| La EVVA ICS de cerca | «Esta es una EVVA ICS. Tiene dientes, sí. Pero una parte de lo que la hace abrir va escondida por dentro de la llave.» |
-| A cámara | «Y lo que no se ve, no se puede copiar.» |
-| La metes del derecho y del revés | «Además entra por los dos lados, que de noche se agradece.» |
-| A cámara | «¿Quieres saber si la tuya se copia fácil? Dime qué marca pone en tu llave, sin foto, o pásate por la tienda, y te lo digo.» |
+| Parte | Qué se ve | Qué dices |
+|---|---|---|
+| Inicio | Tú a cámara con tu llavero, contando con los dedos | «El de la obra, la que limpiaba, tu ex… ¿Cuánta gente ha tenido la llave de tu casa?» |
+| Desarrollo | Una llave normal en primer plano | «Con una llave como esta, cualquiera de ellos pudo hacerse una copia en cualquier ferretería. Y tú ni te enteras.» |
+| Recompensa | Cambias a la EVVA ICS; la metes del derecho y del revés | «Con esta, no. Es una EVVA ICS: parte de lo que la hace abrir va escondida por dentro de la llave, y no te la copian en cualquier sitio. Y encima entra por los dos lados.» |
+| Cierre | A cámara | «Mándaselo a quien se acaba de mudar y no ha cambiado la cerradura.» |
 
-Texto en pantalla al empezar: OJO CON ESTA FOTO
-Otros comienzos para probar: «¿Has subido alguna vez una foto de tus llaves?» · «Una foto de tus llaves puede bastar para copiarlas.»
-Pie: «Se han llegado a copiar llaves solo con una foto. La EVVA ICS esconde por dentro parte de lo que la hace abrir. ¿La tuya se copia fácil? Dinos la marca de tu llave por privado. #publi»
-Fuente del dato: Scientific American y Xataka (copias de llaves a partir de fotos).
+Texto en pantalla al empezar: ¿QUIÉN TIENE TU LLAVE?
+Gancho alternativo: «Si llevas esta llave a una ferretería a que te hagan una copia, te dicen que no.»
+Pie: «¿Cuánta gente ha tenido la llave de tu casa? Con la EVVA ICS, no te la copian en cualquier sitio. ¿Cuánto costaría cambiar la tuya? Escríbenos por privado. #publi»
 
-## Reel 3. Antes de cambiar la cerradura, mira esto (las dos), ~30 s
+## Reel 3 · Apuesto a que tu llave es esta (las dos), ~30 s
 
-| Qué se ve | Qué dices |
-|---|---|
-| Tú con una llave en cada mano | «Si vas a cambiar la cerradura de casa, mira esto antes.» |
-| Enseñas una llave normal | «Una llave normal te la copian en cualquier sitio. Estas dos, no te las copia cualquiera.» |
-| Levantas la ICS | «Para la mayoría de casas, recomiendo esta: la EVVA ICS. Esconde por dentro parte de lo que la hace abrir, y entra por los dos lados.» |
-| Levantas la MCS | «Y si quieres lo más seguro que tiene la marca, esta: la MCS. Lleva imanes dentro de la llave.» |
-| A cámara | «¿Cuál te va a ti? Depende de tu puerta, y eso hay que verlo.» |
-| A cámara | «Mándame una foto de tu puerta por privado y te digo cuál pondría y cuánto costaría.» |
+Formato de vuestro reel con más visitas («Empezamos con la gama básica…»: 6.177 views):
+llaves de menos a más, enseñadas en mano.
 
-Texto en pantalla al empezar: ANTES DE CAMBIAR LA CERRADURA
-Otros comienzos para probar: «¿Vas a cambiar la cerradura? No lo hagas sin ver esto.» · «Dos llaves que no te copian en cualquier ferretería.»
-Pie: «¿Vas a cambiar la cerradura? Para la mayoría de casas, la EVVA ICS; si quieres lo más seguro de la marca, la MCS. Mándanos una foto de tu puerta y te decimos cuál y cuánto. #publi»
+| Parte | Qué se ve | Qué dices |
+|---|---|---|
+| Inicio | Tres llaves en fila en el mostrador; señalas la normal | «De estas tres llaves, apuesto a que la de tu casa es esta.» |
+| Desarrollo | Coges una a una, muy cerca de la cámara | «Es la básica: todo lo que la hace abrir está a la vista. Esta, la EVVA ICS, esconde una parte por dentro de la llave. Y esta, la EVVA MCS, además lleva cuatro imanes.» |
+| Recompensa | Las tres en la mano | «¿La diferencia? La primera te la copian en cualquier sitio. Las otras dos, no.» |
+| Cierre | A cámara | «Mándaselo a alguien de tu familia y que mire cuál tiene en casa.» |
+
+Texto en pantalla al empezar: ¿CUÁL ES LA TUYA?
+Gancho alternativo (solo si es verdad): «Esta es la cerradura que tengo en mi casa.»
+Pie: «¿Cuál de las tres tienes en casa? Si quieres saber cuánto costaría pasar a una EVVA, escríbenos por privado. #publi»
 
 ## Notas
 
-- Sin precios en el vídeo (límite de marca), pero el cierre invita a preguntarlo: es lo
-  primero que quiere saber quien mira y lo que hace que escriba.
-- Confirmar con EVVA: «lo más seguro que tiene EVVA» (MCS), «no te las copia cualquiera»
-  (copias solo por socios autorizados) y la explicación de los imanes.
-- Fuentes de producto: ver CAMPANA-EVVA-ICS-MCS.md.
+- El cierre del vídeo busca que lo compartan (alcance). La invitación a preguntar el
+  precio va en el pie de foto.
+- Confirmar con EVVA: «no te la copian en cualquier sitio» (copias solo por socios
+  autorizados) y la explicación de los imanes.
+
+## Transcripciones de los reels que más funcionaron (11-nov-2026)
+
+Primeros segundos, pasados a texto (faster-whisper):
+
+| Cuenta | Views | Lo que dicen al empezar |
+|---|---|---|
+| @cefibaseguridad | 24.703 (22x) | «Si tienes en tu puerta el bombillo visto, que sepas que te pueden abrir en 30 segundos…» |
+| @cefibaseguridad | 16.152 (14x) | «Están utilizando ácido para atacar las cerraduras. Este agosto la Policía Nacional desarticuló una banda… Te voy a mostrar una solución.» |
+| @cefibaseguridad | 12.523 (11x) | «Si tienes un fardo de billetes y no sabes dónde guardarlo, este vídeo te interesa.» |
+| @cefibaseguridad | 5.794 (5x) | «Si tienes esta llave, de verdad, cambiadla porque estáis en peligro. Aquí nos han llamado porque ha habido robos en esta comunidad…» |
+| @cefibaseguridad | 4.124 (3,7x) | «Te gastas 200 euros en el bombillo y no lo utilizas porque no cierras con llave, mira lo que pasa.» |
+| @elcerrajerodetiktok | 9,8 M (99x) | «Intentamos tirar abajo esta puerta de seguridad acorazada.» |
+| @elcerrajerodetiktok | 1,9 M (19x) | «Mirad amigos, esta cerradura… se abren todas con muchísima facilidad. Os lo voy a demostrar.» |
+| @elcerrajerodetiktok | 1,5 M (16x) | «¿Os suenan estas llaves? Muy posiblemente las tengas en tu casa…» |
+| @ibericaseguridad | 6.177 (10,9x) | «Empezamos con la gama básica… las llaves de la gama básica solo tienen una línea de puntos. Seguimos con la línea media…» |
+| @ibericaseguridad | 3.218 (5,7x) | «Si tienes esta llave en Almería, está en peligro.» |
+
+Fórmula común: enseñar algo que quien mira tiene o puede ver, y decir en la primera
+frase qué le pasa por tenerlo; luego demostrarlo en mano.
