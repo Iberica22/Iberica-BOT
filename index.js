@@ -987,6 +987,7 @@ async function pedirResena({ telefono, nombre, refParte, caseId }) {
   resenasEnCurso[clave] = { refParte: refParte || null, caseId: caseId || null, ts: Date.now() };
   redisSet("iberica:resenasEnCurso", resenasEnCurso);
   const via = enFrio ? "plantilla_en_frio" : (fueraDeVentana ? "plantilla" : "chat");
+  crearNotaParte(caseId, `Encuesta postventa (Marta): enviada por WhatsApp (${via === "chat" ? "en el chat" : "con plantilla"}). Si contesta, se apunta aquí.`);
   console.log(`[Reseñas] Encuesta postventa enviada a ${clave} (parte ${refParte || "—"}, ${via})`);
   return { ok: true, telefono: clave, via };
 }
@@ -1651,6 +1652,8 @@ async function barridoToquesPresupuesto(forzarVentana) {
         if (seg.enviados >= plan.marta.length) seg.estado = "fin_marta";
         guardarSeguimientosPresu();
         registrarResultadoPresu(seg.ref, `toque${n + 1}_enviado`);
+        // Que en el parte quede que Marta le ha escrito, no solo lo que contesta
+        crearNotaParte(seg.caseId, `Seguimiento presupuesto (Marta): enviado por WhatsApp el mensaje ${n + 1} de ${plan.marta.length} (plantilla ${plantilla}). Si contesta, se apunta aquí.`);
         console.log(`[Presupuestos] Mensaje ${n + 1}/${plan.marta.length} enviado — ${seg.ref} (${seg.clave}, ${seg.tipo})`);
       } else {
         registrarResultadoPresu(seg.ref, r.detalle ? `${r.motivo}: ${r.detalle}` : r.motivo);
@@ -6564,6 +6567,33 @@ function marcarAcuseAlta(wamid, tipo) {
 const tareasAgendaAltas = () => Object.entries(altasCasa.porTel)
   .filter(([, a]) => a.estado === "fallida" && !a.agendaTs)
   .map(([tel, a]) => ({ tel, texto: `${a.nombreCompleto || a.nombre || "Cliente"} ${tel} (alta cliente de la casa: la ${a.plantilla || "T7"} no salió)` }));
+
+// Todo lo que Marta sabe de un teléfono: /admin/api/historial?tel=6XXXXXXXX
+app.get("/admin/api/historial", authAdmin, (req, res) => {
+  const k = claveBaja(req.query.tel || "");
+  if (k.length !== 9) return res.json({ ok: false, error: "Pon el teléfono: ?tel=6XXXXXXXX" });
+  const fecha = (ts) => (ts ? new Date(ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }) : null);
+  const mio = (t) => claveBaja(t) === k;
+  const telConv = Object.keys(conversaciones).find(mio);
+  const telAct = Object.keys(actividad).find(mio);
+  const segs = Object.entries(seguimientosPresu).filter(([, x]) => mio(x.clave || x.telefono));
+  const refs = new Set(segs.map(([, x]) => x.ref));
+  const campLista = Object.values(campanas.listas).flatMap((l) => l.filas.filter((f) => f.k === k).map((f) => ({ lista: l.id, campana: l.campana, prueba: !!l.prueba, estado: f.estado, motivo: f.motivo || null, enviado: fecha(f.ts) })));
+  res.json({
+    ok: true, telefono: k,
+    actividad: telAct ? { ...actividad[telAct], ultimaActividad: fecha(actividad[telAct].ultimaActividad) } : null,
+    conversacionAhora: telConv ? { paso: conversaciones[telConv].step, nombre: conversaciones[telConv].nombre || null, canal: CANALES_AGENTES[conversaciones[telConv].channelId] || conversaciones[telConv].channelId || null } : null,
+    pausas: Object.keys(botActivo).filter((c) => c.endsWith(k) && botActivo[c] === false).map((c) => ({ canal: CANALES_AGENTES[c.split("_")[0]] || c.split("_")[0], hasta: fecha(pausaExpira[c]) || "indefinida" })),
+    presupuestos: segs.map(([caseId, x]) => ({ ref: x.ref, caseId, tipo: x.tipo, estado: x.estado, mensajesEnviados: x.enviados || 0, ultimoMensaje: fecha(x.ultimoMensajeTs), enviadoPresupuesto: fecha(x.enviadoTs) })),
+    historialPresupuestos: presuHistorial.filter((h) => refs.has(h.ref)).slice(0, 30),
+    encuesta: { pedida: fecha(Object.entries(resenasPedidas).find(([t]) => mio(t))?.[1]), enCurso: Object.entries(resenasEnCurso).find(([t]) => mio(t))?.[1] || null },
+    campanas: { listas: campLista, conversacion: campanas.conversaciones[k] || null, contacto: campanas.contactos[k] || null },
+    altaCasa: altasCasa.porTel[k] || null,
+    baja: bajas[k] || null,
+    consentimiento: consentimientos[k] || null,
+    captacion: Object.entries(captacionLeads).find(([t]) => mio(t))?.[1] || null,
+  });
+});
 
 app.get("/admin/api/altas-casa", authAdmin, (req, res) => {
   const fecha = (ts) => (ts ? new Date(ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }) : null);
