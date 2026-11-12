@@ -54,19 +54,24 @@ correcta con escudo, en el mismo plano de perfil.
 Texto en pantalla: PASA EL DEDO POR TU PUERTA
 Pie: «Pasa el dedo por tu puerta: si el bombín asoma, mándanos una foto por privado y te decimos cómo dejarlo protegido. 📍 Almería»
 
-## 4 · No lo cambies todo (gancho 5/10 → cambiado) · Pilar «La gran duda»
+## 4 · ¿Te acabas de mudar? (reescrito) · Pilar «La gran duda»
 
-Preparar: una cerradura de embutir de perfil europeo y su bombín.
+La duda: «me mudo, ¿qué tengo que cambiar?». Postura del pilar: que nadie pague por cambiar
+lo que no hace falta. Empieza por algo que le pasa a todo el mundo y baja a la pieza.
+
+Preparar: un llavero tipo inmobiliaria, 5 o 6 llaves iguales sueltas, una cerradura de
+embutir y su bombín.
 
 | Parte | Qué se ve | Qué dices |
 |---|---|---|
-| Inicio | Cerradura grande en una mano; levantas el bombín con la otra | «Solo hay que cambiar esto.» |
-| Desarrollo | Metes el bombín en la cerradura, giras la llave y salen los cierres | «Si has perdido las llaves o te acabas de mudar, no hace falta cambiar todo esto. Casi siempre basta con esta pieza pequeña, el bombín, que es donde metes la llave.» |
-| Recompensa | Dejas la cerradura en el mostrador | «Es más rápido y más barato. La cerradura entera se cambia cuando se atasca, está dañada o es muy antigua. Y si buscas más seguridad: bombín bueno y un escudo.» |
-| Cierre | A cámara | «Mándaselo a quien se acaba de mudar.» |
+| Inicio | Un llavero de piso colgando de tu dedo, cerca de la cámara | «¿Te acabas de mudar?» |
+| Desarrollo | Vas dejando llaves iguales en el mostrador, una por persona | «Pues estas llaves no las tienes solo tú. El dueño de antes, la inmobiliaria, el de la reforma, la que limpiaba… Nadie sabe cuántas copias hay.» |
+| Recompensa | Levantas la cerradura grande y la apartas; coges el bombín. Al final barres todas las llaves del mostrador con la mano | «Y no, no hay que cambiar la puerta ni la cerradura entera. Solo esta pieza, donde metes la llave. Cambias esta, y todas esas llaves dejan de servir.» |
+| Cierre | A cámara, con el bombín en la mano | «Mándaselo a quien se acaba de mudar.» |
 
-Texto en pantalla: ¿TE HAS MUDADO?
-Pie: «¿Llaves perdidas o casa nueva? Casi siempre basta con cambiar el bombín. Mándanos una foto de tu puerta por privado y te decimos qué necesita. 📍 C/ San Leonardo 34, Almería»
+Texto en pantalla: PISO NUEVO EN ALMERÍA
+Otros ganchos para probar: «Estas llaves no son solo tuyas.» · «Lo primero al mudarte: esto.» · «No cambies la puerta.»
+Pie: «¿Piso nuevo en Almería? No sabes cuántas copias de tu llave hay por ahí. Mándanos una foto de tu puerta por privado y te decimos qué pieza hay que cambiar. 📍 C/ San Leonardo 34»
 
 ## Notas
 

@@ -231,3 +231,7 @@ desde 1996; urgencias 24 h 950 088 086; tienda en C/ San Leonardo 34, Almería. 
 - El formato «tres llaves de menos a más» ya está grabado dos veces: no repetirlo.
 - Para la MCS, la brújula es la app del móvil, no una brújula de verdad.
 - Primera frase de cinco palabras o menos, sobre algo que se ve.
+
+- 2026-11-12. Reel «Solo hay que cambiar esto» (bombín o cerradura): «no tiene mucho sentido». Empezaba por la
+  pieza y no por la situación. Desde entonces: «La gran duda» arranca por lo que le pasa a la persona (mudanza,
+  llaves perdidas) y la pieza llega al final, como respuesta.
