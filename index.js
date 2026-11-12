@@ -5267,23 +5267,25 @@ app.post("/webhook", async (req, res) => {
       botActivo[claveBot] = false;
       redisSet("iberica:botActivo", botActivo);
 
-      // Notificar al agente de turno
+      // Buscar al cliente y su último parte en Zoho, para que el aviso diga
+      // quién es y para dejar el mensaje apuntado en ese parte.
       const destinatario = determinarDestinatarioNotificacion();
       const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
-      await enviarNotificacionAgente(destinatario, {
-        nombre:      telefono,
-        telefono:    telefono.slice(-9),
-        direccion:   "—",
-        descripcion: `Respuesta en canal Soporte: "${texto}"`,
-        apertura:    ahoraStr,
-        refParte:    "—",
-        agente:      "Soporte (encuestas)",
-      });
+      const zoho = await clienteYParteZoho(claveBaja(telefono)).catch(() => ({}));
+      const textoCorto = String(texto || "").slice(0, 300);
+      await enviarAvisoInterno(destinatario,
+        { origen: `Mensaje por WhatsApp al 661 (Soporte)${zoho.ref ? `, parte ${zoho.ref}` : ""}`, cliente: zoho.nombre || `Cliente ${telefono.slice(-9)}`, telefono: telefono.slice(-9), que: `"${textoCorto}"` },
+        { nombre: zoho.nombre || telefono, telefono: telefono.slice(-9), direccion: "—", descripcion: `Mensaje en el WhatsApp de Soporte: "${textoCorto}"`, apertura: ahoraStr, refParte: zoho.ref || "—", agente: "Soporte (encuestas)" },
+      ).catch((e) => console.error("[Soporte] Aviso:", e.message));
+      if (zoho.caseId) {
+        notaEnZoho("Cases", zoho.caseId, "Mensaje del cliente por WhatsApp (Marta)",
+          `Mensaje del cliente por WhatsApp (Soporte, ${ahoraStr}): "${textoCorto}". Marta le ha contestado que le llamamos en breve y se ha avisado a ${destinatario?.nombre || "la oficina"}.`);
+      }
 
       // Mensaje al cliente
       await enviarMensaje(
         telefono,
-        "Gracias por contactar con *Ibérica Seguridad* 🔐\n\nHemos recibido tu mensaje y un agente se pondrá en contacto contigo en breve.\n\nSi necesitas ayuda urgente, llámanos al *661 665 929*."
+        "Gracias por contactar con *Ibérica Seguridad* 🔐\n\nHemos recibido tu mensaje y un agente se pondrá en contacto contigo en breve.\n\nSi necesitas ayuda urgente, llámanos al *950 088 086*: te atendemos las 24 horas."
       );
 
       return res.sendStatus(200);
@@ -5755,6 +5757,21 @@ async function contactoZohoPorTelefono(k) {
   const token = await obtenerTokenZoho();
   const r = await axios.get(`https://www.zohoapis.eu/crm/v2/Contacts/search?phone=${k}`, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
   return { token, contactos: r.data?.data || [] };
+}
+// Cliente (contacto) y su parte más reciente en Zoho, por teléfono
+async function clienteYParteZoho(k) {
+  const { token, contactos } = await contactoZohoPorTelefono(k);
+  const c = contactos[0];
+  if (!c) return {};
+  const nombre = c.Full_Name || [c.First_Name, c.Last_Name].filter(Boolean).join(" ");
+  let casos = [];
+  try {
+    const r = await axios.get(`https://www.zohoapis.eu/crm/v2/Contacts/${c.id}/Cases`, { params: { per_page: 50 }, headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+    casos = r.data?.data || [];
+  } catch (_) { /* sin partes */ }
+  casos.sort((a, b) => new Date(b.Modified_Time || b.Created_Time || 0) - new Date(a.Modified_Time || a.Created_Time || 0));
+  const p = casos[0];
+  return { nombre, contactoId: c.id, caseId: p?.id || null, ref: p ? (p.ref_Parte || p.Case_Number || p.id) : null };
 }
 async function optOutEnZoho(k) {
   try {
