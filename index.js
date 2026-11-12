@@ -1991,8 +1991,8 @@ async function cargarEstadoDesdeRedis() {
 async function renovarTokenZoho() {
   const refreshToken = process.env.ZOHO_REFRESH_TOKEN;
   console.log("[Zoho] Renovando access token...");
-  console.log("[Zoho] REFRESH_TOKEN (primeros 30 chars):", refreshToken?.slice(0, 30));
-  console.log("[Zoho] CLIENT_ID:", process.env.ZOHO_CLIENT_ID);
+  // Nunca escribir tokens ni claves en los logs (los ve cualquiera con acceso a Railway)
+  if (!refreshToken || !process.env.ZOHO_CLIENT_ID) console.warn("[Zoho] Falta ZOHO_REFRESH_TOKEN o ZOHO_CLIENT_ID");
 
   try {
     const res = await axios.post("https://accounts.zoho.eu/oauth/v2/token", null, {
@@ -2006,7 +2006,7 @@ async function renovarTokenZoho() {
     });
 
     console.log("[Zoho] Respuesta renovación HTTP:", res.status);
-    console.log("[Zoho] Respuesta renovación body:", JSON.stringify(res.data));
+    if (res.data?.error) console.log("[Zoho] Respuesta renovación:", JSON.stringify({ error: res.data.error }));
 
     if (res.data.error) {
       console.error("[Zoho] Error en respuesta de renovación:", res.data.error);
