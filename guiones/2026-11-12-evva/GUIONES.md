@@ -50,6 +50,23 @@ Texto en pantalla al empezar: VIENA, 1919
 Gancho alternativo: «Esta cerradura está en el estadio de la Juventus.»
 Pie: «EVVA: cerraduras austriacas desde 1919. Ya las tenemos en la tienda de C/ San Leonardo 34. ¿Quieres verlas? Escríbenos por privado. #publi»
 
+## Reel 4 · ¿Y si le pongo un imán? (EVVA MCS), ~25 s
+
+Responde a la pregunta que deja el reel de la brújula. ANTES DE GRABAR: probarlo de verdad
+en el bombín de muestra con el imán más fuerte que haya en la tienda. Solo se graba si no
+gira. Que EVVA dé el visto bueno a la explicación.
+
+| Parte | Qué se ve | Qué dices |
+|---|---|---|
+| Inicio | Un imán gordo en tu mano, pegándose al bombín MCS | «¿Y si le pongo un imán?» |
+| Desarrollo | Pasas el imán por delante, lo dejas pegado e intentas girar. No pasa nada | «Nos lo preguntáis mucho: si esta llave abre con imanes, ¿con un imán cualquiera se abre? Pues mira. Nada.» |
+| Recompensa | Enseñas la llave y señalas los cuatro imanes; la metes y gira | «Porque dentro no hay un imán: hay ocho piezas que giran, como las ruedas de una caja fuerte, y cada una tiene que quedar en su sitio. Un imán de fuera no las coloca. Los cuatro de esta llave, sí. Y además, según EVVA, lleva dos cierres más que no son de imán.» |
+| Cierre | A cámara, con el imán en una mano y la llave en la otra | «Mándaselo a quien te dijo que con un imán se abría.» |
+
+Texto en pantalla al empezar: ¿SE ABRE CON UN IMÁN?
+Pie: «¿Se abre con un imán? No: dentro hay ocho piezas y solo su llave las coloca. Es la EVVA MCS. ¿La quieres ver? Escríbenos por privado. #publi»
+Fuente: ficha técnica MCS (8 rotores magnéticos, 4 imanes en la llave, una codificación magnética y dos mecánicas).
+
 ## Notas
 
 - El cierre del vídeo busca que lo compartan (alcance). La invitación a preguntar el
