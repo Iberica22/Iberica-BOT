@@ -1,7 +1,8 @@
 # Resumen Instagram @ibericaseguridad (hasta el 12-nov-2026)
 
 Documento para empezar una conversación nueva sin perder el contexto. Al abrirla,
-basta con decir: «Lee RESUMEN-INSTAGRAM.md y seguimos con…».
+basta con decir: «Lee RESUMEN-INSTAGRAM.md y seguimos con…». El detalle de los datos
+está en `MATRIZ-VIRALIDAD-IBERICA.md`.
 
 ## 1. Objetivo
 
@@ -12,104 +13,143 @@ que todo se ancla a la zona.
 Se mide cada semana: contactos de la zona → presupuestos → trabajos cerrados. También
 las visitas al perfil y los toques en WhatsApp o en el enlace.
 
-## 2. Estructura acordada
+## 2. Qué funciona en vuestra cuenta
+
+36 reels del 9 de agosto al 9 de noviembre. **Mediana: 569 views.** El rendimiento es
+cada reel dividido entre esa mediana.
+
+| Rend. | Reel | Patrón |
+|---|---|---|
+| 11,4x | ¿Alguna vez has escuchado cerrar una Fichet? | Sonido, curiosidad |
+| 10,9x | El 80 % de las puertas en Almería se abren en menos de 1 minuto | Dato que sorprende + Almería |
+| 6,9x | Así suena una Fichet | Sonido |
+| 5,7x | Si tienes una llave así en Almería, tu casa está en peligro | Aviso + enseñar la llave |
+| 3,0x | Tú te has quedado en la calle. Nosotros tenemos la solución | Situación con la que te identificas |
+| 2,6x | Foxeo S o Foxeo HIS: ¿qué puerta Fichet elegir? | Duda de compra |
+| 2,5x | ¿Tu puerta se abre en 30 segundos? | Pregunta-reto con dato |
+| 2,2x | ¿Te regalan una cerradura inteligente con tu alarma? Ojo | Aviso contra algo popular |
+| 1,9x | Mood / FOMO con el equipo | Humor (la mejor retención: 11 s) |
+
+**No funciona:** anuncios genéricos de urgencias («¿De noche y sin llaves?», «Cerrajeros
+24 h»: entre 0,02x y 0,27x), producto sin gancho («Descubre las puertas Fichet»), subir el
+mismo vídeo dos veces, y los carruseles en general (llegan a entre 20 y 200 personas).
+
+**El patrón:** un aviso o un dato que sorprende, o un sonido, anclado a Almería, que hace
+que quien lo ve se mire su propia puerta o su llave.
+
+## 3. Análisis de la competencia (Apify, 10-nov-2026)
+
+Últimos 40 reels de cada cuenta, cada una comparada consigo misma.
+
+| Cuenta | Mediana de views | Reels por encima de 1,5x | Duración típica |
+|---|---|---|---|
+| @ibericaseguridad | 569 | 11 de 36 | — |
+| @cefibaseguridad (Valencia) | 1.115 | 16 de 40 | ~31 s |
+| @bainba_es (mobiliario infantil) | 24.011 | 12 de 40 | ~37 s |
+| @elcerrajerodetiktok (Zaragoza) | 98.607 | 16 de 40 | ~66 s |
+
+**@cefibaseguridad, la más parecida a vosotros.** Publica casi a diario.
+- Funciona: avisos sobre la puerta de quien mira. «Si tu bombillo se ve desde fuera, te
+  lo pueden romper en 30 segundos» (22x), «¿Tu puerta acorazada tiene esta llave?» (5x),
+  «La mayoría de bombines en España se abren en…» (3,5x). Noticias de robos con la
+  solución («Están atacando cerraduras con ácido», con la Policía como fuente: 14x). Cajas
+  fuertes por tramos de precio (11x). El consejo de echar la llave (3,7x).
+- No funciona: chistes sueltos y ganchos que no hablan de tu puerta (0,12x a 0,15x).
+- Contacto: nunca lo pide en el texto. Cierra con una pregunta («¿Cuál elegirías?») o con
+  «guárdalo y compártelo».
+
+**@elcerrajerodetiktok.**
+- Funciona: el producto estrella en acción (puerta acorazada grado 3: 9,8 M, 99x), avisos
+  sobre un tipo de llave o bombín («si tienes este tipo de llave, cámbiala»: 19x) y una
+  historia propia (4x).
+- No se copia: las demostraciones de apertura. Enseñan a abrir cerraduras.
+- No funciona: tono de anuncio de marca (0,25x) y fichas de producto sin historia.
+- Vende a toda España por su tienda online; no es un modelo de llamadas locales.
+
+**@bainba_es.**
+- Funciona: la historia real de una familia que compró (16,6x) y resolver dudas de
+  compra: «Seguro que tú también tienes estas dudas» (4,3x), «¿A o B?» (3,5x), «El error
+  que más solemos cometer» (2,5x).
+- No funciona: Halloween (0,23x), sorteos (0,36x), directos largos y publicaciones de
+  ambiente.
+- Contacto: al final de los vídeos de dudas y sin presión («escríbenos y te ayudamos»,
+  «guarda este vídeo para cuando…»).
+
+**Qué copiar para Ibérica:**
+1. «La gran duda»: comparativas para elegir.
+2. «Si tienes esta llave o cerradura…»: el aviso concreto.
+3. La historia real de un cliente de la zona, con su permiso.
+4. El producto estrella en acción, con sonido.
+5. «El error que más se comete» al cambiar cerradura o puerta.
+6. Un cierre de ayuda local: «mándanos una foto de tu cerradura y te decimos si es de las
+   vulnerables».
+
+## 4. Estructura acordada
 
 | Pilar | Qué es | Formato | Peso |
 |---|---|---|---|
 | «¿Tu llave es así?» | Aviso concreto que hace mirar tu propia puerta | Reel con el equipo | ~40 % |
 | «La gran duda» | Ayudar a elegir (bombín o cerradura, acorazada o blindada…) | Reel o carrusel | ~25 % |
 | Casos reales en Almería | Un trabajo de verdad: el problema, qué se cambió y en qué zona | Reel con el equipo | ~20 % |
-| Llavín | Consejos y fechas | Solo carrusel | ~15 % |
+| Llavín (la mascota) | Consejos y fechas | Solo carrusel | ~15 % |
 
 - **Ritmo:** 2 o 3 reels a la semana, grabados en una sola sesión al mes. Historias 3 o
-  4 días a la semana. **Llavín: un carrusel cada dos semanas** (decidido).
-- **Un reel de humor con el equipo cada dos semanas** (es el que más retiene: 11 s).
+  4 días a la semana. Llavín: un carrusel cada dos semanas.
+- **Un reel de humor con el equipo cada dos semanas.**
 - **Nombrar el sitio en los dos primeros segundos** («En Roquetas vemos esta llave…»),
-  ubicación etiquetada en cada publicación.
+  hablado y en pantalla, con la ubicación etiquetada.
 - **Cierre:** 3 o 4 versiones que se alternan, y algunos reels sin llamada a la acción.
-  En el vídeo, el cierre busca que lo compartan; la invitación a preguntar va en el pie.
+  En el vídeo, el cierre busca que lo compartan; la invitación a escribir va en el pie.
 - **Ofertas:** como mucho una cada dos semanas, sin precio y dentro de un pilar.
 - **Perfil:** nombre «Cerrajero Almería · Ibérica Seguridad», categoría Cerrajero,
-  dirección, botones de Llamar y WhatsApp, las 105 reseñas de 4,8 en Google en la bio.
+  dirección, botones de Llamar y WhatsApp, y las 105 reseñas de 4,8 en Google en la bio.
   Destacadas: Opiniones · Trabajos en Almería · Urgencias · Checklist · Zona.
 - **Saber de dónde viene cada cliente:** WhatsApp de la bio con «Hola, vengo de
-  Instagram», que Marta pregunte el municipio, y una hoja semanal de contactos.
+  Instagram», que Marta pregunte el municipio y una hoja semanal de contactos.
+- **Se deja de hacer:** anuncios genéricos de urgencias, repetir vídeos, imágenes de
+  descuento sueltas y contenido solo de fechas.
 
-**Se deja de hacer:** anuncios genéricos de urgencias, subir el mismo vídeo dos veces,
-imágenes de descuento sueltas y contenido solo de fechas (Halloween no funcionó).
+## 5. Promoción pagada (propuesta, falta confirmar)
 
-## 3. Promoción pagada (propuesta del especialista, falta confirmar)
-
-- Arranque 150 €/mes (mínimo 90 €, si funciona 300 €).
-- Objetivo de campaña «Mensajes». Se promocionan los 2 mejores reels del mes que
-  nombren Almería, Roquetas o El Ejido al principio; se cambia uno cada 2 semanas.
+- Arranque 150 €/mes (mínimo 90 €; si funciona, 300 €).
+- Objetivo de campaña «Mensajes». Se promocionan los 2 mejores reels del mes que nombren
+  Almería, Roquetas o El Ejido al principio; se cambia uno cada 2 semanas.
 - Público: residentes en Almería capital y Poniente, de 35 a 65 años. 70 % toda la zona,
   30 % a quien ya vio medio reel o entró en el perfil.
 
-## 4. Lo que funciona (datos, ver MATRIZ-VIRALIDAD-IBERICA.md)
+## 6. Lo que ya está montado
 
-Mediana de la cuenta: 569 views. Lo mejor: sonido de una Fichet (11,4x), dato con Almería
-«el 80 % de las puertas…» (10,9x), «si tienes una llave así en Almería…» (5,7x),
-comparativa Foxeo S o HIS (2,6x). Referencias analizadas: @cefibaseguridad (la más
-parecida), @elcerrajerodetiktok y @bainba_es.
+- **Checklist «Tu casa, punto por punto»** (20 comprobaciones). Marta lo manda por
+  privado si alguien escribe «checklist», «lista» o «guía», o si lo comenta en el reel del
+  checklist.
+- **Acceso a datos:** API oficial de Instagram (el token caduca hacia primeros de enero) y
+  Apify para analizar otras cuentas (unos 0,28 $ por pasada).
+- **Llavín:** `GUIA-MASCOTA-LLAVIN.md` y `mascota/llavin-guia.pdf` para el gestor de redes.
 
-## 5. Lo que ya está montado
+## 7. Reglas que no se saltan
 
-- **Checklist «Tu casa, punto por punto»** (20 comprobaciones), publicado en
-  `docs/checklist-tu-casa-punto-por-punto.pdf`. Marta lo manda por privado si alguien
-  escribe «checklist», «lista» o «guía», y también si lo comentan en el reel del checklist
-  (responde en público «¡Te lo acabamos de mandar por mensaje privado!»).
-- **HeyMark:** la regla automática está en pausa y la cuenta suspendida por facturación.
-  Todo lo hace Marta.
-- **Acceso a datos:** API oficial de Instagram (token guardado en el entorno, caduca hacia
-  primeros de enero; hay que renovarlo) y Apify para analizar otras cuentas (~0,28 $ por
-  pasada).
-- **Llavín:** `GUIA-MASCOTA-LLAVIN.md`, `mascota/llavin-guia.pdf` y la skill
-  `mascota/llavin-mascota-iberica.zip` para el gestor de redes. Personalidad: experto
-  cercano y gamberro, con llavero de casita. Solo en carruseles.
-- **Campañas hechas:** Halloween (publicada), puente de noviembre, alerta de viento
-  (`CAMPANA-VIENTO-NOV-2026.md`).
-- **EVVA ICS y MCS:** guiones v8 en `guiones/2026-11-12-evva/GUIONES.md`
-  (brújula del móvil, llave sin dientes, la marca que no conoces).
-- **Skills instaladas** en `.claude/skills/`: guion, ig-*, contenido de Ootto,
-  Emil Kowalski (web). La skill `guion` tiene en «Tu voz» todas tus correcciones.
+- No se publica ni se responde nada sin tu aprobación.
+- Sin precios ni tiempos de llegada. Nada de técnicas de apertura ni «imposible de abrir».
+- Las claves nunca se pegan en el chat.
+- Guiones: habla la dueña, natural. Inicio / Desarrollo / Recompensa / Cierre en una tabla
+  «Qué se ve / Qué dices». Primera frase corta sobre algo que se ve. Una idea por reel.
+  Sin chistes forzados.
 
-## 6. Reglas que no se saltan
+## 8. Pendiente
 
-- **No se publica ni se responde nada sin tu aprobación.**
-- Sin precios ni tiempos de llegada en el contenido. Nada de técnicas de apertura, ni
-  «imposible de abrir». Afirmaciones de seguridad «según EVVA» y marcar #publi /
-  «Colaboración pagada».
-- Las claves nunca se pegan en el chat: van por el formulario seguro.
-- Guiones: habla la dueña, natural, como en el mostrador. Estructura Inicio / Desarrollo /
-  Recompensa / Cierre en una tabla «Qué se ve / Qué dices». Primera frase de cinco palabras
-  o menos sobre algo que se ve. Una idea por reel. Sin chistes forzados ni frases que no
-  entienda alguien de fuera.
-- EVVA: nunca vender como diferencia el control de copias ni la tarjeta (lo tienen todos
-  los de alta seguridad); el formato «tres llaves» ya está grabado; nada de «hospitales o
-  negocios» para la MCS.
+1. Confirmar la promoción pagada y el margen medio por trabajo.
+2. Hacer el documento de la estructura para el gestor de redes.
+3. Cambiar nombre del perfil, bio y destacadas.
+4. Comprobar que Marta da el teléfono de urgencias al momento cuando alguien escribe
+   «me he quedado fuera».
+5. Renovar el token de Instagram antes de primeros de enero.
 
-## 7. Pendiente
-
-1. Confirmar la promoción pagada (150 €/mes) y el margen medio por trabajo.
-2. Dejar la estructura de Instagram en un documento para el gestor de redes.
-3. Que EVVA apruebe las afirmaciones de los tres reels (imanes, «tres sistemas», lista de
-   sitios donde están).
-4. Revisar que Marta, en Instagram, dé el teléfono de urgencias al momento cuando alguien
-   escribe «me he quedado fuera».
-5. Cambiar nombre del perfil, bio y destacadas según el punto 2.
-6. Renovar el token de Instagram antes de primeros de enero.
-7. Opcional: reel sobre copias de llaves con impresora 3D.
-
-## 8. Recomendaciones para la conversación nueva
+## 9. Recomendaciones para la conversación nueva
 
 - **Empieza con:** «Lee RESUMEN-INSTAGRAM.md y MATRIZ-VIRALIDAD-IBERICA.md, y seguimos
-  con [la tarea]». Así no hay que volver a explicar nada.
-- **Una tarea por conversación** (por ejemplo: «guiones de diciembre» o «documento para
-  el gestor»). Las conversaciones largas se resumen y se pierde detalle.
-- **Si son guiones, pide que use la skill `guion`** y que pase el texto por un lector sin
-  conocimientos de cerrajería antes de enseñártelo.
-- **Cada mes:** pide la lectura de los datos del mes con la API («cómo han ido los reels
-  de este mes») para ajustar los pilares.
-- **Al terminar cada tarea**, pide que se guarde y se suba al repositorio, y que se
-  actualice este resumen.
+  con [la tarea]».
+- **Una tarea por conversación** («documento para el gestor», «guiones de diciembre»…).
+- **Cada mes**, pide que se vuelvan a leer los datos con la API y que se repita el
+  análisis de la competencia, para ajustar los pilares.
+- **Al terminar cada tarea**, pide que se guarde en el repositorio y que se actualice este
+  resumen.
