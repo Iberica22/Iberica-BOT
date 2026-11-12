@@ -6593,7 +6593,9 @@ app.get("/admin/api/historial", authAdmin, (req, res) => {
   const mio = (t) => claveBaja(t) === k;
   const telConv = Object.keys(conversaciones).find(mio);
   const telAct = Object.keys(actividad).find(mio);
-  const segs = Object.entries(seguimientosPresu).filter(([, x]) => mio(x.clave || x.telefono));
+  // ?nombre= busca también por nombre (por si el parte tiene otro teléfono)
+  const porNombre = normalizaTxt(req.query.nombre || "");
+  const segs = Object.entries(seguimientosPresu).filter(([, x]) => mio(x.clave || x.telefono) || (porNombre.length >= 4 && normalizaTxt(x.nombre || "").includes(porNombre)));
   const refs = new Set(segs.map(([, x]) => x.ref));
   const campLista = Object.values(campanas.listas).flatMap((l) => l.filas.filter((f) => f.k === k).map((f) => ({ lista: l.id, campana: l.campana, prueba: !!l.prueba, estado: f.estado, motivo: f.motivo || null, enviado: fecha(f.ts) })));
   res.json({
@@ -6601,7 +6603,7 @@ app.get("/admin/api/historial", authAdmin, (req, res) => {
     actividad: telAct ? { ...actividad[telAct], ultimaActividad: fecha(actividad[telAct].ultimaActividad) } : null,
     conversacionAhora: telConv ? { paso: conversaciones[telConv].step, nombre: conversaciones[telConv].nombre || null, canal: CANALES_AGENTES[conversaciones[telConv].channelId] || conversaciones[telConv].channelId || null } : null,
     pausas: Object.keys(botActivo).filter((c) => c.endsWith(k) && botActivo[c] === false).map((c) => ({ canal: CANALES_AGENTES[c.split("_")[0]] || c.split("_")[0], hasta: fecha(pausaExpira[c]) || "indefinida" })),
-    presupuestos: segs.map(([caseId, x]) => ({ ref: x.ref, caseId, tipo: x.tipo, estado: x.estado, mensajesEnviados: x.enviados || 0, ultimoMensaje: fecha(x.ultimoMensajeTs), enviadoPresupuesto: fecha(x.enviadoTs) })),
+    presupuestos: segs.map(([caseId, x]) => ({ ref: x.ref, caseId, nombre: x.nombre || null, telefonoDelParte: x.clave || x.telefono || null, tipo: x.tipo, estado: x.estado, mensajesEnviados: x.enviados || 0, ultimoMensaje: fecha(x.ultimoMensajeTs), enviadoPresupuesto: fecha(x.enviadoTs) })),
     historialPresupuestos: presuHistorial.filter((h) => refs.has(h.ref)).slice(0, 30),
     encuesta: { pedida: fecha(Object.entries(resenasPedidas).find(([t]) => mio(t))?.[1]), enCurso: Object.entries(resenasEnCurso).find(([t]) => mio(t))?.[1] || null },
     campanas: { listas: campLista, conversacion: campanas.conversaciones[k] || null, contacto: campanas.contactos[k] || null },
