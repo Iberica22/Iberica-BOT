@@ -895,7 +895,7 @@ const DISENOS_PANEL = {
 // Molduras estándar (paneles moldurados)
 const MOLDURAS_PANEL = { recta:'Moldura recta (2 cuarterones)', capilla:'Moldura capilla (arco)', una:'Una moldura perimetral' };
 function ranurasPanel(d, sombra, luz) {
-  const L = (x1,y1,x2,y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${sombra}" stroke-width="2.6"/><line x1="${x1+1.3}" y1="${y1+1.3}" x2="${x2+1.3}" y2="${y2+1.3}" stroke="${luz}" stroke-width="1.2"/>`;
+  const L = (x1,y1,x2,y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${sombra}" stroke-width="4"/><line x1="${x1+2}" y1="${y1+2}" x2="${x2+2}" y2="${y2+2}" stroke="${luz}" stroke-width="1.8"/>`;
   const R = (x,y,w,h) => L(x,y,x+w,y)+L(x+w,y,x+w,y+h)+L(x,y+h,x+w,y+h)+L(x,y,x,y+h);
   const H = (ys, x1=4, x2=196) => ys.map(y=>L(x1,y,x2,y)).join('');
   const V = (xs, y1=4, y2=396) => xs.map(x=>L(x,y1,x,y2)).join('');
