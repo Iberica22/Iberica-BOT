@@ -737,6 +737,7 @@ const LADOS = [ ['ext','Cara exterior'], ['int','Cara interior'] ];
 function nuevoPanelCfg() {
   return {
     id: 'liso',
+    color: 'blanco',   // liso y moldurados: color del panel (dibujado en la web y el PDF)
     estega:  { modelo:'HALGA 4R', acabado:0, formato:0, corte:false, clavos:false, e9mm:false },
     blinsur: { gama:'decorados', modelo:'LISO', madera:0, acabado:0, medidaEsp:false },
     indu:    { coleccion:'Tempo Aluminio', modelo:'PANEL LISO', acabado:0, medida:0, chapa:false },
@@ -812,15 +813,46 @@ function resumenLado(l) {
   if (c.id === 'blinsur')   return `Tablero DM Blinsur ${blinsurResumen(c.blinsur)}`;
   if (c.id === 'indupanel') return `Panel Indupanel ${induResumen(c.indu)}`;
   if (c.id === 'estega')    return `Panel aluminio Estega ${estegaResumen(c.estega)}`;
+  if (c.id === 'liso')        return `Panel liso ${COLORES_PANEL[c.color]?.n.toLowerCase() || 'blanco'}`;
+  if (c.id === 'moldurado-s') return `Panel con una moldura · ${COLORES_PANEL[c.color]?.n || 'Blanco'}`;
+  if (c.id === 'moldurado-d') return `Panel con doble moldura · ${COLORES_PANEL[c.color]?.n || 'Blanco'}`;
   return PANELES.find(p => p.id === c.id)?.nombre || 'Panel liso estándar';
 }
+function setColorPanel(l, color) { panelCfg[l].color = color; renderPaneles(); actualizarTotal(); }
 // Imagen del modelo elegido (extraídas de los catálogos a docs/img/paneles/)
 function slugImg(s) {
   return String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()
     .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 }
+// Colores de los paneles propios (liso y moldurados)
+const COLORES_PANEL = {
+  blanco:   { n:'Blanco',         base:'#f7f6f2', veta:null },
+  sapelly:  { n:'Sapelly',        base:'#7a3b22', veta:'#5e2a16' },
+  nogal:    { n:'Nogal',          base:'#5b3a25', veta:'#46291a' },
+  roble:    { n:'Roble',          base:'#b98b57', veta:'#a07444' },
+  gris:     { n:'Gris antracita', base:'#3d4246', veta:null },
+  negro:    { n:'Negro',          base:'#1f2022', veta:null },
+  ral:      { n:'Otro color RAL', base:'#d9d4c7', veta:null },
+};
+const COLORES_LISO = ['blanco','sapelly'];
+// Dibujo del panel (SVG): liso, una moldura o doble moldura, con su color
+function svgPanel(tipo, colorId) {
+  const col = COLORES_PANEL[colorId] || COLORES_PANEL.blanco;
+  const oscuro = ['sapelly','nogal','gris','negro'].includes(colorId);
+  const sombra = oscuro ? 'rgba(0,0,0,.45)' : 'rgba(0,0,0,.18)';
+  const luz = oscuro ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.9)';
+  const vetas = col.veta ? Array.from({length:14},(_,i)=>`<path d="M${12+i*13} 0 C ${8+i*13} 120, ${18+i*13} 260, ${11+i*13} 400" stroke="${col.veta}" stroke-width="${i%3?1:2}" fill="none" opacity=".35"/>`).join('') : '';
+  const moldura = (x,y,w,h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${sombra}" stroke-width="5"/><rect x="${x+5}" y="${y+5}" width="${w-10}" height="${h-10}" fill="none" stroke="${luz}" stroke-width="3"/><rect x="${x+9}" y="${y+9}" width="${w-18}" height="${h-18}" fill="none" stroke="${sombra}" stroke-width="1.5"/>`;
+  let detalle = '';
+  if (tipo==='moldurado-s') detalle = moldura(24, 26, 152, 348);
+  if (tipo==='moldurado-d') detalle = moldura(24, 26, 152, 160) + moldura(24, 214, 152, 160);
+  const pomo = `<circle cx="100" cy="205" r="7" fill="#c9c9c9" stroke="#8a8a8a" stroke-width="2"/>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400" width="200" height="400"><rect width="200" height="400" fill="${col.base}"/>${vetas}${detalle}<rect x="1.5" y="1.5" width="197" height="397" fill="none" stroke="#9a9a9a" stroke-width="3"/>${pomo}</svg>`;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
 function imgPanelLado(l) {
   const c = panelCfg[l];
+  if (['liso','moldurado-s','moldurado-d'].includes(c.id)) return svgPanel(c.id, c.color);
   if (c.id === 'blinsur') {
     const m = c.blinsur.gama === 'aluminio' ? '302 / 303 / 304' : c.blinsur.modelo;
     return `img/paneles/blinsur-${c.blinsur.gama}__${slugImg(m)}.jpg`;
@@ -908,6 +940,15 @@ function subPickerLado(l) {
   const precioLinea = `<div class="estegat-full" style="font-size:13px;font-weight:800;color:var(--dorado)" id="precioLado_${l}">${lineaPrecioLado(l)}</div>`;
   const img = imgPanelLado(l);
   const fotoLinea = img ? `<div class="estegat-full panel-foto"><img src="${img}" alt="Modelo seleccionado" onerror="this.parentNode.style.display='none'"></div>` : '';
+
+  if (['liso','moldurado-s','moldurado-d'].includes(c.id)) {
+    const colores = c.id === 'liso' ? COLORES_LISO : Object.keys(COLORES_PANEL);
+    return `<div class="estegat-zona" style="display:block">
+      <div class="estegat-full"><label style="font-size:12px;color:var(--gris-medio)">Color de la cara ${ladoTxt}:</label>
+      <select onchange="setColorPanel('${l}', this.value)" style="margin-left:6px">${colores.map(k=>`<option value="${k}" ${c.color===k?'selected':''}>${COLORES_PANEL[k].n}</option>`).join('')}</select></div>
+      ${fotoLinea}
+    </div>`;
+  }
 
   if (c.id === 'estega') {
     const e = c.estega;
@@ -1024,7 +1065,11 @@ function subPickerLado(l) {
   return '';
 }
 
-function setPanelLado(l, id) { panelCfg[l].id = id; renderPaneles(); actualizarTotal(); }
+function setPanelLado(l, id) {
+  panelCfg[l].id = id;
+  if (id === 'liso' && !COLORES_LISO.includes(panelCfg[l].color)) panelCfg[l].color = 'blanco';
+  renderPaneles(); actualizarTotal();
+}
 
 function setEstegaCfg(l, campo, v) {
   const e = panelCfg[l].estega;
