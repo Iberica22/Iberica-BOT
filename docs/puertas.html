@@ -880,8 +880,8 @@ function ranurasPanel(d, sombra, luz) {
 function svgPanel(tipo, colorId, diseno) {
   const col = COLORES_PANEL[colorId] || COLORES_PANEL.blanco;
   const oscuro = ['sapelly','nogal','gris','negro'].includes(colorId);
-  const sombra = oscuro ? 'rgba(0,0,0,.45)' : 'rgba(0,0,0,.18)';
-  const luz = oscuro ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.9)';
+  const sombra = oscuro ? 'rgba(0,0,0,.5)' : col.veta ? 'rgba(60,30,10,.55)' : 'rgba(0,0,0,.38)';
+  const luz = oscuro ? 'rgba(255,255,255,.18)' : col.veta ? 'rgba(255,240,220,.35)' : 'rgba(255,255,255,.9)';
   const vetas = col.veta ? Array.from({length:14},(_,i)=>`<path d="M${12+i*13} 0 C ${8+i*13} 120, ${18+i*13} 260, ${11+i*13} 400" stroke="${col.veta}" stroke-width="${i%3?1:2}" fill="none" opacity=".35"/>`).join('') : '';
   const moldura = (x,y,w,h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${sombra}" stroke-width="5"/><rect x="${x+5}" y="${y+5}" width="${w-10}" height="${h-10}" fill="none" stroke="${luz}" stroke-width="3"/><rect x="${x+9}" y="${y+9}" width="${w-18}" height="${h-18}" fill="none" stroke="${sombra}" stroke-width="1.5"/>`;
   let detalle = '';
