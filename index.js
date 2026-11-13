@@ -1101,6 +1101,8 @@ async function sondearPartesCerrados() {
         registrarResultadoResena(caso.ref_Parte || caso.id, "sin_telefono_en_zoho");
         continue;
       }
+      // Apuntar para el mensaje de los 3 meses (solo particulares con móvil)
+      try { registrarReact3m(caso, telefonoCli, nombreCli); } catch (e) { console.error("[Reactivación 3m] Registro:", e.message); }
       const r = await pedirResena({ telefono: telefonoCli, nombre: nombreCli, refParte: caso.ref_Parte, caseId: caso.id });
       const resultado = r.ok ? `enviada_por_${r.via}` : (r.detalle ? `${r.motivo}: ${r.detalle}` : r.motivo);
       resumen.encuestas.push({ parte: caso.ref_Parte || caso.id, resultado });
@@ -1964,6 +1966,8 @@ async function cargarEstadoDesdeRedis() {
     Object.assign(campanas.conversaciones, campanasGuardadas.conversaciones || {});
     indexarWamidsCampana();
   }
+  const react3mGuardado = await redisGet("iberica:reactivacion3m");
+  if (react3mGuardado) Object.assign(reactivacion3m, react3mGuardado);
   const altasGuardadas = await redisGet("iberica:altasCasa");
   if (altasGuardadas) Object.assign(altasCasa, altasGuardadas);
   const seguimientosGuardados = await redisGet("iberica:seguimientosPresu");
@@ -5550,6 +5554,7 @@ app.get("/zoho/campos-case", async (req, res) => {
 const CAMP_TEXTOS = {
   nav: "Hola, {{1}}. Somos Ibérica Seguridad, cerrajería de Almería; te atendimos {{2}} para {{3}}. Antes de las fiestas queremos saber si a tu puerta le falta algo: en una llamada de tres minutos te orientamos y, si conviene mejorar algo, te damos precio cerrado. Que en Navidad las únicas visitas sorpresa sean las de la familia. ¿Te llamamos? (Para urgencias, llama al 950 088 086.) Si no quieres más mensajes, responde BAJA.",
   navRecordatorio: "Hola, {{1}}. Te escribimos hace unos días desde Ibérica Seguridad. Si te viene bien, te llamamos tres minutos y te orientamos sobre tu puerta; puedes dejarla lista antes de Navidad o con fecha para enero. Si no, no te volvemos a escribir con esto. ¿Te llamamos? Si no quieres más mensajes, responde BAJA.",
+  t3m: "(Plantilla iberica_reactivacion_mes3 de Meta: {{1}} = nombre, {{2}} = Ibérica Seguridad)",
   // T7b (código SI-ALTA): como la T7 pero sin la revisión ni el técnico
   t7b: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Como has hablado con Nieves, ya eres cliente de la casa. Guarda este WhatsApp: lo que nos escribas aquí lo ve la oficina directamente. Y para urgencias, guarda también el 950 088 086: te atendemos las 24 horas y, si coinciden dos urgencias, la tuya va delante. Contigo, hasta dejarlo resuelto. Para no recibir más mensajes, responde BAJA.",
   t7: "Hola {{1}}, soy Marta, de Ibérica Seguridad. Como has hablado con Nieves, ya eres cliente de la casa. Guarda este WhatsApp: lo que nos escribas aquí lo ve la oficina directamente. Y para urgencias, guarda también el 950 088 086: te atendemos las 24 horas y, si coinciden dos urgencias, la tuya va delante. Te avisaremos cuando el técnico pase por tu zona. Contigo, hasta dejarlo resuelto. Para no recibir más mensajes, responde BAJA.",
@@ -5571,13 +5576,14 @@ const CAMPANAS_CONFIG = {
     recordatorio: { envPlantilla: "NAV_TEMPLATE_RECORDATORIO", texto: "navRecordatorio", desde: "2026-12-09", hasta: "2026-12-17", diasDesdeEnvio: 5 },
   },
   "REACT-T7": { nombre: "T7 · Alta «Cliente de la casa»", envPlantilla: "T7_TEMPLATE", texto: "t7", variables: ["nombre"], etiqueta: "REACT-T7", comercial: false, control: false, casa: true, dias: [2, 3, 4], cupo: { 2: 40, 3: 40, 4: 40 } },
+  "REACT-3M": { nombre: "Reactivación a los 3 meses del parte", envPlantilla: "REACT3M_TEMPLATE", texto: "t3m", variables: ["nombre"], etiqueta: "REACT-3M", comercial: true, control: false, dias: [1, 2, 3, 4, 5], cupo: { 1: 40, 2: 40, 3: 40, 4: 40, 5: 40 } },
   "REACT-T3": { nombre: "T3 · Cliente top que no contestó", envPlantilla: "T3_TEMPLATE", texto: "t3", variables: ["nombre"], etiqueta: "REACT-T3", comercial: true, control: true, dias: [2, 3, 4], cupo: { 2: 40, 3: 40, 4: 40 } },
   "REACT-T4": { nombre: "T4 · Aniversario", envPlantilla: "T4_TEMPLATE", texto: "t4", variables: ["nombre", "trabajo"], etiqueta: "REACT-T4", comercial: true, control: true, aniversario: true, dias: [2, 3, 4], cupo: { 2: 40, 3: 40, 4: 40 } },
   "REACT-T5": { nombre: "T5 · Antes de vacaciones", envPlantilla: "T5_TEMPLATE", texto: "t5", variables: ["nombre"], etiqueta: "REACT-T5", comercial: true, control: true, dias: [2, 3, 4], cupo: { 2: 40, 3: 40, 4: 40 } },
   "REACT-T6": { nombre: "T6 · Cambio de inquilino", envPlantilla: "T6_TEMPLATE", texto: "t6", variables: ["nombre"], etiqueta: "REACT-T6", comercial: true, control: true, dias: [2, 3, 4], cupo: { 2: 40, 3: 40, 4: 40 } },
 };
 // Nombre de cada plantilla en Meta: la variable de Railway, o el nombre acordado
-const PLANTILLAS_DEFECTO = {"NAV_TEMPLATE": "nav26_puerta_fiestas", "NAV_TEMPLATE_RECORDATORIO": "nav26_recordatorio", "T7_TEMPLATE": "t7_cliente_casa", "T3_TEMPLATE": "t3_top_sin_contestar", "T4_TEMPLATE": "t4_aniversario", "T5_TEMPLATE": "t5_vacaciones", "T6_TEMPLATE": "t6_inquilinos"};
+const PLANTILLAS_DEFECTO = {"NAV_TEMPLATE": "nav26_puerta_fiestas", "NAV_TEMPLATE_RECORDATORIO": "nav26_recordatorio", "T7_TEMPLATE": "t7_cliente_casa", "REACT3M_TEMPLATE": "iberica_reactivacion_mes3", "T3_TEMPLATE": "t3_top_sin_contestar", "T4_TEMPLATE": "t4_aniversario", "T5_TEMPLATE": "t5_vacaciones", "T6_TEMPLATE": "t6_inquilinos"};
 const plantillaDe = (env) => process.env[env] || PLANTILLAS_DEFECTO[env] || null;
 const CAMP_VENTANA = [10 * 60, 10 * 60 + 30];        // 10:00–10:30
 const CAMP_MAX_DIA = parseInt(process.env.CAMP_MAX_DIA || "60", 10); // tope global del número
@@ -5838,7 +5844,7 @@ const enviadosHoy = () => {
     if (f.ts && diaMadrid(new Date(f.ts)) === hoy && ["enviado", "fallido"].includes(f.estado)) n++;
     if (f.recordatorioTs && diaMadrid(new Date(f.recordatorioTs)) === hoy) n++;
   }
-  return n + enviadosHoyAltas();
+  return n + enviadosHoyAltas() + enviadosHoyReact3m();
 };
 const enviadosHoyCampana = (campana) => {
   const hoy = diaMadrid(new Date());
@@ -6637,6 +6643,151 @@ app.get("/admin/api/altas-casa/confirmar", authAdmin, (req, res) => {
 // Lanzar a mano (fuera de la ventana): solo para pruebas
 app.get("/admin/api/altas-casa/lanzar", authAdmin, async (req, res) => res.json(await altasCasaDiario({ forzar: true })));
 
+// ── Reactivación a los 3 meses (antes en Zoho Flow) ──────────────────
+// A los 90 días de cerrarse un parte de un particular, Marta manda la
+// plantilla «iberica_reactivacion_mes3» ({{1}} nombre, {{2}} Ibérica
+// Seguridad) por su número. Si a los 7 días no ha contestado, manda
+// «iberica_reactivacion_seguimiento» ({{1}} nombre). Con las reglas de las
+// campañas: BAJA, Opt Out, presupuesto abierto, máx. 1 comercial cada 30
+// días y 4 al año, límite diario y ventana de 10:00–10:30 en laborables.
+// Cada envío deja nota en el parte; las respuestas las lleva Marta como
+// una campaña más (etiqueta REACT-3M).
+const REACT3M_PLANTILLA = process.env.REACT3M_TEMPLATE || "iberica_reactivacion_mes3";
+const REACT3M_RECORDATORIO = process.env.REACT3M_TEMPLATE_RECORDATORIO || "iberica_reactivacion_seguimiento";
+const REACT3M_ACTIVO = () => (process.env.REACT3M || "on").toLowerCase() !== "off";
+const REACT3M_DIAS = 90, REACT3M_DIAS_REC = 7, REACT3M_DIAS_MAX = 120;
+const reactivacion3m = { porParte: {}, ultimoDia: null };
+let react3mEnCurso = false;
+const guardarReact3m = () => redisSet("iberica:reactivacion3m", reactivacion3m);
+const enviadosHoyReact3m = () => {
+  const hoy = diaMadrid(new Date());
+  return Object.values(reactivacion3m.porParte).reduce((n, e) =>
+    n + [e.enviadoTs, e.recordatorioTs].filter((t) => t > 0 && diaMadrid(new Date(t)) === hoy).length, 0);
+};
+const fechaCierreParte = (caso) => {
+  const k = campoPorNombre(caso, /fecha.*(cierre|cerrad|fin)|closed_time/i);
+  const f = new Date((k && caso[k]) || caso.Modified_Time || 0);
+  return isNaN(f) ? null : f.getTime();
+};
+const esParticularParaReact = (caso) => tipoClientePresu(caso) === "particular" && !parteDeAseguradora(caso) && !/mapfre/.test(normalizaTxt(JSON.stringify(caso)));
+
+// Se apunta al detectar el cierre (sondearPartesCerrados) o al importar
+function registrarReact3m(caso, telefono, nombre, cerradoTs = Date.now()) {
+  if (!caso?.id || reactivacion3m.porParte[caso.id]) return false;
+  const k = claveBaja(telefono || "");
+  if (k.length !== 9 || !/^[67]/.test(k)) return false;
+  if (!esParticularParaReact(caso)) return false;
+  reactivacion3m.porParte[caso.id] = { caseId: caso.id, ref: caso.ref_Parte || caso.id, k, nombre: conTildes(capitaliza(String(nombre || "").trim().split(/\s+/)[0] || "")), cerradoTs, estado: "pendiente" };
+  guardarReact3m();
+  return true;
+}
+
+async function react3mDiario({ forzar = false } = {}) {
+  if (!REACT3M_ACTIVO()) return { ok: false, motivo: "desactivado (REACT3M=off)" };
+  const hoy = diaMadrid(new Date());
+  if (!forzar) {
+    if (!esLaborable(new Date()) || !enVentanaCampana()) return { ok: false, motivo: "fuera_de_ventana" };
+    if (reactivacion3m.ultimoDia === hoy) return { ok: false, motivo: "ya_hecho_hoy" };
+  }
+  if (react3mEnCurso) return { ok: false, motivo: "en_curso" };
+  react3mEnCurso = true;
+  const r = { enviados: [], recordatorios: [], omitidos: [], fallidos: [], avisos: [] };
+  const ahora = Date.now(), dia = 24 * 3600 * 1000;
+  const cfg = { ...CAMPANAS_CONFIG["REACT-3M"], campana: "REACT-3M" };
+  try {
+    for (const e of Object.values(reactivacion3m.porParte)) {
+      if (enviadosHoy() >= CAMP_MAX_DIA) { r.avisos.push(`Límite de ${CAMP_MAX_DIA} mensajes al día: el resto, mañana`); break; }
+      const esRec = e.estado === "enviado" && !e.recordatorioTs && ahora - e.enviadoTs >= REACT3M_DIAS_REC * dia;
+      const toca = e.estado === "pendiente" && ahora - e.cerradoTs >= REACT3M_DIAS * dia;
+      if (!esRec && !toca) continue;
+      if (toca && ahora - e.cerradoTs > REACT3M_DIAS_MAX * dia) { e.estado = "caducado"; r.omitidos.push({ ref: e.ref, motivo: "caducado" }); continue; }
+      if (esRec) {
+        // Solo si no ha contestado ni ha escrito nada desde el mensaje
+        const conv = campanas.conversaciones[e.k];
+        const act = Object.entries(actividad).find(([t]) => claveBaja(t) === e.k)?.[1];
+        const contesto = (conv && (conv.cerrada || (conv.ts || 0) - e.enviadoTs > 60 * 1000)) || (act?.ultimaActividad || 0) > e.enviadoTs + 60 * 1000;
+        if (contesto || esBaja(e.k)) { e.recordatorioTs = -1; e.estado = "contesto"; continue; }
+      }
+      let motivo = esRec ? (esBaja(e.k) ? "baja" : null) : motivoNoEnviar(cfg, { k: e.k });
+      if (!motivo && await optOutEnZoho(e.k)) motivo = "whatsapp_opt_out_en_zoho";
+      if (motivo) {
+        if (esRec) e.recordatorioTs = -1; else e.estado = "omitido";
+        e.motivo = motivo; r.omitidos.push({ ref: e.ref, motivo });
+        guardarReact3m();
+        continue;
+      }
+      const plantilla = esRec ? REACT3M_RECORDATORIO : REACT3M_PLANTILLA;
+      const params = esRec ? [e.nombre || "hola"] : [e.nombre || "hola", "Ibérica Seguridad"];
+      let res;
+      try { res = await enviarPlantillaCampana({ k: e.k, clave: `34${e.k}`, nombre: e.nombre }, plantilla, params, { ...cfg }); }
+      catch (err) { res = { ok: false, detalle: err.message }; }
+      if (res.ok) {
+        const c = (campanas.contactos[e.k] = campanas.contactos[e.k] || { comerciales: [], sinRespuesta: 0 });
+        if (esRec) { e.recordatorioTs = Date.now(); r.recordatorios.push(e.ref); }
+        else {
+          e.estado = "enviado"; e.enviadoTs = Date.now(); r.enviados.push(e.ref);
+          c.comerciales.push(Date.now()); c.sinRespuesta = (c.sinRespuesta || 0) + 1;
+          campanas.conversaciones[e.k] = { ...(campanas.conversaciones[e.k] || {}), campana: "REACT-3M", etiqueta: "REACT-3M", ts: Date.now(), paso: null, cerrada: null, presentado: false };
+        }
+        guardarCampanas();
+        crearNotaParte(e.caseId, `Reactivación 3 meses (Marta): enviado por WhatsApp ${esRec ? "el recordatorio" : "el mensaje de los 3 meses"} (plantilla ${plantilla}). Si contesta, lo lleva Nieves.`);
+      } else {
+        const det = String(res.detalle || "error").slice(0, 160);
+        if (/\b132\d{3}\b/.test(det)) { r.avisos.push(`La plantilla ${plantilla} no funciona en Meta: se para hasta revisarla`); break; }
+        if (esRec) e.recordatorioTs = -1; else e.estado = "fallido";
+        e.motivo = det; r.fallidos.push({ ref: e.ref, motivo: det });
+      }
+      guardarReact3m();
+      if (CAMP_PAUSA_ENTRE_MS) await new Promise((ok) => setTimeout(ok, CAMP_PAUSA_ENTRE_MS));
+    }
+    reactivacion3m.ultimoDia = hoy; guardarReact3m();
+    if (r.enviados.length || r.recordatorios.length) console.log("[Reactivación 3m]", JSON.stringify({ enviados: r.enviados.length, recordatorios: r.recordatorios.length }));
+    return { ok: true, ...r };
+  } finally { react3mEnCurso = false; }
+}
+
+// Importar los partes cerrados de los últimos 90 días (una vez, al apagar
+// Zoho Flow), para que nadie se quede sin su mensaje de los 3 meses.
+async function importarReact3m(dias = 97) {
+  const token = await obtenerTokenZoho();
+  const partes = await paginasZoho("Cases", token, null, 15);
+  const desde = Date.now() - dias * 24 * 3600 * 1000;
+  const r = { leidos: partes.length, anadidos: 0, yaEstaban: 0, sinMovil: 0, noParticular: 0 };
+  for (const caso of partes) {
+    if (caso.Status !== "Cerrado") continue;
+    const sub = normalizaTxt(caso.Subestado || "");
+    if (!sub.includes("acabado") && !sub.includes("solucionado")) continue;
+    const cerrado = fechaCierreParte(caso);
+    if (!cerrado || cerrado < desde) continue;
+    if (reactivacion3m.porParte[caso.id]) { r.yaEstaban++; continue; }
+    if (!esParticularParaReact(caso)) { r.noParticular++; continue; }
+    let tel = null, nombre = caso.Related_To?.name || "";
+    try {
+      if (caso.Related_To?.id) {
+        const c = (await axios.get(`https://www.zohoapis.eu/crm/v2/Contacts/${caso.Related_To.id}`, { headers: { Authorization: `Zoho-oauthtoken ${token}` } })).data?.data?.[0] || {};
+        tel = c.Mobile || c.Phone || null; nombre = c.First_Name || c.Full_Name || nombre;
+      }
+    } catch (_) {}
+    if (registrarReact3m(caso, tel, nombre, cerrado)) r.anadidos++; else r.sinMovil++;
+  }
+  if (partes.cortado) r.aviso = partes.cortado;
+  return r;
+}
+
+app.get("/admin/api/reactivacion-3m", authAdmin, (req, res) => {
+  const fecha = (ts) => (ts > 0 ? new Date(ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }) : null);
+  const lista = Object.values(reactivacion3m.porParte).sort((a, b) => a.cerradoTs - b.cerradoTs);
+  const n = (e) => lista.filter((x) => x.estado === e).length;
+  res.json({ ok: true, activo: REACT3M_ACTIVO(), plantillas: [REACT3M_PLANTILLA, REACT3M_RECORDATORIO], ultimoDia: reactivacion3m.ultimoDia,
+    resumen: { pendientes: n("pendiente"), enviados: n("enviado"), contestaron: n("contesto"), omitidos: n("omitido"), fallidos: n("fallido"), caducados: n("caducado") },
+    proximos: lista.filter((x) => x.estado === "pendiente").slice(0, 30).map((x) => ({ ref: x.ref, nombre: x.nombre, telefono: x.k, cerrado: fecha(x.cerradoTs), toca: fecha(x.cerradoTs + REACT3M_DIAS * 24 * 3600 * 1000) })),
+    ultimos: lista.filter((x) => x.estado !== "pendiente").slice(-30).map((x) => ({ ref: x.ref, nombre: x.nombre, telefono: x.k, estado: x.estado, motivo: x.motivo || null, enviado: fecha(x.enviadoTs), recordatorio: fecha(x.recordatorioTs) })) });
+});
+app.get("/admin/api/reactivacion-3m/importar", authAdmin, async (req, res) => {
+  try { res.json({ ok: true, ...(await importarReact3m()) }); } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+app.get("/admin/api/reactivacion-3m/lanzar", authAdmin, async (req, res) => res.json(await react3mDiario({ forzar: true })));
+
 function estadisticasCampanas() {
   const listas = Object.values(campanas.listas).sort((a, b) => b.creada - a.creada).map((l) => {
     const n = (fn) => l.filas.filter(fn).length;
@@ -6994,6 +7145,8 @@ app.listen(PORT, async () => {
   }, 4 * 60 * 1000);
   // Altas «Cliente de la casa» (T7) desde las notas de Nieves: una vez al día
   setInterval(() => altasCasaDiario().catch((e) => console.error("[Altas T7] Falló:", e.message)), 5 * 60 * 1000);
+  // Reactivación a los 3 meses del cierre del parte (antes en Zoho Flow)
+  setInterval(() => react3mDiario().catch((e) => console.error("[Reactivación 3m] Falló:", e.message)), 5 * 60 * 1000);
 
   // Pre-cargar el token de Zoho al arrancar para detectar errores de configuración
   try {

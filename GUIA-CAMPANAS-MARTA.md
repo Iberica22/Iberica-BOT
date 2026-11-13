@@ -182,6 +182,29 @@ Para comprobar el [NOCOM] hace falta la misma clave en los dos sitios:
 `DIAG_KEY` que ya tiene). Sin ella Marta no envía ninguna T7.
 `ALTAS_CASA=off` lo apaga.
 
+## Reactivación a los 3 meses del parte (antes en Zoho Flow)
+
+- **A quién:** particulares (origen Teléfono, Tienda o Recomendación; sin
+  compañías ni Mapfre) con móvil, cuando su parte pasa a **Cerrado –
+  Acabado / Solucionado**.
+- **Cuándo:** a los **90 días** del cierre, plantilla
+  `iberica_reactivacion_mes3` ({{1}} nombre, {{2}} «Ibérica Seguridad»).
+  Si a los **7 días** no ha contestado ni escrito nada, recordatorio con
+  `iberica_reactivacion_seguimiento` ({{1}} nombre). Días laborables, de
+  10:00 a 10:30, dentro del límite diario.
+- **No se envía** con BAJA, WhatsApp Opt Out, un presupuesto abierto, otro
+  mensaje comercial hace menos de 30 días o 4 este año. Si se pasa de 120
+  días sin poder enviarse, se descarta.
+- **Nota en el parte** con cada envío. Las respuestas las lleva Marta como
+  una campaña más (etiqueta REACT-3M) y pasan a Nieves.
+- **Al pasarlo a Marta:** apagar el flujo de Zoho Flow y abrir una vez
+  `/admin/api/reactivacion-3m/importar`. Así entran los partes cerrados en
+  los últimos 90 días y nadie se queda sin su mensaje.
+
+Enlaces: `/admin/api/reactivacion-3m` (pendientes y enviados),
+`/admin/api/reactivacion-3m/lanzar` (lanzarlo a mano, envía de verdad).
+`REACT3M=off` lo apaga.
+
 ## Variables de Railway (solo si una plantilla se llama distinto)
 
 Marta ya usa por defecto estos nombres: `nav26_puerta_fiestas`, `nav26_recordatorio`, `t7_cliente_casa`, `t7b_cliente_casa`, `t3_top_sin_contestar`, `t4_aniversario`, `t5_vacaciones` y `t6_inquilinos`. Las variables solo hacen falta si en Meta se crean con otro nombre.
