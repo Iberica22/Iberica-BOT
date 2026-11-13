@@ -814,13 +814,14 @@ function resumenLado(l) {
   if (c.id === 'blinsur')   return `Tablero DM Blinsur ${blinsurResumen(c.blinsur)}`;
   if (c.id === 'indupanel') return `Panel Indupanel ${induResumen(c.indu)}`;
   if (c.id === 'estega')    return `Panel aluminio Estega ${estegaResumen(c.estega)}`;
-  if (c.id === 'liso')        return `Panel liso ${COLORES_PANEL[c.color]?.n.toLowerCase() || 'blanco'}${c.diseno && c.diseno!=='lisa' ? ' · ' + DISENOS_PANEL[c.diseno].toLowerCase() : ''}`;
-  if (c.id === 'moldurado-s') return `Panel con una moldura · ${COLORES_PANEL[c.color]?.n || 'Blanco'}`;
-  if (c.id === 'moldurado-d') return `Panel con doble moldura · ${COLORES_PANEL[c.color]?.n || 'Blanco'}`;
+  if (c.id === 'liso')        return `Panel ${COLORES_PANEL[c.color]?.n.toLowerCase() || 'blanco'}${c.diseno && c.diseno!=='lisa' && DISENOS_PANEL[c.diseno] ? ' · ' + DISENOS_PANEL[c.diseno] : ' liso'}`;
+  if (c.id === 'moldurado-s') return `Panel moldurado · ${MOLDURAS_PANEL[c.moldura||'recta']} · ${COLORES_PANEL[c.color]?.n || 'Blanco'}`;
+  if (c.id === 'moldurado-d') return `Panel doble moldura · ${MOLDURAS_PANEL[c.moldura||'recta']} · ${COLORES_PANEL[c.color]?.n || 'Blanco'}`;
   return PANELES.find(p => p.id === c.id)?.nombre || 'Panel liso estándar';
 }
 function setColorPanel(l, color) { panelCfg[l].color = color; renderPaneles(); actualizarTotal(); }
 function setDisenoPanel(l, d) { panelCfg[l].diseno = d; renderPaneles(); actualizarTotal(); }
+function setMolduraPanel(l, d) { panelCfg[l].moldura = d; renderPaneles(); actualizarTotal(); }
 // Imagen del modelo elegido (extraídas de los catálogos a docs/img/paneles/)
 function slugImg(s) {
   return String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()
@@ -837,32 +838,45 @@ const COLORES_PANEL = {
   ral:      { n:'Otro color RAL', base:'#d9d4c7', veta:null },
 };
 const COLORES_LISO = ['blanco','sapelly'];
-// Dibujos del panel liso (ranuras fresadas)
+// Dibujos del panel liso fresado: «Diseños estándar para DM lacado y madera»
 const DISENOS_PANEL = {
-  lisa:  'Sin dibujo',
-  h2:    '2 líneas horizontales',
-  h4:    '4 líneas horizontales',
-  h8:    'Líneas horizontales finas',
-  v3:    '3 líneas verticales',
-  marco: 'Marco grabado',
-  c4:    '4 cuadros',
-  c6:    '6 cuadros',
-  diag:  'Líneas en diagonal',
+  lisa:'Liso', '2rh':'Modelo 2RH', '2rv':'Modelo 2RV', '2rv4rh':'Modelo 2RV 4RH', '1rv2rh':'Modelo 1RV2RH', tienda:'Diseño tienda',
+  halga2r:'Halga 2R', halga3r:'Halga 3R', halga4r:'Halga 4R', halga2x2:'Halga 2x2', halga3x2:'Halga 3x2', m104:'Modelo 104',
+  isoca2r:'Isoca 2R', isoca3r:'Isoca 3R', isoca3r200:'Isoca 3R 200', isoca4r:'Isoca 4R',
+  a:'Modelo A', b:'Modelo B', c:'Modelo C', d:'Modelo D',
 };
+// Molduras estándar (paneles moldurados)
+const MOLDURAS_PANEL = { recta:'Moldura recta (2 cuarterones)', capilla:'Moldura capilla (arco)', una:'Una moldura perimetral' };
 function ranurasPanel(d, sombra, luz) {
-  const L = (x1,y1,x2,y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${sombra}" stroke-width="3"/><line x1="${x1+1.5}" y1="${y1+1.5}" x2="${x2+1.5}" y2="${y2+1.5}" stroke="${luz}" stroke-width="1.5"/>`;
+  const L = (x1,y1,x2,y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${sombra}" stroke-width="2.6"/><line x1="${x1+1.3}" y1="${y1+1.3}" x2="${x2+1.3}" y2="${y2+1.3}" stroke="${luz}" stroke-width="1.2"/>`;
   const R = (x,y,w,h) => L(x,y,x+w,y)+L(x+w,y,x+w,y+h)+L(x,y+h,x+w,y+h)+L(x,y,x,y+h);
-  if (d==='h2') return L(22,140,178,140)+L(22,260,178,260);
-  if (d==='h4') return [90,165,240,315].map(y=>L(22,y,178,y)).join('');
-  if (d==='h8') return Array.from({length:15},(_,i)=>L(22,40+i*23,178,40+i*23)).join('');
-  if (d==='v3') return [60,100,140].map(x=>L(x,30,x,370)).join('');
-  if (d==='marco') return R(26,30,148,340);
-  if (d==='c4') return R(30,40,62,150)+R(108,40,62,150)+R(30,210,62,150)+R(108,210,62,150);
-  if (d==='c6') return [40,152,264].map(y=>R(30,y,62,96)+R(108,y,62,96)).join('');
-  if (d==='diag') return Array.from({length:9},(_,i)=>L(22,60+i*38,178,10+i*38)).join('');
-  return '';
+  const H = (ys, x1=4, x2=196) => ys.map(y=>L(x1,y,x2,y)).join('');
+  const V = (xs, y1=4, y2=396) => xs.map(x=>L(x,y1,x,y2)).join('');
+  const marco = R(14,14,172,372);   // Halga / Isoca: marco perimetral
+  const reparto = (n, a, b) => Array.from({length:n},(_,i)=>a+(b-a)*(i+1)/(n+1));
+  switch (d) {
+    case '2rh':    return H([178, 218]);
+    case '2rv':    return V([26, 172]);
+    case '2rv4rh': return V([26, 172]) + H([80,160,240,320], 26, 172);
+    case '1rv2rh': return V([92]) + L(4,200,92,200) + L(92,280,196,280);
+    case 'tienda': return V([50, 160]) + H([44, 352], 50, 160);
+    case 'halga2r': return marco + H(reparto(2,14,386), 14, 186);
+    case 'halga3r': return marco + H(reparto(3,14,386), 14, 186);
+    case 'halga4r': return marco + H(reparto(4,14,386), 14, 186);
+    case 'halga2x2': return marco + H([140,150,250,260], 14, 186);
+    case 'halga3x2': return marco + H([82,92,190,200,298,308], 14, 186);
+    case 'm104':   return H(reparto(4,0,400));
+    case 'isoca2r': return marco + V(reparto(2,14,186), 14, 386);
+    case 'isoca3r': return marco + V(reparto(3,14,186), 14, 386);
+    case 'isoca3r200': return marco + V([62,100,138], 14, 386);
+    case 'isoca4r': return marco + V(reparto(4,14,186), 14, 386);
+    case 'a':      return V([54,146]) + H(reparto(7,20,380), 54, 146);
+    case 'b':      return V([34,66]) + H([40,70], 4, 196);
+    case 'c':      return V([54]) + H(reparto(7,20,380), 54, 196);
+    case 'd':      return V([54,146]) + H([46,356]) + L(146,200,196,200);
+    default:       return '';
+  }
 }
-// Dibujo del panel (SVG): liso, una moldura o doble moldura, con su color
 function svgPanel(tipo, colorId, diseno) {
   const col = COLORES_PANEL[colorId] || COLORES_PANEL.blanco;
   const oscuro = ['sapelly','nogal','gris','negro'].includes(colorId);
@@ -871,8 +885,14 @@ function svgPanel(tipo, colorId, diseno) {
   const vetas = col.veta ? Array.from({length:14},(_,i)=>`<path d="M${12+i*13} 0 C ${8+i*13} 120, ${18+i*13} 260, ${11+i*13} 400" stroke="${col.veta}" stroke-width="${i%3?1:2}" fill="none" opacity=".35"/>`).join('') : '';
   const moldura = (x,y,w,h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${sombra}" stroke-width="5"/><rect x="${x+5}" y="${y+5}" width="${w-10}" height="${h-10}" fill="none" stroke="${luz}" stroke-width="3"/><rect x="${x+9}" y="${y+9}" width="${w-18}" height="${h-18}" fill="none" stroke="${sombra}" stroke-width="1.5"/>`;
   let detalle = '';
-  if (tipo==='moldurado-s') detalle = moldura(24, 26, 152, 348);
-  if (tipo==='moldurado-d') detalle = moldura(24, 26, 152, 160) + moldura(24, 214, 152, 160);
+  const capilla = (x,y,w,h) => `<path d="M${x} ${y+28} Q ${x+w/2} ${y-14} ${x+w} ${y+28} L ${x+w} ${y+h} L ${x} ${y+h} Z" fill="none" stroke="${sombra}" stroke-width="5"/><path d="M${x+6} ${y+32} Q ${x+w/2} ${y-6} ${x+w-6} ${y+32} L ${x+w-6} ${y+h-6} L ${x+6} ${y+h-6} Z" fill="none" stroke="${luz}" stroke-width="3"/>`;
+  if (tipo==='moldurado-s' || tipo==='moldurado-d') {
+    const dobl = tipo==='moldurado-d';
+    const m = (x,y,w,h) => dobl ? moldura(x,y,w,h) + moldura(x+12,y+12,w-24,h-24) : moldura(x,y,w,h);
+    if (diseno==='capilla') detalle = capilla(28, 30, 144, 215) + (dobl ? capilla(40,44,120,188) : '') + m(28, 270, 144, 104);
+    else if (diseno==='una') detalle = m(24, 26, 152, 348);
+    else detalle = m(28, 30, 144, 215) + m(28, 270, 144, 104);
+  }
   if (tipo==='liso') detalle = ranurasPanel(diseno, sombra, luz);
   const pomo = `<circle cx="100" cy="205" r="7" fill="#c9c9c9" stroke="#8a8a8a" stroke-width="2"/>`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400" width="200" height="400"><rect width="200" height="400" fill="${col.base}"/>${vetas}${detalle}<rect x="1.5" y="1.5" width="197" height="397" fill="none" stroke="#9a9a9a" stroke-width="3"/>${pomo}</svg>`;
@@ -880,7 +900,7 @@ function svgPanel(tipo, colorId, diseno) {
 }
 function imgPanelLado(l) {
   const c = panelCfg[l];
-  if (['liso','moldurado-s','moldurado-d'].includes(c.id)) return svgPanel(c.id, c.color, c.diseno);
+  if (['liso','moldurado-s','moldurado-d'].includes(c.id)) return svgPanel(c.id, c.color, c.id === 'liso' ? c.diseno : (c.moldura || 'recta'));
   if (c.id === 'blinsur') {
     const m = c.blinsur.gama === 'aluminio' ? '302 / 303 / 304' : c.blinsur.modelo;
     return `img/paneles/blinsur-${c.blinsur.gama}__${slugImg(m)}.jpg`;
@@ -974,8 +994,12 @@ function subPickerLado(l) {
     return `<div class="estegat-zona" style="display:block">
       <div class="estegat-full"><label style="font-size:12px;color:var(--gris-medio)">Color de la cara ${ladoTxt}:</label>
       <select onchange="setColorPanel('${l}', this.value)" style="margin-left:6px">${colores.map(k=>`<option value="${k}" ${c.color===k?'selected':''}>${COLORES_PANEL[k].n}</option>`).join('')}</select></div>
-      ${c.id === 'liso' ? `<div class="estegat-full" style="font-size:12px;color:var(--gris-medio);margin-top:6px">Dibujo:</div>
-      <div class="estegat-full" style="display:flex;flex-wrap:wrap;gap:6px">${Object.entries(DISENOS_PANEL).map(([k,n])=>`<button type="button" title="${n}" onclick="setDisenoPanel('${l}','${k}')" style="background:${c.diseno===k?'var(--dorado)':'#2a2a2a'};border:1px solid #555;border-radius:6px;padding:4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;width:74px"><img src="${svgPanel('liso', c.color, k)}" style="height:70px;width:auto;border-radius:3px" alt=""><span style="font-size:9px;line-height:1.1;color:${c.diseno===k?'#111':'#ccc'}">${n}</span></button>`).join('')}</div>` : ''}
+      ${(() => {
+        const boton = (sel, k, n, img, fn) => `<button type="button" title="${n}" onclick="${fn}('${l}','${k}')" style="background:${sel?'var(--dorado)':'#2a2a2a'};border:1px solid #555;border-radius:6px;padding:4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;width:74px"><img src="${img}" style="height:70px;width:auto;border-radius:3px" alt=""><span style="font-size:9px;line-height:1.1;color:${sel?'#111':'#ccc'}">${n}</span></button>`;
+        const grid = (titulo, html) => `<div class="estegat-full" style="font-size:12px;color:var(--gris-medio);margin-top:6px">${titulo}</div><div class="estegat-full" style="display:flex;flex-wrap:wrap;gap:6px">${html}</div>`;
+        if (c.id === 'liso') return grid('Dibujo (diseños estándar DM lacado y madera):', Object.entries(DISENOS_PANEL).map(([k,n])=>boton(c.diseno===k,k,n,svgPanel('liso',c.color,k),'setDisenoPanel')).join(''));
+        return grid('Moldura:', Object.entries(MOLDURAS_PANEL).map(([k,n])=>boton((c.moldura||'recta')===k,k,n,svgPanel(c.id,c.color,k),'setMolduraPanel')).join(''));
+      })()}
       ${fotoLinea}
     </div>`;
   }
@@ -1428,17 +1452,35 @@ const FICHAS_MODELO = {
     ],
     sellos: ['Disponible en RC3 y RC4', 'Norma UNE-EN 1627:2021', 'Producto certificado AENOR'],
   },
+  'k-xxi': {
+    titulo: 'KIUSO XXI', foto: 'img/fichas/kxxi-puerta.jpg',
+    intro: 'Toda la seguridad de la KIUSO 100, con elementos que la hacen más elegante y con terminaciones más apropiadas para la intemperie. Puerta recomendada para viviendas de exterior.',
+    items: [
+      ['Toda la seguridad de la KIUSO 100', 'hoja de acero, cerco de 2 mm, pestillos con 3 bulones antirretroceso y antideformación, cerradura de 4 bulones, cilindro de llave incopiable y protector anti-taladro.'],
+      ['Cantonera de aluminio y doble burlete', 'el burlete doble refuerza el aislamiento.'],
+      ['8 pivotes con cazoletas antipalanca', 'terminación en dorado o cromo mate.'],
+      ['Tancador inferior', 'para la entrada de la barra inferior, con muelle.'],
+      ['Zócalo inferior con batiente', 'que solapa la hoja. Opcional sin escalón, con cortavientos.'],
+      ['Tableros de 9 mm', 'de espesor, más resistentes a la intemperie.'],
+      ['Certificación AENOR', 'producto certificado: la puerta instalada es igual a la ensayada en laboratorio.'],
+      ['Instalación sin obra', 'mediante resina de dos componentes.'],
+    ],
+    extraImg: 'img/fichas/kxxi-diferencias.jpg',
+    sellos: ['Disponible en RC3 y RC4', 'Norma UNE-EN 1627:2021', 'Recomendada para exterior'],
+  },
 };
 function paginaFicha(m, abs, e) {
   const f = FICHAS_MODELO[m.id];
   if (!f) return '';
   return `<section class="hoja">
     <div class="kicker big">Ficha técnica · ${e(m.nombre)}</div>
-    <h1 style="margin-bottom:14px">${e(f.titulo)} · Características</h1>
+    <h1 style="margin-bottom:${f.intro?6:14}px">${e(f.titulo)} · Características</h1>
+    ${f.intro?`<div class="sub" style="margin-bottom:14px">${e(f.intro)}</div>`:''}
     <div class="ficha-g">
       <div class="ficha-foto"><img src="${abs(f.foto)}" alt="${e(f.titulo)}"></div>
       <ol class="ficha-l">${f.items.map(([t,d],i)=>`<li><span class="n">${i+1}</span><span><b>${e(t)}</b> ${e(d)}</span></li>`).join('')}</ol>
     </div>
+    ${f.extraImg?`<div class="kicker" style="margin-top:14px">Diferencias con la KIUSO 100</div><img src="${abs(f.extraImg)}" alt="" style="width:100%;max-height:58mm;object-fit:contain;margin-top:6px;border-radius:8px">`:''}
     <div class="sellos">${f.sellos.map(x=>`<span>${e(x)}</span>`).join('')}</div>
   </section>`;
 }
