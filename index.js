@@ -4728,6 +4728,20 @@ app.get("/admin/api/presupuestos-resultados", authAdmin, async (req, res) => {
   res.json({ ok: true, contactadosPorMarta: detalle.length, porEstadoZoho, detalle });
 });
 
+// Marcar a mano que un presupuesto ya lo lleva una persona (sale del
+// seguimiento de Marta y de la agenda): /admin/api/presupuestos/atendido?ref=2026-12045
+app.get("/admin/api/presupuestos/atendido", authAdmin, (req, res) => {
+  const ref = String(req.query.ref || "").trim();
+  const seg = Object.values(seguimientosPresu).find((x) => x.ref === ref);
+  if (!seg) return res.json({ ok: false, error: "No encuentro ese presupuesto en el seguimiento de Marta" });
+  const antes = seg.estado;
+  seg.estado = "atendido_persona"; seg.atendidoAManoTs = Date.now();
+  guardarSeguimientosPresu();
+  registrarResultadoPresu(ref, "marcado_a_mano_lo_lleva_una_persona");
+  crearNotaParte(seg.caseId, "Seguimiento presupuesto (Marta): lo lleva una persona de la oficina; Marta deja de escribirle y sale de la agenda.");
+  res.json({ ok: true, ref, nombre: seg.nombre || null, antes, ahora: seg.estado });
+});
+
 app.get("/admin/api/test-presupuestos", authAdmin, async (req, res) => {
   const sondeo  = await sondearPresupuestosEnviados();
   const barrido = await barridoToquesPresupuesto(req.query.forzar === "1");

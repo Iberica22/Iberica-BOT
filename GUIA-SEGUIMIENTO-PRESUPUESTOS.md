@@ -227,3 +227,7 @@ sobre el presupuesto: ¿has decidido aparcarlo? Si es así, con un simple
 ## Si contesta «lo reviso y os digo» y no da fecha
 
 Marta le pregunta qué le falta y cuándo le viene bien que le vuelva a escribir. Si el cliente da fecha, Marta la apunta y vuelve a escribirle ese día. Si no vuelve a decir nada, a los **7 días** el presupuesto sale en **📞 Llamar** de la agenda de las 10:00, con el texto «contestó hace N días que lo pensaba y no ha dado fecha». Así no se queda parado hasta el cierre. Los días se cambian con `PRESU_DIAS_SIN_FECHA`.
+
+## Si lo llevas tú a mano
+
+Cuando alguien de la oficina lleva un presupuesto por su cuenta (por ejemplo, desde otro WhatsApp), abre `/admin/api/presupuestos/atendido?ref=2026-XXXXX`. Marta deja de escribirle, el presupuesto ya no sale en «Llamar» y queda una nota en el parte. El aviso de cerrar con R6 a los 45 días sigue saliendo.
