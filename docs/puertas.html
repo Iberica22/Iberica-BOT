@@ -738,6 +738,7 @@ function nuevoPanelCfg() {
   return {
     id: 'liso',
     color: 'blanco',   // liso y moldurados: color del panel (dibujado en la web y el PDF)
+    diseno: 'lisa',    // panel liso: dibujo fresado (líneas, cuadros…)
     estega:  { modelo:'HALGA 4R', acabado:0, formato:0, corte:false, clavos:false, e9mm:false },
     blinsur: { gama:'decorados', modelo:'LISO', madera:0, acabado:0, medidaEsp:false },
     indu:    { coleccion:'Tempo Aluminio', modelo:'PANEL LISO', acabado:0, medida:0, chapa:false },
@@ -813,12 +814,13 @@ function resumenLado(l) {
   if (c.id === 'blinsur')   return `Tablero DM Blinsur ${blinsurResumen(c.blinsur)}`;
   if (c.id === 'indupanel') return `Panel Indupanel ${induResumen(c.indu)}`;
   if (c.id === 'estega')    return `Panel aluminio Estega ${estegaResumen(c.estega)}`;
-  if (c.id === 'liso')        return `Panel liso ${COLORES_PANEL[c.color]?.n.toLowerCase() || 'blanco'}`;
+  if (c.id === 'liso')        return `Panel liso ${COLORES_PANEL[c.color]?.n.toLowerCase() || 'blanco'}${c.diseno && c.diseno!=='lisa' ? ' · ' + DISENOS_PANEL[c.diseno].toLowerCase() : ''}`;
   if (c.id === 'moldurado-s') return `Panel con una moldura · ${COLORES_PANEL[c.color]?.n || 'Blanco'}`;
   if (c.id === 'moldurado-d') return `Panel con doble moldura · ${COLORES_PANEL[c.color]?.n || 'Blanco'}`;
   return PANELES.find(p => p.id === c.id)?.nombre || 'Panel liso estándar';
 }
 function setColorPanel(l, color) { panelCfg[l].color = color; renderPaneles(); actualizarTotal(); }
+function setDisenoPanel(l, d) { panelCfg[l].diseno = d; renderPaneles(); actualizarTotal(); }
 // Imagen del modelo elegido (extraídas de los catálogos a docs/img/paneles/)
 function slugImg(s) {
   return String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase()
@@ -835,8 +837,33 @@ const COLORES_PANEL = {
   ral:      { n:'Otro color RAL', base:'#d9d4c7', veta:null },
 };
 const COLORES_LISO = ['blanco','sapelly'];
+// Dibujos del panel liso (ranuras fresadas)
+const DISENOS_PANEL = {
+  lisa:  'Sin dibujo',
+  h2:    '2 líneas horizontales',
+  h4:    '4 líneas horizontales',
+  h8:    'Líneas horizontales finas',
+  v3:    '3 líneas verticales',
+  marco: 'Marco grabado',
+  c4:    '4 cuadros',
+  c6:    '6 cuadros',
+  diag:  'Líneas en diagonal',
+};
+function ranurasPanel(d, sombra, luz) {
+  const L = (x1,y1,x2,y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${sombra}" stroke-width="3"/><line x1="${x1+1.5}" y1="${y1+1.5}" x2="${x2+1.5}" y2="${y2+1.5}" stroke="${luz}" stroke-width="1.5"/>`;
+  const R = (x,y,w,h) => L(x,y,x+w,y)+L(x+w,y,x+w,y+h)+L(x,y+h,x+w,y+h)+L(x,y,x,y+h);
+  if (d==='h2') return L(22,140,178,140)+L(22,260,178,260);
+  if (d==='h4') return [90,165,240,315].map(y=>L(22,y,178,y)).join('');
+  if (d==='h8') return Array.from({length:15},(_,i)=>L(22,40+i*23,178,40+i*23)).join('');
+  if (d==='v3') return [60,100,140].map(x=>L(x,30,x,370)).join('');
+  if (d==='marco') return R(26,30,148,340);
+  if (d==='c4') return R(30,40,62,150)+R(108,40,62,150)+R(30,210,62,150)+R(108,210,62,150);
+  if (d==='c6') return [40,152,264].map(y=>R(30,y,62,96)+R(108,y,62,96)).join('');
+  if (d==='diag') return Array.from({length:9},(_,i)=>L(22,60+i*38,178,10+i*38)).join('');
+  return '';
+}
 // Dibujo del panel (SVG): liso, una moldura o doble moldura, con su color
-function svgPanel(tipo, colorId) {
+function svgPanel(tipo, colorId, diseno) {
   const col = COLORES_PANEL[colorId] || COLORES_PANEL.blanco;
   const oscuro = ['sapelly','nogal','gris','negro'].includes(colorId);
   const sombra = oscuro ? 'rgba(0,0,0,.45)' : 'rgba(0,0,0,.18)';
@@ -846,13 +873,14 @@ function svgPanel(tipo, colorId) {
   let detalle = '';
   if (tipo==='moldurado-s') detalle = moldura(24, 26, 152, 348);
   if (tipo==='moldurado-d') detalle = moldura(24, 26, 152, 160) + moldura(24, 214, 152, 160);
+  if (tipo==='liso') detalle = ranurasPanel(diseno, sombra, luz);
   const pomo = `<circle cx="100" cy="205" r="7" fill="#c9c9c9" stroke="#8a8a8a" stroke-width="2"/>`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400" width="200" height="400"><rect width="200" height="400" fill="${col.base}"/>${vetas}${detalle}<rect x="1.5" y="1.5" width="197" height="397" fill="none" stroke="#9a9a9a" stroke-width="3"/>${pomo}</svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
 function imgPanelLado(l) {
   const c = panelCfg[l];
-  if (['liso','moldurado-s','moldurado-d'].includes(c.id)) return svgPanel(c.id, c.color);
+  if (['liso','moldurado-s','moldurado-d'].includes(c.id)) return svgPanel(c.id, c.color, c.diseno);
   if (c.id === 'blinsur') {
     const m = c.blinsur.gama === 'aluminio' ? '302 / 303 / 304' : c.blinsur.modelo;
     return `img/paneles/blinsur-${c.blinsur.gama}__${slugImg(m)}.jpg`;
@@ -946,6 +974,8 @@ function subPickerLado(l) {
     return `<div class="estegat-zona" style="display:block">
       <div class="estegat-full"><label style="font-size:12px;color:var(--gris-medio)">Color de la cara ${ladoTxt}:</label>
       <select onchange="setColorPanel('${l}', this.value)" style="margin-left:6px">${colores.map(k=>`<option value="${k}" ${c.color===k?'selected':''}>${COLORES_PANEL[k].n}</option>`).join('')}</select></div>
+      ${c.id === 'liso' ? `<div class="estegat-full" style="font-size:12px;color:var(--gris-medio);margin-top:6px">Dibujo:</div>
+      <div class="estegat-full" style="display:flex;flex-wrap:wrap;gap:6px">${Object.entries(DISENOS_PANEL).map(([k,n])=>`<button type="button" title="${n}" onclick="setDisenoPanel('${l}','${k}')" style="background:${c.diseno===k?'var(--dorado)':'#2a2a2a'};border:1px solid #555;border-radius:6px;padding:4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;width:74px"><img src="${svgPanel('liso', c.color, k)}" style="height:70px;width:auto;border-radius:3px" alt=""><span style="font-size:9px;line-height:1.1;color:${c.diseno===k?'#111':'#ccc'}">${n}</span></button>`).join('')}</div>` : ''}
       ${fotoLinea}
     </div>`;
   }
@@ -1375,10 +1405,43 @@ function mesLimiteSinConf() {
 }
 
 // ── PDF ───────────────────────────────────────────────────────────────────────
-// Fichas técnicas del fabricante que se añaden al PDF (páginas completas)
+// Ficha técnica del modelo (página propia, con texto nítido: el catálogo
+// del fabricante viene a muy poca resolución). Foto + características numeradas.
 const FICHAS_MODELO = {
-  'k100': ['img/fichas/k100-2.jpg', 'img/fichas/k100-3.jpg'],
+  'k100': {
+    titulo: 'KIUSO 100', foto: 'img/fichas/k100-puerta.jpg',
+    items: [
+      ['Hoja de acero', 'con refuerzos de omegas verticales. Relleno de aislante ignífugo.'],
+      ['Cerco cerrado de acero', 'reforzado de 2 mm de espesor. Terminación marrón, blanco o según carta de colores RAL.'],
+      ['3 bisagras de acero', 'regulables, sobre rodamiento a bolas y con capuchones embellecedores.'],
+      ['Mínimo de 8 pivotes antipalanca', 'en la zona de bisagras, insertados en el cerco.'],
+      ['2 pestillos con 3 bulones cada uno', 'con sistema antirretroceso y antideformación (patentes U201100007 y U4201100007).'],
+      ['Cerradura de cilindro', 'de alta seguridad con 4 bulones.'],
+      ['Cilindro de perfil europeo', 'de nivel máximo según UNE-EN 1303:05, con llave incopiable: solo se reproduce presentando la Security Card y el DNI del propietario.'],
+      ['Protector de cilindro', 'de acero carbonitrurado (dureza Rockwell mínima 50 HRc), abocardado en placa de acero al manganeso antiextracción y antitaladro.'],
+      ['Barra superior e inferior', 'de acero, con fijación en suelo y techo.'],
+      ['Controlador de apertura', 'accionado desde el interior: permite abrir la puerta de forma limitada.'],
+      ['Perfilería de aluminio', 'que solapa la puerta, con burlete de goma aislante. Terminación dorado o cromo mate.'],
+      ['Panelable', 'con cualquier tablero o acabado de 5 mm: gran variedad de modelos en madera, aluminio y PVC.'],
+      ['Certificación AENOR', 'producto certificado: la puerta instalada es igual a la ensayada en laboratorio.'],
+      ['Instalación sin obra', 'mediante resina de dos componentes, con la máxima seguridad.'],
+    ],
+    sellos: ['Disponible en RC3 y RC4', 'Norma UNE-EN 1627:2021', 'Producto certificado AENOR'],
+  },
 };
+function paginaFicha(m, abs, e) {
+  const f = FICHAS_MODELO[m.id];
+  if (!f) return '';
+  return `<section class="hoja">
+    <div class="kicker big">Ficha técnica · ${e(m.nombre)}</div>
+    <h1 style="margin-bottom:14px">${e(f.titulo)} · Características</h1>
+    <div class="ficha-g">
+      <div class="ficha-foto"><img src="${abs(f.foto)}" alt="${e(f.titulo)}"></div>
+      <ol class="ficha-l">${f.items.map(([t,d],i)=>`<li><span class="n">${i+1}</span><span><b>${e(t)}</b> ${e(d)}</span></li>`).join('')}</ol>
+    </div>
+    <div class="sellos">${f.sellos.map(x=>`<span>${e(x)}</span>`).join('')}</div>
+  </section>`;
+}
 const TIPO_PUERTA = { fichet:'Puerta acorazada', kiuso:'Puerta acorazada', blindada:'Puerta blindada', metalica:'Puerta metálica de seguridad' };
 // 2.799,85 € (con punto de miles también en 4 cifras)
 const precioDec = (n) => { const [ent, dec] = (Math.round(n*100)/100).toFixed(2).split('.'); return ent.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + dec + ' €'; };
@@ -1447,7 +1510,7 @@ function generarPDF() {
     .concat(regalo ? [[regalo, '<span class="gold">REGALO</span>']] : []);
   const li = (arr) => arr.map(x=>`<li><span class="chk">✓</span><span>${x}</span></li>`).join('');
   const logo = LOGO_DATA_URL ? `<img class="logo" src="${LOGO_DATA_URL}" alt="Ibérica Seguridad">` : '<b>Ibérica Seguridad</b>';
-  const fichas = (FICHAS_MODELO[m.id] || []).map(src=>`<section class="hoja ficha"><img src="${abs(src)}" alt="Ficha técnica ${e(m.nombre)}"></section>`).join('');
+  const fichas = paginaFicha(m, abs, e);
   const cabPag = (t) => `<div class="kicker big">${t}</div>`;
 
   const docHTML = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
@@ -1463,8 +1526,13 @@ function generarPDF() {
   .tb.sec{background:rgba(255,255,255,.12)}
   .hoja{width:210mm;min-height:297mm;margin:10px auto;background:#fff;padding:14mm 13mm;position:relative;page-break-after:always;break-after:page;overflow:hidden}
   .hoja:last-child{page-break-after:auto;break-after:auto}
-  .ficha{padding:0;display:flex;align-items:center;justify-content:center}
-  .ficha img{width:100%;height:297mm;object-fit:contain}
+  .ficha-g{display:grid;grid-template-columns:72mm 1fr;gap:16px;align-items:start}
+  .ficha-foto img{width:100%;border-radius:10px;border:1px solid #e3e6e3;display:block}
+  ol.ficha-l{list-style:none} ol.ficha-l li{display:flex;gap:9px;padding:4.5px 0;font-size:11.8px;line-height:1.42;border-bottom:1px solid #eef1ee}
+  ol.ficha-l li:last-child{border-bottom:0}
+  ol.ficha-l .n{flex-shrink:0;width:21px;height:21px;border-radius:50%;background:var(--osc);color:#fff;font-weight:900;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .sellos{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+  .sellos span{background:var(--claro);border:1px solid var(--borde);border-radius:8px;padding:8px 14px;font-weight:900;font-size:11.5px;color:var(--osc)}
   @media print{body{background:#fff}.toolbar{display:none}.hoja{margin:0;box-shadow:none}}
   .kicker{font-size:9.5px;font-weight:900;letter-spacing:.2em;text-transform:uppercase;color:var(--verde)}
   .kicker.big{font-size:10.5px;margin-bottom:6px}
