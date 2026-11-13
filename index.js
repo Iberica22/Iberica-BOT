@@ -6675,12 +6675,17 @@ const fechaCierreParte = (caso) => {
   const f = new Date(caso.Modified_Time || 0);
   return isNaN(f) ? null : f.getTime();
 };
-// Trabajo terminado: Cerrado (Acabado / Solucionado) o ya Facturado, nunca anulado
+// Trabajo terminado: Facturado, o Cerrado como acabado / por facturar /
+// cobrado. Nunca anulados ni garantías. «TE» queda fuera mientras no se
+// confirme qué es (REACT3M_INCLUIR_TE=on lo incluye).
 const parteTerminado = (caso) => {
   const est = normalizaTxt(caso.Status || ""), sub = normalizaTxt(caso.Subestado || "");
-  if (/anulad/.test(sub)) return false;
-  if (est === "facturado") return true;
-  return est === "cerrado" && (sub.includes("acabado") || sub.includes("solucionado"));
+  const todo = `${est} / ${sub}`;
+  if (/anulad|garant/.test(todo)) return false;
+  if (/\bte\b/.test(todo) && (process.env.REACT3M_INCLUIR_TE || "off").toLowerCase() !== "on") return false;
+  if (/^acabado/.test(est)) return true;
+  if (est === "facturado") return !/espera material|pedir material/.test(sub);
+  return est === "cerrado" && /acabado|solucionado|facturar|facturado|cobrad|pendiente cobrar/.test(sub);
 };
 const esParticularParaReact = (caso) => tipoClientePresu(caso) === "particular" && !parteDeAseguradora(caso) && !/mapfre/.test(normalizaTxt(JSON.stringify(caso)));
 
@@ -6767,7 +6772,9 @@ async function react3mDiario({ forzar = false } = {}) {
 
 // Importar los partes cerrados de los últimos 90 días (una vez, al apagar
 // Zoho Flow), para que nadie se quede sin su mensaje de los 3 meses.
-async function importarReact3m(dias = 97, paginas = 15) {
+async function importarReact3m(dias = 97, paginas = 15, rehacer = false) {
+  // rehacer: quitar los pendientes (aún sin enviar) y volver a calcularlos
+  if (rehacer) for (const [id, e] of Object.entries(reactivacion3m.porParte)) if (e.estado === "pendiente") delete reactivacion3m.porParte[id];
   const token = await obtenerTokenZoho();
   const partes = await paginasZoho("Cases", token, null, paginas);
   const desde = Date.now() - dias * 24 * 3600 * 1000;
@@ -6798,12 +6805,13 @@ app.get("/admin/api/reactivacion-3m", authAdmin, (req, res) => {
   const lista = Object.values(reactivacion3m.porParte).sort((a, b) => a.cerradoTs - b.cerradoTs);
   const n = (e) => lista.filter((x) => x.estado === e).length;
   res.json({ ok: true, activo: REACT3M_ACTIVO(), plantillas: [REACT3M_PLANTILLA, REACT3M_RECORDATORIO], ultimoDia: reactivacion3m.ultimoDia,
+    tocaEnLos7DiasSiguientes: lista.filter((x) => x.estado === "pendiente" && x.cerradoTs + (REACT3M_DIAS - 7) * 24 * 3600 * 1000 <= Date.now()).length,
     resumen: { pendientes: n("pendiente"), enviados: n("enviado"), contestaron: n("contesto"), omitidos: n("omitido"), fallidos: n("fallido"), caducados: n("caducado") },
     proximos: lista.filter((x) => x.estado === "pendiente").slice(0, 30).map((x) => ({ ref: x.ref, nombre: x.nombre, telefono: x.k, cerrado: fecha(x.cerradoTs), toca: fecha(x.cerradoTs + REACT3M_DIAS * 24 * 3600 * 1000) })),
     ultimos: lista.filter((x) => x.estado !== "pendiente").slice(-30).map((x) => ({ ref: x.ref, nombre: x.nombre, telefono: x.k, estado: x.estado, motivo: x.motivo || null, enviado: fecha(x.enviadoTs), recordatorio: fecha(x.recordatorioTs) })) });
 });
 app.get("/admin/api/reactivacion-3m/importar", authAdmin, async (req, res) => {
-  try { res.json({ ok: true, ...(await importarReact3m()) }); } catch (e) { res.json({ ok: false, error: e.message }); }
+  try { res.json({ ok: true, ...(await importarReact3m(97, 15, req.query.rehacer === "1")) }); } catch (e) { res.json({ ok: false, error: e.message }); }
 });
 app.get("/admin/api/reactivacion-3m/lanzar", authAdmin, async (req, res) => res.json(await react3mDiario({ forzar: true })));
 
