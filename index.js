@@ -1964,6 +1964,7 @@ async function cargarEstadoDesdeRedis() {
     Object.assign(campanas.listas, campanasGuardadas.listas || {});
     Object.assign(campanas.contactos, campanasGuardadas.contactos || {});
     Object.assign(campanas.conversaciones, campanasGuardadas.conversaciones || {});
+    if (typeof campanasGuardadas.nievesBaja === "boolean") campanas.nievesBaja = campanasGuardadas.nievesBaja;
     indexarWamidsCampana();
   }
   const react3mGuardado = await redisGet("iberica:reactivacion3m");
@@ -5819,7 +5820,8 @@ async function enviarPlantillaCampana(f, plantilla, variables, cfg) {
 }
 
 // Conversaciones con Nieves aún abiertas (pasadas en las últimas 48 h)
-const abiertasNieves = () => Object.values(campanas.conversaciones).filter((c) => c.nievesTs && Date.now() - c.nievesTs < 48 * 3600 * 1000 && !c.cerrada).length;
+// (las que atiende Noemí mientras Nieves está de baja no cuentan)
+const abiertasNieves = () => Object.values(campanas.conversaciones).filter((c) => c.nievesTs && Date.now() - c.nievesTs < 48 * 3600 * 1000 && !c.cerrada && !atiendeNoemi(c)).length;
 
 function rechazoLista(l) {
   const enviados = l.filas.filter((f) => ["enviado", "fallido"].includes(f.estado)).length;
@@ -5923,7 +5925,7 @@ async function tandaCampanas({ forzar = false, soloLista = null } = {}) {
             if (cfg.casa) c.casa = Date.now();
           }
           // La T7 no es una oferta: lo que escriba un cliente de la casa va a la oficina
-          if (!cfg.casa) campanas.conversaciones[f.k] = { ...(campanas.conversaciones[f.k] || {}), campana: l.campana, etiqueta: cfg.etiqueta, listaId: l.id, ts: Date.now(), paso: null, cerrada: null };
+          if (!cfg.casa) campanas.conversaciones[f.k] = { ...(campanas.conversaciones[f.k] || {}), campana: l.campana, etiqueta: cfg.etiqueta, listaId: l.id, ts: Date.now(), paso: null, cerrada: null, atiende: l.atiende || null };
           resumen.enviados++;
         } else if (!esRec) {
           if (/limite_de_creacion/.test(String(res.detalle))) break; // se sigue en la próxima vuelta
@@ -6081,7 +6083,10 @@ async function avisarNievesCampana(telefono, conv, descripcion, prioridad = fals
   const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
   conv.nievesTs = conv.nievesTs || Date.now();
   const cliente = conversaciones[telefono]?.nombre || conv.nombre || `Cliente ${k}`;
-  await enviarAvisoInterno(NOTIFICACIONES_CONFIG.nieves,
+  const paraNoemi = atiendeNoemi(conv);
+  const destinoAviso = paraNoemi ? ((await destinoNoemi()) || NOTIFICACIONES_CONFIG.mari) : NOTIFICACIONES_CONFIG.nieves;
+  if (paraNoemi) descripcion = `${destinoAviso?.nombre === "Noemí" ? "" : "PARA NOEMÍ (Nieves de baja) · "}${descripcion}`;
+  await enviarAvisoInterno(destinoAviso,
     { origen: `${prioridad ? "🚨 PRIORIDAD " : ""}${conv.etiqueta}`, cliente, telefono: k, que: descripcion },
     { nombre: cliente, telefono: k, direccion: "—", descripcion: `${prioridad ? "🚨 PRIORIDAD · " : ""}[${conv.etiqueta}] ${descripcion}`, apertura: ahoraStr, refParte: "—", agente: `Marta · ${conv.etiqueta}` },
   ).catch((e) => console.error("[Campañas] Aviso a Nieves:", e.message));
@@ -6138,7 +6143,8 @@ async function manejarRespuestaCampana({ telefono, memberId, channelId, texto, t
   const responder = async (msg) => {
     const pre = conv.presentado ? "" : (conv.entrada ? PRESENTACION_CAMPANA.replace("Las llamadas y los precios los lleva", "Las llamadas las lleva") : PRESENTACION_CAMPANA) + "\n\n";
     conv.presentado = true;
-    await enviarMensaje(telefono, pre + msg);
+    // Clientes de la lista de Nieves mientras está de baja: los atiende Noemí
+    await enviarMensaje(telefono, atiendeNoemi(conv) ? (pre + msg).replace(/Nieves/g, "Noemí") : pre + msg);
   };
   marcarRespuestaFila(conv);
   conv.ts = Date.now();
@@ -6813,6 +6819,159 @@ app.get("/admin/api/reactivacion-3m/importar", authAdmin, async (req, res) => {
   try { res.json({ ok: true, ...(await importarReact3m(97, 15, req.query.rehacer === "1")) }); } catch (e) { res.json({ ok: false, error: e.message }); }
 });
 app.get("/admin/api/reactivacion-3m/lanzar", authAdmin, async (req, res) => res.json(await react3mDiario({ forzar: true })));
+
+// ── Los clientes altos de Nieves («los 76») en la campaña de Navidad ──
+// Mientras Nieves está de baja, a los que no ha llamado se les escribe por
+// Navidad (674 09 66 10) y sus «SÍ» van a Noemí. Solo se quedan fuera los
+// que ya hablaron con Nieves (nota REACT con SI-ALTA, SI-REV, SI-TRAB, NO o
+// BAJA), la familia (Juan Miguel Arcos Cirera) y lo de siempre: BAJA,
+// WhatsApp Opt Out, [NOCOM] en FactuSOL y (si se aplica) sin el «sí» a
+// recibir información.
+const NIEVES_FAMILIA = ["juan miguel arcos cirera"];
+const nievesDeBaja = () => campanas.nievesBaja !== false;   // por defecto, de baja
+// Resultado de la llamada de Nieves en una nota: REACT … SI-ALTA / SI-REV / SI-TRAB / NO / BAJA / NC1 / NC2
+function resultadoNotaNieves(texto) {
+  const t = normalizaTxt(texto || "").toUpperCase();
+  if (!/\bREACT/.test(t)) return null;
+  const m = t.match(/\bSI[^A-Z0-9]{0,3}(ALTA|REV|TRAB)\b/);
+  if (m) return `SI-${m[1]}`;
+  if (/\bBAJA\b/.test(t)) return "BAJA";
+  if (/\bNC\s*\d\b/.test(t)) return (t.match(/\bNC\s*\d\b/)[0]).replace(/\s/g, "");
+  if (/\bNO\b(?!\s+CONTEST)/.test(t)) return "NO";
+  return "REACT (sin código)";
+}
+const nieves76 = { estado: "parado", progreso: "", resultado: null, error: null };
+
+async function calcularNieves76({ exigirConsentimiento = true } = {}) {
+  const token = await obtenerTokenZoho();
+  nieves76.progreso = "Leyendo partes de Zoho…";
+  const partes = await paginasZoho("Cases", token, (n) => { nieves76.progreso = `Leyendo partes… ${n}`; });
+  nieves76.progreso = "Leyendo contactos de Zoho…";
+  const contactos = await paginasZoho("Contacts", token, (n) => { nieves76.progreso = `Leyendo contactos… ${n}`; });
+  const porId = new Map(contactos.map((c) => [c.id, c]));
+  const contactoDeParte = new Map(partes.map((c) => [c.id, c.Related_To?.id]));
+  // Notas de Nieves con REACT (desde el 20 de octubre)
+  nieves76.progreso = "Leyendo las notas de Nieves…";
+  const notasPorContacto = new Map();
+  const limite = new Date("2026-10-20T00:00:00+02:00").getTime();
+  for (let page = 1; page <= 40; page++) {
+    const d = await zohoGet("Notes", { per_page: 200, page, sort_by: "Created_Time", sort_order: "desc" });
+    const lote = d.data || [];
+    let viejas = false;
+    for (const n of lote) {
+      if (new Date(n.Created_Time).getTime() < limite) { viejas = true; continue; }
+      const res = resultadoNotaNieves(`${n.Note_Title || ""} ${n.Note_Content || ""}`);
+      if (!res) continue;
+      const pid = n.Parent_Id?.id;
+      const cid = (n.$se_module === "Cases" ? contactoDeParte.get(pid) : pid) || pid;
+      (notasPorContacto.get(cid) || notasPorContacto.set(cid, []).get(cid)).push({ res, fecha: n.Created_Time, texto: String(n.Note_Content || "").slice(0, 80) });
+    }
+    if (viejas || !d.info?.more_records || !lote.length) break;
+  }
+  // Mismos criterios que la lista de Navidad, quedándonos con los «de Nieves»
+  const clientes = new Map();
+  for (const c of partes) {
+    const id = c.Related_To?.id; if (!id) continue;
+    const cl = clientes.get(id) || { hechos: [], mapfre: false };
+    if (/mapfre/.test(normalizaTxt(JSON.stringify(c)))) cl.mapfre = true;
+    if (trabajoHecho(c)) cl.hechos.push(c);
+    clientes.set(id, cl);
+  }
+  const ahora = Date.now(), dia = 24 * 3600 * 1000;
+  const yaEnNavidad = new Set(Object.values(campanas.listas).filter((l) => l.campana === "NAV26" && !l.prueba)
+    .flatMap((l) => l.filas.filter((f) => ["pendiente", "enviado", "control"].includes(f.estado)).map((f) => f.k)));
+  const candidatos = [];
+  for (const [id, cl] of clientes) {
+    if (!cl.hechos.length) continue;
+    cl.hechos.sort((a, b) => (fechaInicioParte(b)?.getTime() || 0) - (fechaInicioParte(a)?.getTime() || 0));
+    const ultimo = cl.hechos[0];
+    const fecha = fechaInicioParte(ultimo);
+    if (!fecha || ahora - fecha.getTime() < 182 * dia) continue;
+    if (cl.mapfre || parteDeAseguradora(ultimo)) continue;
+    const origen = campoOrigenParte(ultimo);
+    if (origen && !/telefono|tienda|recomendacion|particular/.test(origen)) continue;
+    const facturado = cl.hechos.reduce((t, c) => t + (leerCantidad(c.Importe) || 0), 0);
+    if (cl.hechos.length < 3 && facturado < 600) continue;   // no es de los de Nieves
+    const contacto = porId.get(id) || {};
+    if (contacto.Account_Name?.name) continue;
+    const nombreCompleto = capitaliza(contacto.Full_Name || [contacto.First_Name, contacto.Last_Name].filter(Boolean).join(" ") || ultimo.Related_To?.name || "");
+    const movil = claveBaja(String(contacto.Mobile || contacto.Phone || ""));
+    candidatos.push({ id, nombreCompleto, nombre: conTildes(capitaliza(contacto.First_Name || nombreCompleto.split(" ")[0] || "")), telefono: movil,
+      trabajos: cl.hechos.length, facturado: Math.round(facturado), fecha, articulo: String(ultimo.Subject || "").replace(/[\t\r\n]+/g, " "),
+      optOut: tieneOptOut(contacto), notas: notasPorContacto.get(id) || [] });
+  }
+  nieves76.progreso = "Comprobando [NOCOM] en FactuSOL…";
+  const tels = candidatos.map((c) => c.telefono).filter((t) => t.length === 9);
+  const nocom = tels.length ? await nocomFactusol(tels) : {};
+  const entran = [], fuera = [];
+  for (const c of candidatos) {
+    const codigos = c.notas.map((n) => n.res);
+    const hablo = codigos.find((x) => /^(SI-ALTA|SI-REV|SI-TRAB|NO|BAJA)$/.test(x));
+    const consent = consentimientos[c.telefono]?.respuesta || "sin preguntar";
+    let motivo = null;
+    if (NIEVES_FAMILIA.includes(normalizaTxt(c.nombreCompleto))) motivo = "familia: no se le escribe nunca";
+    else if (hablo) motivo = `ya habló con Nieves (${hablo})`;
+    else if (c.telefono.length !== 9 || !/^[67]/.test(c.telefono)) motivo = "sin móvil";
+    else if (esBaja(c.telefono)) motivo = "BAJA";
+    else if (c.optOut) motivo = "WhatsApp Opt Out en Zoho";
+    else if (nocom === null) motivo = "sin comprobar [NOCOM] (FactuSOL no contesta)";
+    else if (nocom[c.telefono]?.nocom) motivo = "[NOCOM] en FactuSOL";
+    else if (yaEnNavidad.has(c.telefono)) motivo = "ya está en la lista de Navidad";
+    else if (exigirConsentimiento && consent !== "si") motivo = `no dijo «sí» a recibir información (${consent})`;
+    const fila = { nombre: c.nombreCompleto, telefono: c.telefono, trabajos: c.trabajos, facturado: c.facturado, notaNieves: codigos.join(", ") || "sin nota", consentimiento: consent };
+    if (motivo) fuera.push({ ...fila, motivo }); else entran.push({ ...fila, _c: c });
+  }
+  const porMotivo = fuera.reduce((a, f) => { const k = f.motivo.replace(/ \(.*\)$/, ""); a[k] = (a[k] || 0) + 1; return a; }, {});
+  return { total: candidatos.length, exigirConsentimiento, entran, fuera, porMotivo };
+}
+
+app.get("/admin/api/campanas/nieves", authAdmin, async (req, res) => {
+  // ?calcular=1[&consentimiento=0] lo calcula (tarda); sin parámetros, enseña el último cálculo
+  if (req.query.calcular === "1" && nieves76.estado !== "trabajando") {
+    Object.assign(nieves76, { estado: "trabajando", progreso: "Empezando…", resultado: null, error: null });
+    calcularNieves76({ exigirConsentimiento: req.query.consentimiento !== "0" })
+      .then((r) => Object.assign(nieves76, { estado: "hecho", resultado: r, progreso: "" }))
+      .catch((e) => Object.assign(nieves76, { estado: "error", error: String(e.message).slice(0, 200), progreso: "" }));
+    return res.json({ ok: true, estado: "trabajando", nota: "Vuelve a abrir /admin/api/campanas/nieves en un par de minutos" });
+  }
+  // ?crear=1: crea la lista de Navidad (en revisión) con los que entran
+  if (req.query.crear === "1") {
+    const r = nieves76.resultado;
+    if (!r?.entran?.length) return res.json({ ok: false, error: "Primero calcula la lista (?calcular=1) y revísala" });
+    const filas = r.entran.map(({ _c: c }) => `${c.telefono}\t${c.nombre}\t${ddmmaaaa(c.fecha)}\t${c.articulo}`);
+    const cr = crearListaCampana("NAV26", ["telefono\tnombre\tfecha\tarticulo", ...filas].join("\n"));
+    if (!cr.ok) return res.json(cr);
+    const l = campanas.listas[cr.id];
+    l.origen = "nieves76"; l.atiende = "noemi";
+    l.filas.forEach((f) => { if (f.estado === "control") f.estado = "pendiente"; });   // sin grupo de control: son los mejores clientes
+    guardarCampanas();
+    return res.json({ ok: true, lista: cr.id, estado: l.estado, filas: l.filas.length, excluidosAlSubir: l.filas.filter((f) => f.estado === "excluido").map((f) => `${f.k}: ${f.motivo}`), siguiente: "Revísala con «Ver» en /admin/campanas y pulsa «Activar»" });
+  }
+  const r = nieves76.resultado;
+  res.json({ ok: true, estado: nieves76.estado, progreso: nieves76.progreso, error: nieves76.error, nievesDeBaja: nievesDeBaja(), respuestasVanA: nievesDeBaja() ? "Noemí" : "Nieves",
+    resultado: r ? { total: r.total, exigirConsentimiento: r.exigirConsentimiento, entran: r.entran.length, quedanFuera: r.fuera.length, porMotivo: r.porMotivo,
+      listaEntran: r.entran.map(({ _c, ...x }) => x), listaFuera: r.fuera } : null });
+});
+// Nieves de baja (los «SÍ» de su lista van a Noemí) o de vuelta: ?baja=0 / ?baja=1
+app.get("/admin/api/campanas/nieves-baja", authAdmin, (req, res) => {
+  if (req.query.baja === "0" || req.query.baja === "1") { campanas.nievesBaja = req.query.baja === "1"; guardarCampanas(); }
+  res.json({ ok: true, nievesDeBaja: nievesDeBaja(), respuestasDeSuListaVanA: nievesDeBaja() ? "Noemí" : "Nieves" });
+});
+
+// Destino de los avisos para Noemí (AVISOS_NOEMI_TEL en Railway); si no, Mari
+let destinoNoemiCache = null;
+async function destinoNoemi() {
+  if (NOTIFICACIONES_CONFIG.noemi?.memberId) return NOTIFICACIONES_CONFIG.noemi;
+  const tel = claveBaja(process.env.AVISOS_NOEMI_TEL || "");
+  if (tel.length !== 9) return null;
+  if (destinoNoemiCache) return destinoNoemiCache;
+  try {
+    const m = await buscarOCrearMiembroWoztell(CANAL_NOTIFICACIONES, `34${tel}`, "Noemí");
+    destinoNoemiCache = { nombre: "Noemí", channelId: CANAL_NOTIFICACIONES, memberId: m.memberId, telefono: `34${tel}` };
+    return destinoNoemiCache;
+  } catch (e) { console.error("[Avisos] No se pudo preparar el aviso a Noemí:", e.message); return null; }
+}
+const atiendeNoemi = (conv) => conv?.atiende === "noemi" && nievesDeBaja();
 
 function estadisticasCampanas() {
   const listas = Object.values(campanas.listas).sort((a, b) => b.creada - a.creada).map((l) => {

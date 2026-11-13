@@ -140,6 +140,30 @@ Responde «Recibido, se lo paso a…» y lo pasa a Mari o a Nieves según la
 hora. Fuera de horario va a Mari para primera hora, y si es urgente, a la
 guardia.
 
+## Clientes altos de Nieves en la campaña de Navidad (Nieves de baja)
+
+Mientras Nieves está de baja, los clientes altos que no ha llamado (3
+trabajos o más, o 600 € o más) entran en Navidad por el 674 09 66 10.
+
+- **Se quedan fuera:**
+  - los que tienen nota de Nieves con «REACT» y SI-ALTA, SI-REV, SI-TRAB, NO
+    o BAJA, porque ya han hablado con ella;
+  - Juan Miguel Arcos Cirera (familia);
+  - los de siempre: BAJA, WhatsApp Opt Out, [NOCOM] y sin el «sí» a recibir
+    información;
+  - los que ya están en otra lista de Navidad.
+- **Los NC1/NC2 entran** (no contestaron).
+- **Sus «SÍ» los lleva Noemí:** Marta dice «Noemí» en lugar de «Nieves» y el
+  aviso va al móvil de `AVISOS_NOEMI_TEL`; si no está, a Mari con «PARA
+  NOEMÍ». Cuando Nieves vuelva: `/admin/api/campanas/nieves-baja?baja=0`.
+- **Pasos:**
+  1. `/admin/api/campanas/nieves?calcular=1` y, al rato,
+     `/admin/api/campanas/nieves` para ver quién entra y por qué se excluye
+     a los demás.
+  2. `/admin/api/campanas/nieves?crear=1` crea la lista, en revisión y sin
+     grupo de control.
+  3. «Activar» en /admin/campanas.
+
 ## Alta «Cliente de la casa» (T7) tras la llamada de Nieves
 
 Cuando un cliente acepta en la llamada, Nieves escribe en Zoho una nota con
