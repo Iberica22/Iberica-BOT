@@ -6676,16 +6676,15 @@ const fechaCierreParte = (caso) => {
   return isNaN(f) ? null : f.getTime();
 };
 // Trabajo terminado: Facturado, o Cerrado como acabado / por facturar /
-// cobrado. Nunca anulados ni garantías. «TE» queda fuera mientras no se
-// confirme qué es (REACT3M_INCLUIR_TE=on lo incluye).
+// cobrado. «TE» = cobrado en efectivo (cuenta como terminado). Nunca
+// anulados ni garantías.
 const parteTerminado = (caso) => {
   const est = normalizaTxt(caso.Status || ""), sub = normalizaTxt(caso.Subestado || "");
   const todo = `${est} / ${sub}`;
   if (/anulad|garant/.test(todo)) return false;
-  if (/\bte\b/.test(todo) && (process.env.REACT3M_INCLUIR_TE || "off").toLowerCase() !== "on") return false;
-  if (/^acabado/.test(est)) return true;
+  if (/^acabado/.test(est) || est === "te") return true;
   if (est === "facturado") return !/espera material|pedir material/.test(sub);
-  return est === "cerrado" && /acabado|solucionado|facturar|facturado|cobrad|pendiente cobrar/.test(sub);
+  return est === "cerrado" && /acabado|solucionado|facturar|facturado|cobrad|pendiente cobrar|\bte\b/.test(sub);
 };
 const esParticularParaReact = (caso) => tipoClientePresu(caso) === "particular" && !parteDeAseguradora(caso) && !/mapfre/.test(normalizaTxt(JSON.stringify(caso)));
 
