@@ -440,6 +440,7 @@ const MODELOS = [
 
 const PANELES = [
   { id:'liso',      nombre:'Panel liso estándar (sapelly o blanco)', precio:0,    desc:'Incluido en el precio base' },
+  { id:'dibujo',    nombre:'Panel con dibujo (fresado)',              precio:null, precioTxt:'Según dibujo', desc:'2RH, 2RV, Halga, Isoca, 104… · Precio de la tarifa Estega / Blinsur' },
   { id:'moldurado-s', nombre:'Panel moldurado sencillo',             precio:150,  desc:'Moldura simple, varios colores disponibles' },
   { id:'moldurado-d', nombre:'Panel moldurado doble / bicolor',      precio:300,  desc:'Mayor detalle decorativo y personalización' },
   { id:'blinsur',   nombre:'Tablero DM decorado (Blinsur)',          precio:null, precioTxt:'Según modelo', desc:'Modelos decorados en madera, MDF y con aluminio · Precio automático según modelo y acabado' },
@@ -647,6 +648,11 @@ const ESTEGA_MODELOS = {
 
 // Datos ampliados para PDF
 const PANEL_PDF = {
+  'dibujo': {
+    desc: 'Panel con dibujo fresado (ranuras horizontales, verticales o combinadas) en lacado blanco o madera. Diseños estándar de la tienda, al precio de la tarifa de Estega o de Blinsur según el modelo.',
+    colores: 'Blanco · Sapelly (según dibujo)',
+    swatch: 'background:repeating-linear-gradient(180deg,#f3f1ec 0 22px,#b9b2a3 22px 24px);border:2px solid #c8bfae;',
+  },
   'liso': {
     desc: 'Acabado plano sin relieves. Disponible en sapelly (tono madera natural cálido) o blanco puro. El acabado más versátil: encaja a la perfección con cualquier estilo de decoración, desde clásico hasta moderno.',
     colores: 'Sapelly · Blanco',
@@ -739,7 +745,7 @@ function nuevoPanelCfg() {
   return {
     id: 'liso',
     color: 'blanco',   // liso y moldurados: color del panel (dibujado en la web y el PDF)
-    diseno: 'lisa',    // panel liso: dibujo fresado (líneas, cuadros…)
+    diseno: '2rh',     // panel con dibujo: modelo fresado (2RH, Halga…)
     estega:  { modelo:'HALGA 4R', acabado:0, formato:0, corte:false, clavos:false, e9mm:false },
     blinsur: { gama:'decorados', modelo:'LISO', madera:0, acabado:0, medidaEsp:false },
     indu:    { coleccion:'Tempo Aluminio', modelo:'PANEL LISO', acabado:0, medida:0, chapa:false },
@@ -804,7 +810,8 @@ function precioLado(l) { // € IVA incl. · 0 = incluido · null = a consultar
   const c = panelCfg[l];
   // Liso sin dibujo: incluido. Con dibujo siempre lleva suplemento
   // (SUPLEMENTO_DIBUJO; mientras no esté fijado, «a consultar»).
-  if (c.id === 'liso') return (c.diseno && c.diseno !== 'lisa') ? precioDiseno(l) : 0;
+  if (c.id === 'liso') return 0;
+  if (c.id === 'dibujo') return precioDiseno(l);
   if (c.id === 'moldurado-s') return 150;
   if (c.id === 'moldurado-d') return 300;
   if (c.id === 'blinsur')   {
@@ -825,7 +832,8 @@ function resumenLado(l) {
   if (c.id === 'blinsur')   return `Tablero DM Blinsur ${blinsurResumen(c.blinsur)}`;
   if (c.id === 'indupanel') return `Panel Indupanel ${induResumen(c.indu)}`;
   if (c.id === 'estega')    return `Panel aluminio Estega ${estegaResumen(c.estega)}`;
-  if (c.id === 'liso')        return `Panel ${COLORES_PANEL[c.color]?.n.toLowerCase() || 'blanco'}${c.diseno && c.diseno!=='lisa' && DISENOS_PANEL[c.diseno] ? ' · ' + DISENOS_PANEL[c.diseno] : ' liso'}`;
+  if (c.id === 'liso')        return `Panel liso ${COLORES_PANEL[c.color]?.n.toLowerCase() || 'blanco'}`;
+  if (c.id === 'dibujo')      return `Panel con dibujo ${DISENOS_PANEL[c.diseno] || ''} · ${COLORES_PANEL[c.color]?.n || 'Blanco'}`;
   if (c.id === 'moldurado-s') return `Panel moldurado · ${MOLDURAS_PANEL[c.moldura||'recta']} · ${COLORES_PANEL[c.color]?.n || 'Blanco'}`;
   if (c.id === 'moldurado-d') return `Panel doble moldura · ${MOLDURAS_PANEL[c.moldura||'recta']} · ${COLORES_PANEL[c.color]?.n || 'Blanco'}`;
   return PANELES.find(p => p.id === c.id)?.nombre || 'Panel liso estándar';
@@ -860,7 +868,7 @@ const DISENO_FUENTE = {
   isoca2r:['estega','ISOCA 2R'], isoca3r:['estega','ISOCA 3R'], isoca3r200:['estega','ISOCA 3R 200'], isoca4r:['estega','ISOCA 4R'],
   '2rh':['blinsur','2RH'], '2rv':['blinsur','2RV'], '1rv2rh':['blinsur','1RV 2RH'], '2rv4rh':['blinsur','2RV 4RH'], m104:['blinsur','104'],
 };
-const fuenteDiseno = (c) => (c.id === 'liso' && c.diseno && c.diseno !== 'lisa') ? (DISENO_FUENTE[c.diseno] || ['consultar']) : null;
+const fuenteDiseno = (c) => c.id === 'dibujo' ? (DISENO_FUENTE[c.diseno] || ['consultar']) : null;
 function precioDiseno(l) {   // € IVA incl.; null = a consultar
   const c = panelCfg[l];
   const f = fuenteDiseno(c);
@@ -932,14 +940,14 @@ function svgPanel(tipo, colorId, diseno) {
     else if (diseno==='una') detalle = m(24, 26, 152, 348);
     else detalle = m(28, 30, 144, 215) + m(28, 270, 144, 104);
   }
-  if (tipo==='liso') detalle = ranurasPanel(diseno, sombra, luz);
+  if (tipo==='dibujo') detalle = ranurasPanel(diseno, sombra, luz);
   const pomo = `<circle cx="100" cy="205" r="7" fill="#c9c9c9" stroke="#8a8a8a" stroke-width="2"/>`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 400" width="200" height="400"><rect width="200" height="400" fill="${col.base}"/>${vetas}${detalle}<rect x="1.5" y="1.5" width="197" height="397" fill="none" stroke="#9a9a9a" stroke-width="3"/>${pomo}</svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
 function imgPanelLado(l) {
   const c = panelCfg[l];
-  if (['liso','moldurado-s','moldurado-d'].includes(c.id)) return svgPanel(c.id, c.color, c.id === 'liso' ? c.diseno : (c.moldura || 'recta'));
+  if (['liso','dibujo','moldurado-s','moldurado-d'].includes(c.id)) return svgPanel(c.id, c.color, c.id === 'dibujo' ? c.diseno : (c.moldura || 'recta'));
   if (c.id === 'blinsur') {
     const m = c.blinsur.gama === 'aluminio' ? '302 / 303 / 304' : c.blinsur.modelo;
     return `img/paneles/blinsur-${c.blinsur.gama}__${slugImg(m)}.jpg`;
@@ -958,6 +966,7 @@ function resumenCortoLado(l) {
   if (c.id === 'blinsur')   return `Blinsur ${c.blinsur.modelo}`;
   if (c.id === 'indupanel') return `Indupanel ${c.indu.modelo}`;
   if (c.id === 'estega')    return `Estega ${c.estega.modelo}`;
+  if (c.id === 'dibujo')    return `Dibujo ${DISENOS_PANEL[c.diseno] || ''}`;
   if (c.id === 'moldurado-s') return 'Moldurado sencillo';
   if (c.id === 'moldurado-d') return 'Moldurado doble';
   if (c.id === 'especial')  return 'Acabado especial';
@@ -1028,15 +1037,16 @@ function subPickerLado(l) {
   const img = imgPanelLado(l);
   const fotoLinea = img ? `<div class="estegat-full panel-foto"><img src="${img}" alt="Modelo seleccionado" onerror="this.parentNode.style.display='none'"></div>` : '';
 
-  if (['liso','moldurado-s','moldurado-d'].includes(c.id)) {
-    const colores = c.id === 'liso' ? COLORES_LISO : Object.keys(COLORES_PANEL);
+  if (['liso','dibujo','moldurado-s','moldurado-d'].includes(c.id)) {
+    const colores = ['liso','dibujo'].includes(c.id) ? COLORES_LISO : Object.keys(COLORES_PANEL);
     return `<div class="estegat-zona" style="display:block">
       <div class="estegat-full"><label style="font-size:12px;color:var(--gris-medio)">Color de la cara ${ladoTxt}:</label>
       <select onchange="setColorPanel('${l}', this.value)" style="margin-left:6px">${colores.map(k=>`<option value="${k}" ${c.color===k?'selected':''}>${COLORES_PANEL[k].n}</option>`).join('')}</select></div>
       ${(() => {
         const boton = (sel, k, n, img, fn) => `<button type="button" title="${n}" onclick="${fn}('${l}','${k}')" style="background:${sel?'var(--dorado)':'#2a2a2a'};border:1px solid #555;border-radius:6px;padding:4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;width:74px"><img src="${img}" style="height:70px;width:auto;border-radius:3px" alt=""><span style="font-size:9px;line-height:1.1;color:${sel?'#111':'#ccc'}">${n}</span></button>`;
         const grid = (titulo, html) => `<div class="estegat-full" style="font-size:12px;color:var(--gris-medio);margin-top:6px">${titulo}</div><div class="estegat-full" style="display:flex;flex-wrap:wrap;gap:6px">${html}</div>`;
-        if (c.id === 'liso') return `<div class="estegat-full" style="font-size:11px;color:var(--dorado);margin-top:4px">Liso sin dibujo: incluido. Con dibujo, el suplemento es el del tablero equivalente de Estega (Halga, Isoca, en blanco) o Blinsur (2RH, 2RV, 1RV 2RH, 2RV 4RH, 104). Diseño tienda y A–D: a consultar. Para otro color o madera (roble, teca, haya, lacado…), elige «Tablero DM decorado (Blinsur)»: tiene los mismos dibujos (liso, 2RH, 2RV, 1RV 2RH, 104, 2RV 4RH) y calcula el suplemento solo.</div>` + grid('Dibujo (diseños estándar DM lacado y madera):', Object.entries(DISENOS_PANEL).map(([k,n])=>boton(c.diseno===k,k,n,svgPanel('liso',c.color,k),'setDisenoPanel')).join(''));
+        if (c.id === 'liso') return `<div class="estegat-full" style="font-size:11px;color:var(--dorado);margin-top:4px">Incluido en blanco o sapelly. Si lo quiere con rayas o dibujo, elige «Panel con dibujo».</div>`;
+        if (c.id === 'dibujo') return `<div class="estegat-full" style="font-size:11px;color:var(--dorado);margin-top:4px">Precio de la tarifa: Halga e Isoca como Estega (blanco); 2RH, 2RV, 1RV 2RH, 2RV 4RH y 104 como Blinsur. Diseño tienda y A–D: a consultar. Para otra madera o color, elige «Tablero DM decorado (Blinsur)».</div>` + grid('Dibujo (diseños estándar DM lacado y madera):', Object.entries(DISENOS_PANEL).filter(([k])=>k!=='lisa').map(([k,n])=>boton(c.diseno===k,k,n,svgPanel('dibujo',c.color,k),'setDisenoPanel')).join(''));
         return grid('Moldura:', Object.entries(MOLDURAS_PANEL).map(([k,n])=>boton((c.moldura||'recta')===k,k,n,svgPanel(c.id,c.color,k),'setMolduraPanel')).join(''));
       })()}
       ${fotoLinea}
@@ -1160,7 +1170,8 @@ function subPickerLado(l) {
 
 function setPanelLado(l, id) {
   panelCfg[l].id = id;
-  if (id === 'liso' && !COLORES_LISO.includes(panelCfg[l].color)) panelCfg[l].color = 'blanco';
+  if (['liso','dibujo'].includes(id) && !COLORES_LISO.includes(panelCfg[l].color)) panelCfg[l].color = 'blanco';
+  if (id === 'dibujo' && (!panelCfg[l].diseno || panelCfg[l].diseno === 'lisa')) panelCfg[l].diseno = '2rh';
   renderPaneles(); actualizarTotal();
 }
 
@@ -1342,7 +1353,7 @@ function payloadFactusol() {
   if (catActiva !== 'metalica') {
     for (const [l, titulo] of LADOS) {
       const c = panelCfg[l];
-      if (c.id === 'liso' && (!c.diseno || c.diseno === 'lisa')) continue;
+      if (c.id === 'liso') continue;
       let pb = null; // precio unitario SIN IVA
       if (c.id === 'blinsur')        pb = blinsurBaseTablero(c.blinsur);
       else if (c.id === 'indupanel') pb = induBasePanel(c.indu);
