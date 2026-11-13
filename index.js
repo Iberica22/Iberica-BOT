@@ -6664,10 +6664,23 @@ const enviadosHoyReact3m = () => {
   return Object.values(reactivacion3m.porParte).reduce((n, e) =>
     n + [e.enviadoTs, e.recordatorioTs].filter((t) => t > 0 && diaMadrid(new Date(t)) === hoy).length, 0);
 };
+// Fecha de cierre: un campo «Fecha … cierre» si lo hay; si no, la
+// Fecha-Hora Inicio del trabajo; si tampoco, la última modificación.
 const fechaCierreParte = (caso) => {
-  const k = campoPorNombre(caso, /fecha.*(cierre|cerrad|fin)|closed_time/i);
-  const f = new Date((k && caso[k]) || caso.Modified_Time || 0);
+  for (const re of [/fecha.*(cierre|cerrad)|closed_time/i, /fecha.*hora.*inicio|fecha.*inicio/i]) {
+    const k = campoPorNombre(caso, re);
+    const f = k && caso[k] ? new Date(caso[k]) : null;
+    if (f && !isNaN(f) && f.getTime() <= Date.now()) return f.getTime();
+  }
+  const f = new Date(caso.Modified_Time || 0);
   return isNaN(f) ? null : f.getTime();
+};
+// Trabajo terminado: Cerrado (Acabado / Solucionado) o ya Facturado, nunca anulado
+const parteTerminado = (caso) => {
+  const est = normalizaTxt(caso.Status || ""), sub = normalizaTxt(caso.Subestado || "");
+  if (/anulad/.test(sub)) return false;
+  if (est === "facturado") return true;
+  return est === "cerrado" && (sub.includes("acabado") || sub.includes("solucionado"));
 };
 const esParticularParaReact = (caso) => tipoClientePresu(caso) === "particular" && !parteDeAseguradora(caso) && !/mapfre/.test(normalizaTxt(JSON.stringify(caso)));
 
@@ -6695,6 +6708,12 @@ async function react3mDiario({ forzar = false } = {}) {
   const ahora = Date.now(), dia = 24 * 3600 * 1000;
   const cfg = { ...CAMPANAS_CONFIG["REACT-3M"], campana: "REACT-3M" };
   try {
+    // Una vez por semana, repasar los partes terminados de las últimas 2
+    // semanas por si alguno no se vio al cerrarse (p. ej. pasó directo a Facturado)
+    if (!reactivacion3m.repasoTs || ahora - reactivacion3m.repasoTs > 7 * dia) {
+      reactivacion3m.repasoTs = ahora;
+      try { r.repaso = await importarReact3m(14, 3); } catch (e) { r.avisos.push(`Repaso semanal: ${e.message}`); }
+    }
     for (const e of Object.values(reactivacion3m.porParte)) {
       if (enviadosHoy() >= CAMP_MAX_DIA) { r.avisos.push(`Límite de ${CAMP_MAX_DIA} mensajes al día: el resto, mañana`); break; }
       const esRec = e.estado === "enviado" && !e.recordatorioTs && ahora - e.enviadoTs >= REACT3M_DIAS_REC * dia;
@@ -6748,17 +6767,17 @@ async function react3mDiario({ forzar = false } = {}) {
 
 // Importar los partes cerrados de los últimos 90 días (una vez, al apagar
 // Zoho Flow), para que nadie se quede sin su mensaje de los 3 meses.
-async function importarReact3m(dias = 97) {
+async function importarReact3m(dias = 97, paginas = 15) {
   const token = await obtenerTokenZoho();
-  const partes = await paginasZoho("Cases", token, null, 15);
+  const partes = await paginasZoho("Cases", token, null, paginas);
   const desde = Date.now() - dias * 24 * 3600 * 1000;
-  const r = { leidos: partes.length, anadidos: 0, yaEstaban: 0, sinMovil: 0, noParticular: 0 };
+  const r = { leidos: partes.length, anadidos: 0, yaEstaban: 0, sinMovil: 0, noParticular: 0, noTerminados: 0, masAntiguos: 0, estados: {} };
   for (const caso of partes) {
-    if (caso.Status !== "Cerrado") continue;
-    const sub = normalizaTxt(caso.Subestado || "");
-    if (!sub.includes("acabado") && !sub.includes("solucionado")) continue;
+    const est = `${caso.Status || "?"} / ${caso.Subestado || "—"}`;
+    r.estados[est] = (r.estados[est] || 0) + 1;
+    if (!parteTerminado(caso)) { r.noTerminados++; continue; }
     const cerrado = fechaCierreParte(caso);
-    if (!cerrado || cerrado < desde) continue;
+    if (!cerrado || cerrado < desde) { r.masAntiguos++; continue; }
     if (reactivacion3m.porParte[caso.id]) { r.yaEstaban++; continue; }
     if (!esParticularParaReact(caso)) { r.noParticular++; continue; }
     let tel = null, nombre = caso.Related_To?.name || "";
