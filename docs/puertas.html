@@ -802,7 +802,9 @@ function estegaResumen(e) {
 // ── Precio y resumen por cara ─────────────────────────────────────────────────
 function precioLado(l) { // € IVA incl. · 0 = incluido · null = a consultar
   const c = panelCfg[l];
-  if (c.id === 'liso') return 0;
+  // Liso sin dibujo: incluido. Con dibujo siempre lleva suplemento
+  // (SUPLEMENTO_DIBUJO; mientras no esté fijado, «a consultar»).
+  if (c.id === 'liso') return (c.diseno && c.diseno !== 'lisa') ? SUPLEMENTO_DIBUJO : 0;
   if (c.id === 'moldurado-s') return 150;
   if (c.id === 'moldurado-d') return 300;
   if (c.id === 'blinsur')   {
@@ -848,6 +850,7 @@ const COLORES_PANEL = {
 };
 const COLORES_LISO = ['blanco','sapelly'];
 // Dibujos del panel liso fresado: «Diseños estándar para DM lacado y madera»
+const SUPLEMENTO_DIBUJO = null;   // € IVA incl. por cara para el panel con dibujo (pendiente de fijar)
 const DISENOS_PANEL = {
   lisa:'Liso', '2rh':'Modelo 2RH', '2rv':'Modelo 2RV', '2rv4rh':'Modelo 2RV 4RH', '1rv2rh':'Modelo 1RV2RH', tienda:'Diseño tienda',
   halga2r:'Halga 2R', halga3r:'Halga 3R', halga4r:'Halga 4R', halga2x2:'Halga 2x2', halga3x2:'Halga 3x2', m104:'Modelo 104',
@@ -1006,7 +1009,7 @@ function subPickerLado(l) {
       ${(() => {
         const boton = (sel, k, n, img, fn) => `<button type="button" title="${n}" onclick="${fn}('${l}','${k}')" style="background:${sel?'var(--dorado)':'#2a2a2a'};border:1px solid #555;border-radius:6px;padding:4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;width:74px"><img src="${img}" style="height:70px;width:auto;border-radius:3px" alt=""><span style="font-size:9px;line-height:1.1;color:${sel?'#111':'#ccc'}">${n}</span></button>`;
         const grid = (titulo, html) => `<div class="estegat-full" style="font-size:12px;color:var(--gris-medio);margin-top:6px">${titulo}</div><div class="estegat-full" style="display:flex;flex-wrap:wrap;gap:6px">${html}</div>`;
-        if (c.id === 'liso') return `<div class="estegat-full" style="font-size:11px;color:var(--dorado);margin-top:4px">Incluido en blanco o sapelly. Para otro color o madera (roble, teca, haya, lacado…), elige «Tablero DM decorado (Blinsur)»: tiene los mismos dibujos (liso, 2RH, 2RV, 1RV 2RH, 104, 2RV 4RH) y calcula el suplemento solo.</div>` + grid('Dibujo (diseños estándar DM lacado y madera):', Object.entries(DISENOS_PANEL).map(([k,n])=>boton(c.diseno===k,k,n,svgPanel('liso',c.color,k),'setDisenoPanel')).join(''));
+        if (c.id === 'liso') return `<div class="estegat-full" style="font-size:11px;color:var(--dorado);margin-top:4px">Liso sin dibujo: incluido. Con dibujo lleva suplemento. Para otro color o madera (roble, teca, haya, lacado…), elige «Tablero DM decorado (Blinsur)»: tiene los mismos dibujos (liso, 2RH, 2RV, 1RV 2RH, 104, 2RV 4RH) y calcula el suplemento solo.</div>` + grid('Dibujo (diseños estándar DM lacado y madera):', Object.entries(DISENOS_PANEL).map(([k,n])=>boton(c.diseno===k,k,n,svgPanel('liso',c.color,k),'setDisenoPanel')).join(''));
         return grid('Moldura:', Object.entries(MOLDURAS_PANEL).map(([k,n])=>boton((c.moldura||'recta')===k,k,n,svgPanel(c.id,c.color,k),'setMolduraPanel')).join(''));
       })()}
       ${fotoLinea}
@@ -1312,7 +1315,7 @@ function payloadFactusol() {
   if (catActiva !== 'metalica') {
     for (const [l, titulo] of LADOS) {
       const c = panelCfg[l];
-      if (c.id === 'liso') continue;
+      if (c.id === 'liso' && (!c.diseno || c.diseno === 'lisa')) continue;
       let pb = null; // precio unitario SIN IVA
       if (c.id === 'blinsur')        pb = blinsurBaseTablero(c.blinsur);
       else if (c.id === 'indupanel') pb = induBasePanel(c.indu);
