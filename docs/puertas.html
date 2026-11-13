@@ -1464,6 +1464,11 @@ const FICHAS_MODELO = {
     ],
     sellos: ['Disponible en RC3 y RC4', 'Norma UNE-EN 1627:2021', 'Producto certificado AENOR'],
   },
+  // Fichet: la página de características del folleto oficial (2026)
+  'foxeo-his':   { titulo: 'FOXEO+ HiS',   imagen: 'img/fichas/foxeo-his.jpg' },
+  'spheris-s':   { titulo: 'SPHERIS+ S',   imagen: 'img/fichas/spheris-s.jpg' },
+  'spheris-his': { titulo: 'SPHERIS+ HiS', imagen: 'img/fichas/spheris-his.jpg' },
+  'spheris-xp':  { titulo: 'SPHERIS+ XP',  imagen: 'img/fichas/spheris-xp.jpg' },
   'k-xxi': {
     titulo: 'KIUSO XXI', foto: 'img/fichas/kxxi-puerta.jpg',
     intro: 'Toda la seguridad de la KIUSO 100, con elementos que la hacen más elegante y con terminaciones más apropiadas para la intemperie. Puerta recomendada para viviendas de exterior.',
@@ -1484,6 +1489,11 @@ const FICHAS_MODELO = {
 function paginaFicha(m, abs, e) {
   const f = FICHAS_MODELO[m.id];
   if (!f) return '';
+  if (f.imagen) return `<section class="hoja">
+    <div class="kicker big">Ficha técnica · ${e(m.nombre)}</div>
+    <h1 style="margin-bottom:10px">${e(f.titulo)} · Características</h1>
+    <img src="${abs(f.imagen)}" alt="${e(f.titulo)}" style="display:block;margin:0 auto;max-width:100%;max-height:238mm;border-radius:10px">
+  </section>`;
   return `<section class="hoja">
     <div class="kicker big">Ficha técnica · ${e(m.nombre)}</div>
     <h1 style="margin-bottom:${f.intro?6:14}px">${e(f.titulo)} · Características</h1>
