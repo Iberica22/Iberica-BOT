@@ -804,7 +804,7 @@ function precioLado(l) { // € IVA incl. · 0 = incluido · null = a consultar
   const c = panelCfg[l];
   // Liso sin dibujo: incluido. Con dibujo siempre lleva suplemento
   // (SUPLEMENTO_DIBUJO; mientras no esté fijado, «a consultar»).
-  if (c.id === 'liso') return (c.diseno && c.diseno !== 'lisa') ? SUPLEMENTO_DIBUJO : 0;
+  if (c.id === 'liso') return (c.diseno && c.diseno !== 'lisa') ? precioDiseno(l) : 0;
   if (c.id === 'moldurado-s') return 150;
   if (c.id === 'moldurado-d') return 300;
   if (c.id === 'blinsur')   {
@@ -813,7 +813,7 @@ function precioLado(l) { // € IVA incl. · 0 = incluido · null = a consultar
     // Blinsur, se reparten entre las dos.
     const b = blinsurBaseTablero(c.blinsur);
     if (b == null) return null;
-    const caras = ['ext','int'].filter(x => panelCfg[x].id === 'blinsur').length || 1;
+    const caras = ['ext','int'].filter(x => panelCfg[x].id === 'blinsur' || fuenteDiseno(panelCfg[x])?.[0] === 'blinsur').length || 1;
     return Math.round((b + BLINSUR_PORTES / caras) * 1.21);
   }
   if (c.id === 'indupanel') { const b = induBasePanel(c.indu);        return b == null ? null : Math.round(b * 1.21); }
@@ -850,7 +850,34 @@ const COLORES_PANEL = {
 };
 const COLORES_LISO = ['blanco','sapelly'];
 // Dibujos del panel liso fresado: «Diseños estándar para DM lacado y madera»
-const SUPLEMENTO_DIBUJO = null;   // € IVA incl. por cara para el panel con dibujo (pendiente de fijar)
+// Suplemento del panel con dibujo: el mismo que el tablero equivalente de
+// Estega (Halga, Isoca) o de Blinsur (2RH, 2RV, 1RV 2RH, 2RV 4RH, 104).
+// Blanco = lacado blanco; sapelly solo existe en el 104 de Blinsur.
+// Diseño tienda y A–D: a consultar.
+const DISENO_FUENTE = {
+  halga2r:['estega','HALGA 2R'], halga3r:['estega','HALGA 3R'], halga4r:['estega','HALGA 4R'],
+  halga2x2:['estega','HALGA 2*2R'], halga3x2:['estega','HALGA 3*2R'],
+  isoca2r:['estega','ISOCA 2R'], isoca3r:['estega','ISOCA 3R'], isoca3r200:['estega','ISOCA 3R 200'], isoca4r:['estega','ISOCA 4R'],
+  '2rh':['blinsur','2RH'], '2rv':['blinsur','2RV'], '1rv2rh':['blinsur','1RV 2RH'], '2rv4rh':['blinsur','2RV 4RH'], m104:['blinsur','104'],
+};
+const fuenteDiseno = (c) => (c.id === 'liso' && c.diseno && c.diseno !== 'lisa') ? (DISENO_FUENTE[c.diseno] || ['consultar']) : null;
+function precioDiseno(l) {   // € IVA incl.; null = a consultar
+  const c = panelCfg[l];
+  const f = fuenteDiseno(c);
+  if (!f || f[0] === 'consultar') return null;
+  if (f[0] === 'estega') {
+    if (c.color !== 'blanco') return null;
+    const b = estegaBasePanel({ modelo: f[1], acabado: 0, formato: 0, corte: false, clavos: false, e9mm: false });
+    return b == null ? null : Math.round(b * 1.21);
+  }
+  // Blinsur: MDF lacado en blanco, o el 104 decorado en sapely
+  let base = null;
+  if (c.color === 'blanco') base = BLINSUR.mdf[f[1]] != null ? BLINSUR.mdf[f[1]] + 45 : null;
+  else if (c.color === 'sapelly' && BLINSUR.decorados[f[1]]) base = BLINSUR.decorados[f[1]][0];
+  if (base == null) return null;
+  const caras = ['ext','int'].filter(x => panelCfg[x].id === 'blinsur' || fuenteDiseno(panelCfg[x])?.[0] === 'blinsur').length || 1;
+  return Math.round((base + BLINSUR_PORTES / caras) * 1.21);
+}
 const DISENOS_PANEL = {
   lisa:'Liso', '2rh':'Modelo 2RH', '2rv':'Modelo 2RV', '2rv4rh':'Modelo 2RV 4RH', '1rv2rh':'Modelo 1RV2RH', tienda:'Diseño tienda',
   halga2r:'Halga 2R', halga3r:'Halga 3R', halga4r:'Halga 4R', halga2x2:'Halga 2x2', halga3x2:'Halga 3x2', m104:'Modelo 104',
@@ -1009,7 +1036,7 @@ function subPickerLado(l) {
       ${(() => {
         const boton = (sel, k, n, img, fn) => `<button type="button" title="${n}" onclick="${fn}('${l}','${k}')" style="background:${sel?'var(--dorado)':'#2a2a2a'};border:1px solid #555;border-radius:6px;padding:4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;width:74px"><img src="${img}" style="height:70px;width:auto;border-radius:3px" alt=""><span style="font-size:9px;line-height:1.1;color:${sel?'#111':'#ccc'}">${n}</span></button>`;
         const grid = (titulo, html) => `<div class="estegat-full" style="font-size:12px;color:var(--gris-medio);margin-top:6px">${titulo}</div><div class="estegat-full" style="display:flex;flex-wrap:wrap;gap:6px">${html}</div>`;
-        if (c.id === 'liso') return `<div class="estegat-full" style="font-size:11px;color:var(--dorado);margin-top:4px">Liso sin dibujo: incluido. Con dibujo lleva suplemento. Para otro color o madera (roble, teca, haya, lacado…), elige «Tablero DM decorado (Blinsur)»: tiene los mismos dibujos (liso, 2RH, 2RV, 1RV 2RH, 104, 2RV 4RH) y calcula el suplemento solo.</div>` + grid('Dibujo (diseños estándar DM lacado y madera):', Object.entries(DISENOS_PANEL).map(([k,n])=>boton(c.diseno===k,k,n,svgPanel('liso',c.color,k),'setDisenoPanel')).join(''));
+        if (c.id === 'liso') return `<div class="estegat-full" style="font-size:11px;color:var(--dorado);margin-top:4px">Liso sin dibujo: incluido. Con dibujo, el suplemento es el del tablero equivalente de Estega (Halga, Isoca, en blanco) o Blinsur (2RH, 2RV, 1RV 2RH, 2RV 4RH, 104). Diseño tienda y A–D: a consultar. Para otro color o madera (roble, teca, haya, lacado…), elige «Tablero DM decorado (Blinsur)»: tiene los mismos dibujos (liso, 2RH, 2RV, 1RV 2RH, 104, 2RV 4RH) y calcula el suplemento solo.</div>` + grid('Dibujo (diseños estándar DM lacado y madera):', Object.entries(DISENOS_PANEL).map(([k,n])=>boton(c.diseno===k,k,n,svgPanel('liso',c.color,k),'setDisenoPanel')).join(''));
         return grid('Moldura:', Object.entries(MOLDURAS_PANEL).map(([k,n])=>boton((c.moldura||'recta')===k,k,n,svgPanel(c.id,c.color,k),'setMolduraPanel')).join(''));
       })()}
       ${fotoLinea}
