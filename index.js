@@ -6085,11 +6085,13 @@ async function avisarNievesCampana(telefono, conv, descripcion, prioridad = fals
   const cliente = conversaciones[telefono]?.nombre || conv.nombre || `Cliente ${k}`;
   const paraNoemi = atiendeNoemi(conv);
   const destinoAviso = paraNoemi ? ((await destinoNoemi()) || NOTIFICACIONES_CONFIG.mari) : NOTIFICACIONES_CONFIG.nieves;
-  if (paraNoemi) descripcion = `${destinoAviso?.nombre === "Noemí" ? "" : "PARA NOEMÍ (Nieves de baja) · "}${descripcion}`;
-  await enviarAvisoInterno(destinoAviso,
-    { origen: `${prioridad ? "🚨 PRIORIDAD " : ""}${conv.etiqueta}`, cliente, telefono: k, que: descripcion },
-    { nombre: cliente, telefono: k, direccion: "—", descripcion: `${prioridad ? "🚨 PRIORIDAD · " : ""}[${conv.etiqueta}] ${descripcion}`, apertura: ahoraStr, refParte: "—", agente: `Marta · ${conv.etiqueta}` },
-  ).catch((e) => console.error("[Campañas] Aviso a Nieves:", e.message));
+  const enviar = (dest, desc) => enviarAvisoInterno(dest,
+    { origen: `${prioridad ? "🚨 PRIORIDAD " : ""}${conv.etiqueta}`, cliente, telefono: k, que: desc },
+    { nombre: cliente, telefono: k, direccion: "—", descripcion: `${prioridad ? "🚨 PRIORIDAD · " : ""}[${conv.etiqueta}] ${desc}`, apertura: ahoraStr, refParte: "—", agente: `Marta · ${conv.etiqueta}` },
+  ).catch((e) => { console.error("[Campañas] Aviso:", e.message); return false; });
+  const ok = await enviar(destinoAviso, paraNoemi && destinoAviso?.nombre !== "Noemí" ? `PARA NOEMÍ (Nieves de baja) · ${descripcion}` : descripcion);
+  // Si el aviso a Noemí no sale, que no se pierda: a Mari, marcado para Noemí
+  if (!ok && paraNoemi && destinoAviso?.nombre === "Noemí") await enviar(NOTIFICACIONES_CONFIG.mari, `PARA NOEMÍ (no le llegó a ella) · ${descripcion}`);
 }
 async function avisarNoemiCampana(telefono, conv, descripcion) {
   const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
@@ -6962,7 +6964,7 @@ app.get("/admin/api/campanas/nieves-baja", authAdmin, (req, res) => {
 let destinoNoemiCache = null;
 async function destinoNoemi() {
   if (NOTIFICACIONES_CONFIG.noemi?.memberId) return NOTIFICACIONES_CONFIG.noemi;
-  const tel = claveBaja(process.env.AVISOS_NOEMI_TEL || "");
+  const tel = claveBaja(process.env.AVISOS_NOEMI_TEL || "670710202");   // móvil de Noemí
   if (tel.length !== 9) return null;
   if (destinoNoemiCache) return destinoNoemiCache;
   try {

@@ -154,7 +154,7 @@ trabajos o más, o 600 € o más) entran en Navidad por el 674 09 66 10.
   - los que ya están en otra lista de Navidad.
 - **Los NC1/NC2 entran** (no contestaron).
 - **Sus «SÍ» los lleva Noemí:** Marta dice «Noemí» en lugar de «Nieves» y el
-  aviso va al móvil de `AVISOS_NOEMI_TEL`; si no está, a Mari con «PARA
+  aviso va al móvil de Noemí (670 71 02 02, o `AVISOS_NOEMI_TEL`); si no le llega, a Mari con «PARA
   NOEMÍ». Cuando Nieves vuelva: `/admin/api/campanas/nieves-baja?baja=0`.
 - **Pasos:**
   1. `/admin/api/campanas/nieves?calcular=1` y, al rato,
