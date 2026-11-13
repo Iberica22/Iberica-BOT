@@ -1525,7 +1525,8 @@ function generarPDF() {
     const c = panelCfg[l];
     const p = precioLado(l);
     const pd = PANEL_PDF[c.id] || PANEL_PDF['liso'];
-    return { nombre: resumenLado(l), precio: p, img: imgPanelLado(l), swatch: pd.swatch, desc: pd.desc };
+    const fab = c.id==='estega' ? 'Panel aluminio Estega' : c.id==='blinsur' ? 'Tablero DM Blinsur' : c.id==='indupanel' ? 'Panel Indupanel' : 'Panel Ibérica';
+    return { id: c.id, nombre: resumenLado(l), precio: p, img: imgPanelLado(l), swatch: pd.swatch, desc: pd.desc, colores: pd.colores, fab };
   };
   const ext = conPaneles ? ladoInfo('ext') : null;
   const int = conPaneles ? ladoInfo('int') : null;
@@ -1628,6 +1629,20 @@ function generarPDF() {
   .pname{font-size:14px;font-weight:900;color:var(--osc);margin:4px 0 8px;line-height:1.3}
   .tag{font-size:11px;font-weight:900;padding:4px 10px;border-radius:6px;display:inline-block}
   .tag.ok{background:#e3f3df;color:#2d7a2a} .tag.sup{background:#fff1d6;color:#9a6400} .tag.con{background:#fde4ea;color:#a3123a}
+  .pbig{border:1.5px solid #d9ccb3;border-radius:14px;overflow:hidden;margin-bottom:14px;box-shadow:0 3px 8px rgba(0,0,0,.07)}
+  .pbig-h{background:#f6f1e8;border-bottom:1.5px solid #d9ccb3;padding:10px 14px;display:flex;align-items:center;gap:12px}
+  .pbig-b{font-size:9.5px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#9c8a6a;background:rgba(0,0,0,.06);padding:4px 10px;border-radius:20px;white-space:nowrap}
+  .pbig-n{flex:1;font-size:15px;font-weight:900;color:var(--osc);line-height:1.3}
+  .pbig-c{display:flex;gap:16px;padding:10px 14px}
+  .pbig-f{width:48mm;flex-shrink:0;display:flex;justify-content:center}
+  .pbig-f img{max-width:40mm;max-height:62mm;border-radius:8px;border:2px solid #d9ccb3;display:block}
+  .pbig-f .sw{width:32mm;height:60mm}
+  .pbig-t p{font-size:12px;color:#333;line-height:1.6;margin-bottom:8px} .pbig-t .sel{font-size:11.5px;color:var(--gris)}
+  .pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;background:#faf7f1;border:1.5px solid #e6dcc9;border-radius:12px;padding:10px}
+  .pmini{background:#fff;border:1.5px solid #e2e2e2;border-radius:9px;padding:8px 6px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px}
+  .pmini.on{border-color:var(--verde);background:#f0f8ee}
+  .pmini .psw{width:36px;height:26px;border-radius:4px;margin-bottom:4px}
+  .pmini b{font-size:9.5px;line-height:1.25;color:#333} .pmini span{font-size:9px;color:#888} .pmini em{font-size:9px;font-weight:900;color:var(--verde);font-style:normal}
   .notas{margin-top:16px;font-size:11.5px;color:var(--gris);background:#f6f7f6;border-radius:8px;padding:9px 12px}
   /* Incluye */
   .g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
@@ -1682,6 +1697,19 @@ function generarPDF() {
   <div class="paneles" style="margin-top:8px">${tarjetaPanel('Cara exterior', ext)}${tarjetaPanel('Cara interior', int)}</div>`:''}
   ${notas?`<div class="notas"><b>Notas:</b> ${e(notas)}</div>`:''}
 </section>
+
+${conPaneles?`<section class="hoja">
+  ${cabPag(`Sus paneles · Presupuesto ${e(num)}`)}
+  <h1 style="margin-bottom:14px">Los paneles de su puerta</h1>
+  ${[['🚪','Panel exterior',ext],['🏠','Panel interior',int]].map(([ic,t,i])=>`<div class="pbig">
+    <div class="pbig-h"><span class="pbig-b">${ic} ${t}</span><span class="pbig-n">${e(i.nombre)}</span>${i.precio===0?'<span class="tag ok">Incluido</span>':i.precio?`<span class="tag sup">+${formatPrecio(i.precio)}</span>`:'<span class="tag con">A consultar</span>'}</div>
+    <div class="pbig-c">
+      <div class="pbig-f">${i.img?`<img src="${abs(i.img)}" alt="" onerror="this.style.display='none'">`:`<div class="sw" style="${i.swatch}"></div>`}</div>
+      <div class="pbig-t"><p>${e(i.desc)}</p><p class="sel"><b>◆ Su elección:</b> ${e(i.nombre)}</p>${i.colores?`<p class="sel"><b>◆ Colores disponibles:</b> ${e(i.colores)}</p>`:''}</div>
+    </div></div>`).join('')}
+  <div class="pgrid">${PANELES.map(pp=>{const md=PANEL_PDF[pp.id]||PANEL_PDF['liso'];const bs=[panelCfg.ext.id===pp.id?'EXT':null,panelCfg.int.id===pp.id?'INT':null].filter(Boolean);
+    return `<div class="pmini${bs.length?' on':''}"><div class="psw" style="${md.swatch}"></div><b>${e(pp.nombre.replace(' estándar (sapelly o blanco)','').replace(' (lacado, RAL, diseño...)',''))}</b><span>${pp.precioTxt?pp.precioTxt:pp.precio===null?'Consultar':pp.precio===0?'Incluido':'+'+formatPrecio(pp.precio)}</span>${bs.length?`<em>▲ ${bs.join(' + ')}</em>`:''}</div>`;}).join('')}</div>
+</section>`:''}
 
 ${fichas}
 
