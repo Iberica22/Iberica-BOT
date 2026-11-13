@@ -451,6 +451,7 @@ const PANELES = [
 // ── Tarifa Blinsur — Tableros decorados y lisos (noviembre 2025) ─────────────
 // Precios de tarifa por tablero (207x87x6), SIN IVA. El precio de venta es el
 // de tarifa (el margen está en el descuento de proveedor) + 21% IVA.
+const BLINSUR_PORTES = 21;   // € sin IVA por envío de 1–2 tableros (de 6 unidades en adelante, portes pagados)
 const BLINSUR = {
   maderas: ['Sapely', 'Tea', 'Roble', 'Haya vaporizada'],
   decorados: { // [Sapely, Tea, Roble, Haya vap.]
@@ -804,7 +805,15 @@ function precioLado(l) { // € IVA incl. · 0 = incluido · null = a consultar
   if (c.id === 'liso') return 0;
   if (c.id === 'moldurado-s') return 150;
   if (c.id === 'moldurado-d') return 300;
-  if (c.id === 'blinsur')   { const b = blinsurBaseTablero(c.blinsur); return b == null ? null : Math.round(b * 1.21); }
+  if (c.id === 'blinsur')   {
+    // Portes de Blinsur (21 € por envío de 1 o 2 tableros) metidos en el precio
+    // del tablero, sin línea aparte para el cliente. Si las dos caras llevan
+    // Blinsur, se reparten entre las dos.
+    const b = blinsurBaseTablero(c.blinsur);
+    if (b == null) return null;
+    const caras = ['ext','int'].filter(x => panelCfg[x].id === 'blinsur').length || 1;
+    return Math.round((b + BLINSUR_PORTES / caras) * 1.21);
+  }
   if (c.id === 'indupanel') { const b = induBasePanel(c.indu);        return b == null ? null : Math.round(b * 1.21); }
   if (c.id === 'estega')    { const b = estegaBasePanel(c.estega);    return b == null ? null : Math.round(b * 1.21); }
   return null; // acabado especial → a consultar
