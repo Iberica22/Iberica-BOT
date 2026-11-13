@@ -223,3 +223,7 @@ sobre el presupuesto: ¿has decidido aparcarlo? Si es así, con un simple
 - La nota solo dice «Avisada la responsable para llamar» si el aviso salió de verdad. Si no salió, la nota lo dice y el presupuesto aparece en **📞 Llamar** de la agenda de las 10:00 («Marta no pudo enviarle el WhatsApp»).
 - Si la agenda de las 10:00 no llega, no se da por enviada: Marta la reintenta cada 30 minutos ese mismo día.
 - Los avisos de presupuestos salen con la plantilla de avisos internos («Aviso de Marta para el equipo…»). Si falla, sale la de siempre («Nuevo parte creado»).
+
+## Si contesta «lo reviso y os digo» y no da fecha
+
+Marta le pregunta qué le falta y cuándo le viene bien que le vuelva a escribir. Si el cliente da fecha, Marta la apunta y vuelve a escribirle ese día. Si no vuelve a decir nada, a los **7 días** el presupuesto sale en **📞 Llamar** de la agenda de las 10:00, con el texto «contestó hace N días que lo pensaba y no ha dado fecha». Así no se queda parado hasta el cierre. Los días se cambian con `PRESU_DIAS_SIN_FECHA`.

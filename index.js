@@ -1177,6 +1177,9 @@ const PLANES_PRESU = {
   compania:   { marta: [], emails: [3, 10, 20], llamada7: false, cierre: 45 },
 };
 const PRESU_IMPORTE_LLAMADA = parseFloat(process.env.PRESU_IMPORTE_LLAMADA || "500"); // > 500 € → María llama también el día 7
+// Contestó («lo reviso y os digo», «lo tengo que hablar»…) pero no dio fecha:
+// si en estos días no vuelve a decir nada, María le llama (agenda de las 10:00)
+const PRESU_DIAS_SIN_FECHA = parseInt(process.env.PRESU_DIAS_SIN_FECHA || "7");
 const PRESU_DIAS_LLAMADA_FIN = 2; // María llama 2 días después del último mensaje de Marta
 // Días de retraso máximo de un mensaje que no se ha podido enviar (chat en
 // pausa, plantilla rechazada…) antes de pasárselo a una persona.
@@ -1722,6 +1725,11 @@ async function agendaPresupuestos({ forzar = false } = {}) {
         add("llamada_fin", "llamar", `no contestó a ${seg.enviados || 0} mensajes de Marta`);
       }
       if (seg.estado === "no_enviable") add("no_enviable", "llamar", "Marta no pudo enviarle el WhatsApp");
+      if (seg.estado === "respondido" && !seg.volverLlamarTs && !seg.juntaTs) {
+        const desde = seg.respondidoTs || seg.ultimoMensajeTs || seg.toque1Ts || seg.enviadoTs;
+        const d = Math.floor((ahora - desde) / dia);
+        if (d >= PRESU_DIAS_SIN_FECHA) add("sin_fecha", "llamar", `contestó hace ${d} días que lo pensaba y no ha dado fecha`);
+      }
       if (seg.volverLlamarTs && ahora >= seg.volverLlamarTs) add("volver", "llamar", "volver a llamar, lo acordó con Marta");
       if (seg.juntaTs && ahora >= seg.juntaTs + dia) add("junta", "llamar", "al administrador, tras la junta");
     }
@@ -3246,7 +3254,7 @@ async function procesarRespuestaPresu(telefono) {
   const caseId = estado.presu?.caseId || null;
   const toque  = estado.presu?.toque || null;
   const seg    = caseId ? seguimientosPresu[caseId] : null;
-  if (seg) { seg.estado = "respondido"; guardarSeguimientosPresu(); }
+  if (seg) { seg.estado = "respondido"; seg.respondidoTs = Date.now(); guardarSeguimientosPresu(); }
   estado.step = "menu_principal";
 
   const avisar = async (titulo, texto = msg) => {
