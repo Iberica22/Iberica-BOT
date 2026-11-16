@@ -6056,6 +6056,92 @@ function clasificarRespuestaCampanaReglas(texto, paso) {
   if (paso === "llave") return "llave";
   return "otro";
 }
+// ── Respuestas al mensaje de reactivación de los 3 meses ─────────────
+// El mensaje pregunta qué tal sigue el trabajo. Marta entiende la respuesta
+// (reglas y, si no está claro, la IA) y contesta como corresponde: un
+// saludo se contesta sin avisar a nadie; «todo bien» se agradece y se
+// cierra; un problema o un trabajo nuevo pasan a la oficina.
+async function clasificarRespuesta3m(texto) {
+  const t = normalizaTxt(texto).replace(/[¡!¿?.,;:"'()]/g, " ").replace(/\s+/g, " ").trim();
+  if (!t) return "otro";
+  if (/^(hola|buenas|buenos dias|buenas tardes|buenas noches|hey|ey|hola marta|hola buenas)( (que tal|como estas|marta))?$/.test(t)) return "saludo";
+  if (/^(gracias|muchas gracias|ok|okey|vale|perfecto|genial|de nada|igualmente|un saludo|saludos)$/.test(t) || !/[a-z0-9]/.test(t)) return "cortesia";
+  const problema = /(no funciona|no va bien|falla|fallo|roto|rota|se ha roto|problema|cuesta|duro|dura|atasca|atascad|no cierra|no abre|ruido|vuelta en vacio|da una vuelta|se sale|cojea|desajust|holgura|se queda)/.test(t);
+  const servicio = /(presupuesto|cambiar|instalar|otra puerta|alarma|camara|cerradura nueva|bombin|necesito|quiero|me gustaria|podeis venir|venir a)/.test(t);
+  const bien = /(todo (bien|perfecto|genial|ok|estupendo)|muy bien|fue muy bien|va (bien|genial|perfecto)|funciona (bien|perfect|genial)|sin problema|contento|contenta|encantad|de maravilla|10)/.test(t);
+  if (problema && !/no hay (ningun )?problema|sin problema/.test(t)) return "problema";
+  if (bien && !/\b(pero|aunque)\b/.test(t) && !servicio) return "bien";
+  if (servicio) return "servicio";
+  if (!process.env.OPENAI_API_KEY) return bien ? "bien" : "otro";
+  try {
+    const res = await Promise.race([
+      openai.chat.completions.create({
+        model: "gpt-4o-mini", temperature: 0, max_tokens: 6,
+        messages: [
+          { role: "system", content: "Una cerrajería escribió a un cliente: «Han pasado unos meses desde que trabajamos juntos, ¿qué tal está funcionando todo?». Clasifica la respuesta del cliente con UNA palabra: saludo (solo saluda), bien (todo funciona bien / contento), problema (algo no va bien con el trabajo o la puerta/cerradura), servicio (quiere otro trabajo, presupuesto o que vayan), pregunta (pregunta algo), cortesia (gracias, ok…), otro." },
+          { role: "user", content: String(texto).slice(0, 400) },
+        ],
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
+    ]);
+    const c = normalizaTxt(res.choices?.[0]?.message?.content || "").replace(/[^a-z]/g, "");
+    return ["saludo", "bien", "problema", "servicio", "pregunta", "cortesia", "otro"].includes(c) ? c : "otro";
+  } catch (_) { return bien ? "bien" : "otro"; }
+}
+
+async function manejarRespuesta3m({ telefono, conv, texto, t }) {
+  const k = claveBaja(telefono);
+  const entrada = Object.values(reactivacion3m.porParte).filter((e) => e.k === k).sort((a, b) => (b.enviadoTs || 0) - (a.enviadoTs || 0))[0];
+  const nombre = entrada?.nombre ? `, ${entrada.nombre}` : "";
+  if (entrada?.nombre && !conv.nombre) conv.nombre = `${entrada.nombre} (parte ${entrada.ref})`;
+  if (entrada && entrada.estado === "enviado") { entrada.estado = "contesto"; entrada.respuestaTs = Date.now(); guardarReact3m(); }
+  const nota = (txt) => entrada?.caseId && crearNotaParte(entrada.caseId, `Reactivación 3 meses (Marta): el cliente contesta «${String(texto).slice(0, 250)}». ${txt}`);
+  // Ya lo lleva la oficina: no contestar a cada mensaje (se reenvía como mucho una vez por hora)
+  if (conv.paso === "con_oficina") {
+    if (!conv.reenvioTs || Date.now() - conv.reenvioTs > 3600 * 1000) {
+      conv.reenvioTs = Date.now();
+      await avisarNievesCampana(telefono, conv, `sigue escribiendo (respuesta al mensaje de los 3 meses): "${String(texto).slice(0, 120)}"`);
+    }
+    guardarCampanas();
+    return true;
+  }
+  const cat = await clasificarRespuesta3m(texto);
+  console.log(`[Reactivación 3m] Respuesta de ${k}: ${cat}`);
+  const enviar = (msg) => enviarMensaje(telefono, msg);
+  switch (cat) {
+    case "saludo":
+      await enviar(`¡Hola${nombre}! 😊 Soy Marta, el asistente de WhatsApp de Ibérica Seguridad. Te escribíamos para saber qué tal sigue todo con el trabajo que te hicimos. ¿Va todo bien?`);
+      break;
+    case "cortesia":
+      break;
+    case "bien":
+      await enviar(`¡Qué alegría leerlo${nombre}! 🙌 Gracias por contárnoslo. Si algún día necesitas algo, escríbenos por aquí; y para urgencias, el 950 088 086, las 24 horas.`);
+      nota("Todo bien.");
+      conv.cerrada = Date.now();
+      break;
+    case "problema":
+      await enviar(`Vaya, siento que no vaya del todo bien${nombre}. Se lo paso ahora mismo a la oficina para que te llamen y lo revisen. Si es urgente (no puedes abrir o cerrar), llama al 950 088 086, las 24 horas.`);
+      await avisarNievesCampana(telefono, conv, `POSTVENTA a los 3 meses, algo no va bien: "${String(texto).slice(0, 150)}"${entrada?.ref ? ` (parte ${entrada.ref})` : ""}`);
+      nota("Algo no va bien: avisada la oficina para llamarle.");
+      conv.paso = "con_oficina";
+      break;
+    case "servicio":
+      await enviar(`¡Genial${nombre}! Se lo paso a la oficina y te llaman para verlo con calma, sin compromiso. 🙂`);
+      await avisarNievesCampana(telefono, conv, `quiere otro trabajo (mensaje de los 3 meses): "${String(texto).slice(0, 150)}"`);
+      nota("Pide otro trabajo: avisada la oficina para llamarle.");
+      conv.paso = "con_oficina";
+      break;
+    default:
+      await enviar(`Gracias por escribirnos${nombre}. Se lo paso a la oficina y te contestan en cuanto puedan. Para urgencias, el 950 088 086, las 24 horas.`);
+      await avisarNievesCampana(telefono, conv, `contesta al mensaje de los 3 meses: "${String(texto).slice(0, 150)}"`);
+      nota("Avisada la oficina.");
+      conv.paso = "con_oficina";
+  }
+  conv.ts = Date.now();
+  guardarCampanas();
+  return true;
+}
+
 async function clasificarRespuestaCampana(texto, paso) {
   const porReglas = clasificarRespuestaCampanaReglas(texto, paso);
   if (porReglas !== "otro" || !process.env.OPENAI_API_KEY) return porReglas;
@@ -6106,7 +6192,9 @@ async function avisarNievesCampana(telefono, conv, descripcion, prioridad = fals
   conv.nievesTs = conv.nievesTs || Date.now();
   const cliente = conversaciones[telefono]?.nombre || conv.nombre || `Cliente ${k}`;
   const paraNoemi = atiendeNoemi(conv);
-  const destinoAviso = paraNoemi ? ((await destinoNoemi()) || NOTIFICACIONES_CONFIG.mari) : NOTIFICACIONES_CONFIG.nieves;
+  // Los del mensaje de los 3 meses son postventa: a quien esté de turno
+  const destinoAviso = conv.campana === "REACT-3M" ? determinarDestinatarioNotificacion()
+    : paraNoemi ? ((await destinoNoemi()) || NOTIFICACIONES_CONFIG.mari) : NOTIFICACIONES_CONFIG.nieves;
   const enviar = (dest, desc) => enviarAvisoInterno(dest,
     { origen: `${prioridad ? "🚨 PRIORIDAD " : ""}${conv.etiqueta}`, cliente, telefono: k, que: desc },
     { nombre: cliente, telefono: k, direccion: "—", descripcion: `${prioridad ? "🚨 PRIORIDAD · " : ""}[${conv.etiqueta}] ${desc}`, apertura: ahoraStr, refParte: "—", agente: `Marta · ${conv.etiqueta}` },
@@ -6200,6 +6288,9 @@ async function manejarRespuestaCampana({ telefono, memberId, channelId, texto, t
     conv.paso = "con_nieves"; guardarCampanas();
     return true;
   }
+
+  // Respuestas al mensaje de los 3 meses («¿qué tal está funcionando todo?»)
+  if (conv.campana === "REACT-3M") return manejarRespuesta3m({ telefono, conv, texto, t });
 
   // Llega desde la web, Instagram/Facebook o un anuncio con la frase de Navidad
   if (recienLlegado) {

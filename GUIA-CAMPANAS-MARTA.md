@@ -219,8 +219,15 @@ Para comprobar el [NOCOM] hace falta la misma clave en los dos sitios:
 - **No se envía** con BAJA, WhatsApp Opt Out, un presupuesto abierto, otro
   mensaje comercial hace menos de 30 días o 4 este año. Si se pasa de 120
   días sin poder enviarse, se descarta.
-- **Nota en el parte** con cada envío. Las respuestas las lleva Marta como
-  una campaña más (etiqueta REACT-3M) y pasan a Nieves.
+- **Nota en el parte** con cada envío y con lo que conteste.
+- **Las respuestas las entiende Marta** (reglas y, si no está claro, IA):
+  - «Hola» → se presenta y le pregunta si va todo bien, sin avisar a nadie;
+  - «Todo bien» → lo agradece, recuerda el 950 088 086 y cierra;
+  - algo no va bien → lo pasa a la oficina para que le llamen (postventa);
+  - pide otro trabajo, pregunta u otra cosa → a la oficina;
+  - «gracias», «ok»… → no contesta.
+  Los avisos van a quien esté de turno (no a Nieves). Una vez pasado a la
+  oficina, Marta no contesta a cada mensaje: lo reenvía (máx. 1 por hora).
 - **Al pasarlo a Marta:** apagar el flujo de Zoho Flow y abrir una vez
   `/admin/api/reactivacion-3m/importar`. Así entran los partes cerrados en
   los últimos 90 días y nadie se queda sin su mensaje.
