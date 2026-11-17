@@ -3514,9 +3514,10 @@ async function procesarMensaje(telefono, texto) {
     await enviarMensaje(telefono, "Gracias de verdad — ahora mismo se lo traslado al equipo. 🙏");
     crearNotaParte(estado.resena?.caseId, `Nota del cliente: ${estado.resena?.nota || "baja"}. Qué podríamos mejorar: "${msg.slice(0, 300)}"`);
     try {
-      const propuesta = await proponerRespuesta(`encuesta tras el trabajo: puso un ${estado.resena?.nota || "nota baja"} y explica qué mejorar`, msg, estado.nombre ? String(estado.nombre).split(" ")[0] : null);
+      const tiempos = await datosTiemposParte(estado.resena?.caseId);
+      const propuesta = await proponerRespuesta(`encuesta tras el trabajo: puso un ${estado.resena?.nota || "nota baja"} y explica qué mejorar`, msg, estado.nombre ? String(estado.nombre).split(" ")[0] : null, tiempos);
       await avisarANoemi({ origen: "📉 ENCUESTA · qué mejorar", cliente: estado.nombre || `Cliente ${telefono.slice(-9)}`, telefono: telefono.slice(-9),
-        que: `Nota ${estado.resena?.nota || "baja"} (parte ${estado.resena?.refParte || "—"}): "${msg.slice(0, 150)}" · PROPUESTA DE RESPUESTA: «${propuesta}»`, ref: estado.resena?.refParte || "—", agente: "Postventa" });
+        que: `Nota ${estado.resena?.nota || "baja"} (parte ${estado.resena?.refParte || "—"}): "${msg.slice(0, 150)}"${tiempos?.resumen ? ` · PARTE: ${tiempos.resumen}` : ""} · PROPUESTA DE RESPUESTA (revísala con el parte): «${propuesta}»`, ref: estado.resena?.refParte || "—", agente: "Postventa" });
     } catch (e) { console.error("[Reseñas] No se pudo avisar a Noemí:", e.message); }
     return;
   }
@@ -6217,16 +6218,41 @@ async function avisarNoemiCampana(telefono, conv, descripcion) {
   await avisarANoemi({ origen: `⚠️ QUEJA · ${conv.etiqueta}`, cliente: conversaciones[telefono]?.nombre || conv.nombre || `Cliente ${claveBaja(telefono)}`, telefono: claveBaja(telefono), que: descripcion, agente: "Marta · Campañas" });
 }
 // Propuesta de respuesta para Noemí (la IA la redacta; ella decide si la usa).
-async function proponerRespuesta(situacion, textoCliente, nombre) {
-  const reserva = `Hola${nombre ? " " + nombre : ""}, soy Noemí, de Ibérica Seguridad. Siento mucho que no haya ido como esperabas y gracias por decírnoslo. ¿Te viene bien que te llame hoy para verlo y solucionarlo?`;
+// Tiempos del parte (aviso abierto → técnico allí → cerrado), para que la
+// propuesta no dé por bueno lo que el parte desmiente (p. ej. «tardaron
+// mucho» cuando el técnico llegó en hora y media).
+async function datosTiemposParte(caseId) {
+  if (!caseId) return null;
+  try {
+    const caso = (await zohoGet(`Cases/${caseId}`)).data?.[0];
+    if (!caso) return null;
+    const f = (v) => (v ? new Date(v) : null);
+    const hm = (d) => d.toLocaleString("es-ES", { timeZone: "Europe/Madrid", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+    const abierto = f(caso.Created_Time);
+    const kIni = campoPorNombre(caso, /fecha.*hora.*inicio|fecha.*inicio/i);
+    const inicio = kIni ? f(caso[kIni]) : null;
+    const kFin = campoPorNombre(caso, /fecha.*hora.*fin|fecha.*(cierre|cerrad)/i);
+    const fin = kFin ? f(caso[kFin]) : null;
+    const partes = [];
+    if (abierto) partes.push(`aviso abierto ${hm(abierto)}`);
+    if (inicio) partes.push(`técnico allí ${hm(inicio)}${abierto && inicio > abierto ? ` (${Math.round((inicio - abierto) / 60000)} min después)` : ""}`);
+    if (fin) partes.push(`terminado ${hm(fin)}`);
+    const notas = (await zohoGet(`Cases/${caseId}/Notes`, { per_page: 10 }).catch(() => ({}))).data || [];
+    const ultNotas = notas.slice(0, 4).map((n) => String(n.Note_Content || "").replace(/\s+/g, " ").slice(0, 140)).filter(Boolean);
+    return { resumen: partes.join(" · "), notas: ultNotas };
+  } catch (_) { return null; }
+}
+
+async function proponerRespuesta(situacion, textoCliente, nombre, datosParte = null) {
+  const reserva = `Hola${nombre ? " " + nombre : ""}, soy Noemí, de Ibérica Seguridad. Gracias por contarnos cómo lo viviste; lo he revisado con el equipo. Si quieres, lo hablamos por teléfono cuando te venga bien.`;
   if (!process.env.OPENAI_API_KEY) return reserva;
   try {
     const res = await Promise.race([
       openai.chat.completions.create({
         model: "gpt-4o-mini", temperature: 0.4, max_tokens: 160,
         messages: [
-          { role: "system", content: "Eres Noemí, responsable de Ibérica Seguridad (cerrajería de Almería). Escribe la respuesta de WhatsApp a un cliente descontento. Reglas: tutea; 2 o 3 frases y menos de 350 caracteres; empieza por su nombre si lo hay; agradece que lo cuente y pide disculpas por lo concreto que dice, sin excusas ni echar la culpa a nadie; no prometas descuentos, devoluciones ni precios; ofrece llamarle tú o pasar a revisarlo, y termina con una pregunta para concretar. Sin emojis. Firma implícita: ya te presentas como Noemí." },
-          { role: "user", content: `Situación: ${situacion}\nNombre del cliente: ${nombre || "(desconocido)"}\nLo que ha escrito: «${String(textoCliente || "").slice(0, 400)}»` },
+          { role: "system", content: "Eres Noemí, responsable de Ibérica Seguridad (cerrajería de Almería). Escribe la respuesta de WhatsApp a un cliente descontento. Reglas: tutea; 2 o 3 frases y menos de 350 caracteres; empieza por su nombre si lo hay; agradece que lo cuente y muestra que entiendes cómo lo vivió. NO des la razón en hechos que el parte no confirma: si los datos del parte muestran que los tiempos fueron razonables (por ejemplo, el técnico llegó en una o dos horas), explícalo con tacto y con los datos concretos, sin discutir ni culpar al cliente, entendiendo que con prisa la espera se hace larga. Si el parte confirma un fallo nuestro, pide disculpas por ese fallo concreto. No prometas descuentos, devoluciones, precios ni visitas; como mucho ofrece hablarlo por teléfono si quiere. Sin emojis. Ya te presentas como Noemí." },
+          { role: "user", content: `Situación: ${situacion}\nNombre del cliente: ${nombre || "(desconocido)"}\nLo que ha escrito: «${String(textoCliente || "").slice(0, 400)}»\nDatos del parte: ${datosParte?.resumen || "no disponibles"}${datosParte?.notas?.length ? `\nNotas del parte: ${datosParte.notas.join(" | ")}` : ""}` },
         ],
       }),
       new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 9000)),

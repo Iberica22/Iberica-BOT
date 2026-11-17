@@ -242,7 +242,13 @@ Le llegan desde el número de Marta. Si no le llegan, van a Mari con «PARA NOEM
   - un aviso en el momento («📉 ENCUESTA · nota baja», con la nota y el parte);
   - otro cuando el cliente explica qué podríamos mejorar.
   - Ese segundo aviso, y el de las quejas, lleva una **propuesta de respuesta**
-    redactada por la IA: tuteando, pidiendo disculpas por lo que cuenta,
-    sin prometer descuentos ni devoluciones, ofreciendo llamar o pasar a
-    revisarlo. Noemí decide si la usa, la cambia o llama directamente.
+    redactada por la IA. Noemí decide si la usa, la cambia o llama directamente.
+  - En las encuestas, el aviso trae también las horas del parte
+    («PARTE: aviso abierto 13:15 · técnico allí 14:50 (95 min después)»)
+    y la IA las lee junto con las últimas notas del parte.
+  - La IA no da la razón en lo que el parte no confirma. Si los tiempos
+    fueron razonables, lo explica con tacto y con los datos. Solo pide
+    disculpas por un fallo que el parte confirme.
+  - Nunca promete descuentos, devoluciones, precios ni visitas; como mucho
+    ofrece hablarlo por teléfono.
 - Mientras Nieves está de baja, los «SÍ» de su lista de clientes altos.
