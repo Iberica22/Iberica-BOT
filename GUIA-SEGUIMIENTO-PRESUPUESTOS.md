@@ -251,4 +251,12 @@ Le llegan desde el número de Marta. Si no le llegan, van a Mari con «PARA NOEM
     disculpas por un fallo que el parte confirme.
   - Nunca promete descuentos, devoluciones, precios ni visitas; como mucho
     ofrece hablarlo por teléfono.
+  - El criterio por tipo de queja está en `DIRECTRICES_RESPUESTA` (index.js):
+    - espera razonable o larga (el límite son 3 h en una urgencia);
+    - precio, trato del técnico, trabajo que falla, daños;
+    - no vino, queja ambigua, insultos, nota sin explicación.
+
+    Ahí está también la lista de frases prohibidas («lamentamos las
+    molestias», «compensarte»…). En `EJEMPLOS_RESPUESTA` hay 8 ejemplos de
+    respuesta. Para cambiar el tono o el criterio se editan esos dos textos.
 - Mientras Nieves está de baja, los «SÍ» de su lista de clientes altos.
