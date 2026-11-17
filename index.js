@@ -3514,8 +3514,9 @@ async function procesarMensaje(telefono, texto) {
     await enviarMensaje(telefono, "Gracias de verdad — ahora mismo se lo traslado al equipo. 🙏");
     crearNotaParte(estado.resena?.caseId, `Nota del cliente: ${estado.resena?.nota || "baja"}. Qué podríamos mejorar: "${msg.slice(0, 300)}"`);
     try {
+      const propuesta = await proponerRespuesta(`encuesta tras el trabajo: puso un ${estado.resena?.nota || "nota baja"} y explica qué mejorar`, msg, estado.nombre ? String(estado.nombre).split(" ")[0] : null);
       await avisarANoemi({ origen: "📉 ENCUESTA · qué mejorar", cliente: estado.nombre || `Cliente ${telefono.slice(-9)}`, telefono: telefono.slice(-9),
-        que: `Nota ${estado.resena?.nota || "baja"} (parte ${estado.resena?.refParte || "—"}): "${msg.slice(0, 150)}"`, ref: estado.resena?.refParte || "—", agente: "Postventa" });
+        que: `Nota ${estado.resena?.nota || "baja"} (parte ${estado.resena?.refParte || "—"}): "${msg.slice(0, 150)}" · PROPUESTA DE RESPUESTA: «${propuesta}»`, ref: estado.resena?.refParte || "—", agente: "Postventa" });
     } catch (e) { console.error("[Reseñas] No se pudo avisar a Noemí:", e.message); }
     return;
   }
@@ -6211,8 +6212,30 @@ async function avisarNievesCampana(telefono, conv, descripcion, prioridad = fals
   if (!ok && paraNoemi && destinoAviso?.nombre === "Noemí") await enviar(NOTIFICACIONES_CONFIG.mari, `PARA NOEMÍ (no le llegó a ella) · ${descripcion}`);
 }
 async function avisarNoemiCampana(telefono, conv, descripcion) {
+  const propuesta = await proponerRespuesta(`queja en respuesta a un WhatsApp de la campaña ${conv.etiqueta}`, descripcion, conv.nombre && !/^Cliente /.test(conv.nombre) ? conv.nombre.split(" ")[0] : null);
+  descripcion = `${descripcion} · PROPUESTA DE RESPUESTA: «${propuesta}»`;
   await avisarANoemi({ origen: `⚠️ QUEJA · ${conv.etiqueta}`, cliente: conversaciones[telefono]?.nombre || conv.nombre || `Cliente ${claveBaja(telefono)}`, telefono: claveBaja(telefono), que: descripcion, agente: "Marta · Campañas" });
 }
+// Propuesta de respuesta para Noemí (la IA la redacta; ella decide si la usa).
+async function proponerRespuesta(situacion, textoCliente, nombre) {
+  const reserva = `Hola${nombre ? " " + nombre : ""}, soy Noemí, de Ibérica Seguridad. Siento mucho que no haya ido como esperabas y gracias por decírnoslo. ¿Te viene bien que te llame hoy para verlo y solucionarlo?`;
+  if (!process.env.OPENAI_API_KEY) return reserva;
+  try {
+    const res = await Promise.race([
+      openai.chat.completions.create({
+        model: "gpt-4o-mini", temperature: 0.4, max_tokens: 160,
+        messages: [
+          { role: "system", content: "Eres Noemí, responsable de Ibérica Seguridad (cerrajería de Almería). Escribe la respuesta de WhatsApp a un cliente descontento. Reglas: tutea; 2 o 3 frases y menos de 350 caracteres; empieza por su nombre si lo hay; agradece que lo cuente y pide disculpas por lo concreto que dice, sin excusas ni echar la culpa a nadie; no prometas descuentos, devoluciones ni precios; ofrece llamarle tú o pasar a revisarlo, y termina con una pregunta para concretar. Sin emojis. Firma implícita: ya te presentas como Noemí." },
+          { role: "user", content: `Situación: ${situacion}\nNombre del cliente: ${nombre || "(desconocido)"}\nLo que ha escrito: «${String(textoCliente || "").slice(0, 400)}»` },
+        ],
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 9000)),
+    ]);
+    const txt = String(res.choices?.[0]?.message?.content || "").replace(/\s+/g, " ").replace(/^["«]|["»]$/g, "").trim();
+    return txt.length > 20 ? txt.slice(0, 400) : reserva;
+  } catch (_) { return reserva; }
+}
+
 // Avisos que son para Noemí (quejas y notas bajas de la encuesta): a su móvil
 // de empresa; si no le llega, a Mari con «PARA NOEMÍ».
 async function avisarANoemi({ origen, cliente, telefono, que, ref = "—", agente = "Marta" }) {

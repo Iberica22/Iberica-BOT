@@ -241,4 +241,8 @@ Le llegan desde el número de Marta. Si no le llegan, van a Mari con «PARA NOEM
 - **Notas bajas de la encuesta** (de 0 a 8, o una respuesta negativa):
   - un aviso en el momento («📉 ENCUESTA · nota baja», con la nota y el parte);
   - otro cuando el cliente explica qué podríamos mejorar.
+  - Ese segundo aviso, y el de las quejas, lleva una **propuesta de respuesta**
+    redactada por la IA: tuteando, pidiendo disculpas por lo que cuenta,
+    sin prometer descuentos ni devoluciones, ofreciendo llamar o pasar a
+    revisarlo. Noemí decide si la usa, la cambia o llama directamente.
 - Mientras Nieves está de baja, los «SÍ» de su lista de clientes altos.
