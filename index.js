@@ -3468,6 +3468,9 @@ async function procesarMensaje(telefono, texto) {
       estado.resena.nota = n !== null ? `${n}/10` : `negativa ("${msg.slice(0, 80)}")`;
       registrarResultadoResena(estado.resena?.refParte || telefono, `respondio_${n !== null ? n : "negativo"}_pidiendo_mejora`);
       await enviarMensaje(telefono, "Muchas gracias por la sinceridad 🙏 ¿Qué podríamos haber hecho mejor? Se lo paso tal cual al equipo.");
+      // Nota baja: aviso a Noemí ya (aunque luego no explique el motivo)
+      avisarANoemi({ origen: "📉 ENCUESTA · nota baja", cliente: estado.nombre || `Cliente ${telefono.slice(-9)}`, telefono: telefono.slice(-9),
+        que: `Nota ${estado.resena.nota} (parte ${estado.resena?.refParte || "—"}). Le hemos preguntado qué podríamos mejorar.`, ref: estado.resena?.refParte || "—", agente: "Postventa" });
       return;
     }
     if ((estado.resena?.intentos || 0) >= 1) {
@@ -3511,18 +3514,9 @@ async function procesarMensaje(telefono, texto) {
     await enviarMensaje(telefono, "Gracias de verdad — ahora mismo se lo traslado al equipo. 🙏");
     crearNotaParte(estado.resena?.caseId, `Nota del cliente: ${estado.resena?.nota || "baja"}. Qué podríamos mejorar: "${msg.slice(0, 300)}"`);
     try {
-      const destinatario = determinarDestinatarioNotificacion();
-      const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
-      await enviarNotificacionAgente(destinatario, {
-        nombre:      estado.nombre || `Cliente ${telefono.slice(-9)}`,
-        telefono:    telefono.slice(-9),
-        direccion:   "—",
-        descripcion: `Valoración postventa BAJA (parte ${estado.resena?.refParte || "—"}): "${msg.slice(0, 150)}"`,
-        apertura:    ahoraStr,
-        refParte:    estado.resena?.refParte || "—",
-        agente:      "Postventa",
-      });
-    } catch (e) { console.error("[Reseñas] No se pudo avisar al equipo:", e.message); }
+      await avisarANoemi({ origen: "📉 ENCUESTA · qué mejorar", cliente: estado.nombre || `Cliente ${telefono.slice(-9)}`, telefono: telefono.slice(-9),
+        que: `Nota ${estado.resena?.nota || "baja"} (parte ${estado.resena?.refParte || "—"}): "${msg.slice(0, 150)}"`, ref: estado.resena?.refParte || "—", agente: "Postventa" });
+    } catch (e) { console.error("[Reseñas] No se pudo avisar a Noemí:", e.message); }
     return;
   }
 
@@ -6217,9 +6211,19 @@ async function avisarNievesCampana(telefono, conv, descripcion, prioridad = fals
   if (!ok && paraNoemi && destinoAviso?.nombre === "Noemí") await enviar(NOTIFICACIONES_CONFIG.mari, `PARA NOEMÍ (no le llegó a ella) · ${descripcion}`);
 }
 async function avisarNoemiCampana(telefono, conv, descripcion) {
+  await avisarANoemi({ origen: `⚠️ QUEJA · ${conv.etiqueta}`, cliente: conversaciones[telefono]?.nombre || conv.nombre || `Cliente ${claveBaja(telefono)}`, telefono: claveBaja(telefono), que: descripcion, agente: "Marta · Campañas" });
+}
+// Avisos que son para Noemí (quejas y notas bajas de la encuesta): a su móvil
+// de empresa; si no le llega, a Mari con «PARA NOEMÍ».
+async function avisarANoemi({ origen, cliente, telefono, que, ref = "—", agente = "Marta" }) {
   const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
-  const destino = NOTIFICACIONES_CONFIG.noemi || NOTIFICACIONES_CONFIG.mari;
-  await enviarNotificacionAgente(destino, { nombre: `Cliente ${claveBaja(telefono)}`, telefono: claveBaja(telefono), direccion: "—", descripcion: `⚠️ QUEJA (para Noemí) [${conv.etiqueta}]: ${descripcion}`, apertura: ahoraStr, refParte: "—", agente: "Marta · Campañas" }).catch(() => {});
+  const enviar = (dest, extra = "") => enviarAvisoInterno(dest,
+    { origen: `${extra}${origen}`, cliente, telefono, que },
+    { nombre: cliente, telefono, direccion: "—", descripcion: `${extra}${origen}: ${que}`, apertura: ahoraStr, refParte: ref, agente },
+  ).catch((e) => { console.error("[Avisos] Noemí:", e.message); return false; });
+  const dest = await destinoNoemi();
+  if (dest && await enviar(dest)) return true;
+  return enviar(NOTIFICACIONES_CONFIG.mari, "PARA NOEMÍ · ");
 }
 
 // Tras la franja se espera un poco por si manda la marca de la llave, y a

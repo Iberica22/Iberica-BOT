@@ -231,3 +231,14 @@ Marta le pregunta qué le falta y cuándo le viene bien que le vuelva a escribir
 ## Si lo llevas tú a mano
 
 Cuando alguien de la oficina lleva un presupuesto por su cuenta (por ejemplo, desde otro WhatsApp), abre `/admin/api/presupuestos/atendido?ref=2026-XXXXX`. Marta deja de escribirle, el presupuesto ya no sale en «Llamar» y queda una nota en el parte. El aviso de cerrar con R6 a los 45 días sigue saliendo.
+
+
+## Avisos que le llegan a Noemí (670 71 02 02)
+
+Le llegan desde el número de Marta. Si no le llegan, van a Mari con «PARA NOEMÍ».
+
+- **Quejas** de las campañas de Marta (Navidad, reactivación).
+- **Notas bajas de la encuesta** (de 0 a 8, o una respuesta negativa):
+  - un aviso en el momento («📉 ENCUESTA · nota baja», con la nota y el parte);
+  - otro cuando el cliente explica qué podríamos mejorar.
+- Mientras Nieves está de baja, los «SÍ» de su lista de clientes altos.
