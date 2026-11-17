@@ -83,6 +83,7 @@ function botPausado(clave) {
 // Últimos mensajes enviados por el propio bot, para distinguir su eco
 // OUTBOUND del de una persona de la oficina: { telefono: [{t, ts}] }
 const enviosBot = {};
+const fotosAgradecidas = {}; // { canal_telefono: ts } — un solo «gracias por las fotos» cada 10 min
 function registrarEnvioBot(telefono, texto) {
   (enviosBot[telefono] = enviosBot[telefono] || []).push({ t: texto, ts: Date.now() });
   if (enviosBot[telefono].length > 25) enviosBot[telefono].shift();
@@ -5170,13 +5171,25 @@ app.post("/webhook", async (req, res) => {
       // vez de ignorarla en silencio (la oficina la ve en la bandeja).
       if (esImagen && IA_MODO === "on" && !botPausado(`${channelId}_${telefono}`) && !NOMBRES_AGENTES[telefono]) {
         if (conversaciones[telefono]?.memberId) {
-          await enviarNatural(telefono, "¡Gracias por la foto! 📸 Se la paso al equipo para que lo valore mejor. Seguimos por aquí 😊");
+          // Contestar SIEMPRE por el número al que ha escrito (antes salía por
+          // el último chat guardado, p. ej. el de Mari), respetando su horario,
+          // y una sola vez aunque mande varias fotos seguidas.
+          const est = conversaciones[telefono];
+          est.memberId = memberId;
+          est.channelId = channelId;
+          const claveFoto = `${channelId}_${telefono}`;
+          fotosAgradecidas[claveFoto] = fotosAgradecidas[claveFoto] || 0;
+          if (dentroDeHorario(channelId) && Date.now() - fotosAgradecidas[claveFoto] > 10 * 60 * 1000) {
+            fotosAgradecidas[claveFoto] = Date.now();
+            await enviarNatural(telefono, "¡Gracias por las fotos! 📸 Se las paso al equipo para que lo valore mejor. Seguimos por aquí 😊");
+          }
         } else if (dentroDeHorario(channelId) && !(channelId === CANAL_INSTAGRAM && !martaEnInstagram())) {
           // Primer mensaje y solo una foto: preguntar qué necesita (antes, silencio)
           resetearConversacion(telefono);
           conversaciones[telefono].memberId  = memberId;
           conversaciones[telefono].channelId = channelId;
           conversaciones[telefono].step = "menu_principal";
+          fotosAgradecidas[`${channelId}_${telefono}`] = Date.now();
           await enviarNatural(telefono, "¡Hola! 👋 Soy Marta, de Ibérica Seguridad. Gracias por la foto 📸 ¿Me cuentas qué necesitas y en qué zona está? Así te ayudo enseguida.");
         }
       }
