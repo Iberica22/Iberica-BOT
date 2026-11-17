@@ -7090,15 +7090,16 @@ app.get("/admin/api/campanas/nieves-baja", authAdmin, (req, res) => {
 let destinoNoemiCache = null;
 async function destinoNoemi() {
   if (NOTIFICACIONES_CONFIG.noemi?.memberId) return NOTIFICACIONES_CONFIG.noemi;
-  // El 670 71 02 02 es un número de empresa conectado a Woztell (Marta contesta
-  // en él): no sirve para avisar a Noemí. Hasta tener su móvil personal
-  // (AVISOS_NOEMI_TEL), los avisos van a Mari con «PARA NOEMÍ».
-  const tel = claveBaja(process.env.AVISOS_NOEMI_TEL || "");
+  // Móvil de empresa de Noemí (670 71 02 02). Es el número del canal desde el
+  // que salen los avisos, así que a ella se le avisa desde el número de Marta
+  // (661 66 59 29). Si no le llega, el aviso va a Mari con «PARA NOEMÍ».
+  const tel = claveBaja(process.env.AVISOS_NOEMI_TEL || "670710202");
+  const canalAviso = process.env.AVISOS_NOEMI_CANAL || process.env.WOZTELL_CHANNEL_ID || CANAL_SOPORTE_MARTA;
   if (tel.length !== 9) return null;
   if (destinoNoemiCache) return destinoNoemiCache;
   try {
-    const m = await buscarOCrearMiembroWoztell(CANAL_NOTIFICACIONES, `34${tel}`, "Noemí");
-    destinoNoemiCache = { nombre: "Noemí", channelId: CANAL_NOTIFICACIONES, memberId: m.memberId, telefono: `34${tel}` };
+    const m = await buscarOCrearMiembroWoztell(canalAviso, `34${tel}`, "Noemí");
+    destinoNoemiCache = { nombre: "Noemí", channelId: canalAviso, memberId: m.memberId, telefono: `34${tel}` };
     return destinoNoemiCache;
   } catch (e) { console.error("[Avisos] No se pudo preparar el aviso a Noemí:", e.message); return null; }
 }
