@@ -7090,7 +7090,10 @@ app.get("/admin/api/campanas/nieves-baja", authAdmin, (req, res) => {
 let destinoNoemiCache = null;
 async function destinoNoemi() {
   if (NOTIFICACIONES_CONFIG.noemi?.memberId) return NOTIFICACIONES_CONFIG.noemi;
-  const tel = claveBaja(process.env.AVISOS_NOEMI_TEL || "670710202");   // móvil de Noemí
+  // El 670 71 02 02 es un número de empresa conectado a Woztell (Marta contesta
+  // en él): no sirve para avisar a Noemí. Hasta tener su móvil personal
+  // (AVISOS_NOEMI_TEL), los avisos van a Mari con «PARA NOEMÍ».
+  const tel = claveBaja(process.env.AVISOS_NOEMI_TEL || "");
   if (tel.length !== 9) return null;
   if (destinoNoemiCache) return destinoNoemiCache;
   try {
