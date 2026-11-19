@@ -1,7 +1,7 @@
-# Plan para vender el material de exposición (noviembre-diciembre 2026)
+# Black Friday de exposición: plan para vender el material (19-30 nov 2026)
 
 Material: cajas fuertes, buzones, cestas y expositores de publicidad, y más.
-Objetivo: vaciarlo en 3 semanas. Nada se publica sin aprobación de Noemi.
+Excusa: el Black Friday (viernes 27 de noviembre). Objetivo: vaciarlo antes del lunes 30. Nada se publica sin aprobación de Noemi.
 
 ## Lo que hemos visto en Instagram (Apify, 18-nov, 174 posts, 0,45 $)
 
@@ -23,7 +23,7 @@ categoría; «comenta X».
 **No funciona:** foto de una sola pieza con texto largo; textos de marca; «Black Friday» sin
 producto; carteles sin producto. En cajas fuertes lo que engancha es abrirla y enseñarla por dentro.
 
-## Antes de empezar (día 1)
+## Antes de empezar (jueves 19 y viernes 20)
 
 1. **Expositores y cestas de marca:** preguntar a cada proveedor si son suyos. Muchos los
    recogen ellos: espacio libre sin vender nada.
@@ -51,12 +51,12 @@ producto; carteles sin producto. En cajas fuertes lo que engancha es abrirla y e
 ## En Instagram
 
 - **Reel 1 «Esto tiene que salir»:** recorrido de 20 s por la tienda, un rótulo por pieza.
-  Gancho: «Cambiamos la tienda y todo esto se va.» Cierre: «Comenta CAJA, BUZÓN o EXPOSITOR
+  Gancho: «Cambiamos la tienda y todo esto se va.» Texto en pantalla: BLACK FRIDAY DE EXPOSICIÓN. Cierre: «Comenta CAJA, BUZÓN o EXPOSITOR
   y te mandamos fotos y precio.»
 - **Reel por categoría** (lo que hace allmobel): uno de cajas fuertes abriéndolas por dentro,
   otro de buzones («buzones para un portal entero»).
 - **Stories a diario:** foto con VENDIDO tachado en rojo, encuesta «¿Cuál se va hoy?» y
-  cuenta atrás al sábado. Ver cómo se vacía la tienda es la mejor prueba.
+  cuenta atrás al viernes. Ver cómo se vacía la tienda es la mejor prueba.
 - **Lista VIP (Mejores amigos):** «Responde VIP y ves las piezas 24 h antes que nadie.»
 - **Marta:** palabras CAJA, BUZÓN, EXPOSITOR → ficha, medidas, precio y enlace; reserva con persona.
 - **Reserva:** señal por Bizum y 48 h para recoger.
@@ -68,10 +68,10 @@ si se anuncia rebaja, el precio anterior tiene que ser el más bajo de los últi
 
 ## Precios orientativos
 
-- Semana 1: un 30 % menos que el precio de venta (cajas certificadas, un 20-25 % menos).
-  Lotes a profesionales, a precio de coste.
-- Semana 2: un 45 % menos, y un 10 % más en lotes.
-- Semana 3: un 60 % menos o «haz tu oferta». Expositores, de regalo con una compra.
+- Del 21 al 26: precio de exposición, un 30-40 % por debajo del de venta (cajas
+  certificadas, un 20-25 %). Lotes a profesionales, a precio de coste.
+- Viernes 27: segundo precio en lo que quede.
+- Sábado 28 y lunes 30: «haz tu oferta». Expositores, de regalo con una compra.
 - Al final: donar, chatarra o punto limpio.
 - Cada pieza con su precio mínimo, y nadie baja de ahí.
 
@@ -84,22 +84,32 @@ si se anuncia rebaja, el precio anterior tiene que ser el más bajo de los últi
 - **Cajas fuertes:** combinación de fábrica o llaves nuevas, certificado y manual, aviso de peso y anclaje.
 - **IVA del 21 %** en todo, también lo que se venda por Wallapop. Factura completa si la piden.
 
-## Calendario
+## El Black Friday como excusa
 
-| Días | Qué |
+- **Nombre:** «Black Friday de exposición». Resuelve también lo de la palabra
+  «liquidación»: no hace falta usarla.
+- **Siempre con producto a la vista.** En la búsqueda, los «Black Friday» sin producto
+  concreto sacaron entre 0 y 1 like. Cada pieza, en foto o vídeo, con lo que es.
+- **Por qué este Black Friday sí es creíble:** no es un descuento inventado; es que
+  cambiamos la tienda y lo que está expuesto se tiene que ir. Decirlo así.
+- **Precio fijo «de exposición»** mejor que «−40 %»: un Black Friday con «antes X €» tiene que
+  usar el precio más bajo de los últimos 30 días.
+- **El problema de todo el mundo en Black Friday es que se pierde entre las grandes marcas.**
+  Lo que nos diferencia: unidades únicas, se ve en la tienda y «te la llevamos e instalamos».
+
+## Calendario (Black Week)
+
+| Día | Qué |
 |---|---|
-| 1 | Inventario, preguntar a proveedores, palabras en Marta |
-| 2 | Wallapop, catálogo de WhatsApp, Milanuncios, Google |
-| 3 | Reel 1 + lista VIP + primera difusión de WhatsApp |
-| 3-5 | Llamar a 15-20 profesionales con el listado en PDF |
-| 4-7 | Stories diarias, reel de cajas fuertes, Marketplace y grupos |
-| 8 | Segundo precio. Volver a publicar en Wallapop y grupos |
-| 9-12 | Reel «lo que queda» y cuenta atrás al sábado |
-| 13 | Sábado de puertas abiertas, 10:00-14:00 |
-| 15 | Tercer precio, «haz tu oferta» |
-| 16-19 | «Últimas unidades», reservas con señal |
-| 20 | Último sábado |
-| 21 | Donar o reciclar lo que quede. Reel «Tienda nueva» |
+| Jue 19 – vie 20 | Inventario y precios; preguntar a proveedores por los expositores; palabras CAJA, BUZÓN, EXPOSITOR en Marta |
+| Sáb 21 | Subir todo a Wallapop y al catálogo de WhatsApp, sin publicitar aún. Llamar a profesionales con el listado: «antes que nadie, antes del Black Friday» |
+| Dom 22 | Teaser en stories: la tienda tapada o piezas con etiqueta negra, «El lunes empieza nuestro Black Friday de exposición». Abrir la lista VIP |
+| Lun 23 | **Arranque.** Reel recorriendo la tienda: «Cambiamos la tienda y todo esto se va.» Las piezas, 24 h antes a la lista VIP. Difusión de WhatsApp, Marketplace, grupos y Google |
+| Mar 24 – mié 25 | Reel de cajas fuertes abriéndolas por dentro. Stories con VENDIDO tachado |
+| Jue 26 | Reel de buzones («para un portal entero»). Cuenta atrás al viernes |
+| **Vie 27** | **Black Friday.** Segundo precio en lo que quede. Stories durante el día; la tienda, abierta con las piezas fuera |
+| Sáb 28 | Puertas abiertas 10:00-14:00. «Lo que quede, haz tu oferta» |
+| Lun 30 | Último día («Cyber Monday»). Lo que quede: expositores de regalo con compra, donar o reciclar. Después, reel «Tienda nueva» |
 
 ## Fuentes
 - Wallapop PRO: https://es.wallapop.com/wallapop-pro
