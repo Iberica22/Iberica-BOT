@@ -44,7 +44,7 @@ producto; carteles sin producto. En cajas fuertes lo que engancha es abrirla y e
 | **Milanuncios** | Solo las piezas grandes |
 | **Google Business** | Una publicación de oferta con fecha de fin |
 | **Instagram** | Crear urgencia y llevar a privado, WhatsApp o Wallapop |
-| **Sábado de puertas abiertas** | Cerrar en el momento las piezas pesadas |
+| **Recogida en la nave** | Las piezas pesadas, con cita; o entrega a domicilio |
 
 **La ventaja frente a un particular:** «Te la llevamos e instalamos en Almería y el Poniente».
 
@@ -71,7 +71,7 @@ si se anuncia rebaja, el precio anterior tiene que ser el más bajo de los últi
 - Del 21 al 26: precio de exposición, un 30-40 % por debajo del de venta (cajas
   certificadas, un 20-25 %). Lotes a profesionales, a precio de coste.
 - Viernes 27: segundo precio en lo que quede.
-- Sábado 28 y lunes 30: «haz tu oferta». Expositores, de regalo con una compra.
+- Sábado 28: «haz tu oferta». Expositores, de regalo con una compra.
 - Al final: donar, chatarra o punto limpio.
 - Cada pieza con su precio mínimo, y nadie baja de ahí.
 
