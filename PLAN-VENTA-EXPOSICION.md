@@ -97,19 +97,45 @@ si se anuncia rebaja, el precio anterior tiene que ser el más bajo de los últi
 - **El problema de todo el mundo en Black Friday es que se pierde entre las grandes marcas.**
   Lo que nos diferencia: unidades únicas, se ve en la tienda y «te la llevamos e instalamos».
 
+## Cierre de la tienda por reforma (23-29 nov)
+
+La tienda de exposición de C/ San Leonardo 34 cierra del lunes 23 al domingo 29. **La nave
+sigue abierta y las urgencias 24 h funcionan.** El Black Friday sigue: se compra por
+privado, WhatsApp, Wallapop o Marta, y se recoge en la nave o se lleva a domicilio.
+La reforma es además la razón de la venta: «antes de la reforma, todo lo de exposición se va».
+
+**Google (perfil de empresa).** Editar perfil → Horario → Horario especial: del lunes 23 al
+domingo 29, «Cerrado». No usar «Cerrado temporalmente», que baja la ficha en Maps.
+Publicación de tipo «Novedad»:
+> Cerramos la tienda de C/ San Leonardo del 23 al 29 de noviembre por reforma. Las urgencias
+> 24 h siguen funcionando: 950 088 086. Y nuestro Black Friday sigue: escríbenos por WhatsApp
+> y te lo preparamos para recoger o te lo llevamos. Volvemos el lunes 30 con la tienda renovada.
+
+**Instagram.** Línea en la bio: «🔨 Tienda cerrada 23-29 nov por reforma · Urgencias 24 h
+950 088 086». Story en destacados «Reforma».
+
+**WhatsApp Business.** Mensaje de ausencia y estado:
+> ¡Hola! La tienda está cerrada por reforma del 23 al 29 de noviembre, pero seguimos
+> trabajando. Urgencias 24 h: 950 088 086. ¿Te interesa algo del Black Friday de exposición?
+> Dinos qué pieza y te lo preparamos para recoger o te lo llevamos.
+
+**Cartel en la puerta:**
+> CERRADO POR REFORMA del 23 al 29 de noviembre · Urgencias 24 h: 950 088 086 ·
+> Black Friday de exposición: escríbenos al WhatsApp · Volvemos el lunes 30.
+
 ## Calendario (Black Week)
 
 | Día | Qué |
 |---|---|
-| Jue 19 – vie 20 | Inventario y precios; preguntar a proveedores por los expositores; palabras CAJA, BUZÓN, EXPOSITOR en Marta |
-| Sáb 21 | Subir todo a Wallapop y al catálogo de WhatsApp, sin publicitar aún. Llamar a profesionales con el listado: «antes que nadie, antes del Black Friday» |
-| Dom 22 | Teaser en stories: la tienda tapada o piezas con etiqueta negra, «El lunes empieza nuestro Black Friday de exposición». Abrir la lista VIP |
-| Lun 23 | **Arranque.** Reel recorriendo la tienda: «Cambiamos la tienda y todo esto se va.» Las piezas, 24 h antes a la lista VIP. Difusión de WhatsApp, Marketplace, grupos y Google |
-| Mar 24 – mié 25 | Reel de cajas fuertes abriéndolas por dentro. Stories con VENDIDO tachado |
+| Vie 20 | Inventario y precios; horario especial y publicación en Google; preguntar a proveedores por los expositores |
+| Sáb 21 | Último día de tienda abierta: «antes de la reforma, todo lo de exposición se va». Subir todo a Wallapop y al catálogo de WhatsApp. Llamar a profesionales |
+| Dom 22 | Avance en stories: «Cerramos para reformar y empieza nuestro Black Friday de exposición». Bio y mensaje de ausencia de WhatsApp. Abrir la lista VIP |
+| Lun 23 | **Arranque.** Reel recorriendo la tienda antes de la obra: «Reformamos la tienda y todo esto se va.» Difusión de WhatsApp, Marketplace, grupos |
+| Mar 24 – mié 25 | Reel de cajas fuertes abriéndolas por dentro. Stories de la obra y con VENDIDO tachado |
 | Jue 26 | Reel de buzones («para un portal entero»). Cuenta atrás al viernes |
-| **Vie 27** | **Black Friday.** Segundo precio en lo que quede. Stories durante el día; la tienda, abierta con las piezas fuera |
-| Sáb 28 | Puertas abiertas 10:00-14:00. «Lo que quede, haz tu oferta» |
-| Lun 30 | Último día («Cyber Monday»). Lo que quede: expositores de regalo con compra, donar o reciclar. Después, reel «Tienda nueva» |
+| **Vie 27** | **Black Friday.** Segundo precio en lo que quede. Recogida en la nave o entrega a domicilio |
+| Sáb 28 | «Haz tu oferta» en lo que quede |
+| Lun 30 | Reapertura. Reel «Tienda nueva» (antes y después) con lo poco que quede al lado |
 
 ## Fuentes
 - Wallapop PRO: https://es.wallapop.com/wallapop-pro
