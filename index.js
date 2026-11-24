@@ -1195,7 +1195,8 @@ const presuActivo = () => (process.env.PRESU_AUTO || "off").toLowerCase() === "o
 //   atendido_persona → alguien de la oficina escribió en el chat
 //   no_enviable      → un mensaje de Marta no pudo salir en 3 días
 //   compania         → presupuesto de compañía: sin Marta
-// Finales: cancelado (cambió de estado en Zoho, o sin teléfono válido) y
+// Finales: aceptado / declinado (el cliente contestó y Marta movió el parte
+// en Zoho), cancelado (cambió de estado en Zoho, o sin teléfono válido) y
 // cerrado_r6 (la agenda pidió cerrarlo con R6 al llegar al día 45 o 90).
 const PRESU_ESTADOS_VIVOS = ["en_curso", "fin_marta", "respondido", "volver_a_llamar", "atendido_persona", "no_enviable", "compania"];
 
@@ -1240,9 +1241,12 @@ function tipoClientePresu(caso, contacto = {}) {
     if (v.includes("administrador") || v.includes("finca") || v.includes("comunidad")) return "comunidad";
     if (v.includes("empresa")) return "empresa";
   }
+  // La cuenta del parte es una aseguradora (ASITUR…): presupuesto de compañía
   if (parteDeAseguradora(caso) || cuentaEsCompania(caso)) return "compania";
-  // Teléfono, tienda o recomendación: particular, salvo que el nombre diga
-  // que es una empresa o una comunidad.
+  // Teléfono, tienda o recomendación: particular, aunque sea una empresa
+  // (Noemí: «son presupuestos que deben tener seguimiento»).
+  if (v && v !== "-none-" && /telefono|tienda|recomendacion|particular/.test(v)) return "particular";
+  // Origen vacío: se deduce por el nombre
   const nombres = normalizaTxt([caso?.Related_To?.name, caso?.Account_Name?.name, contacto.Account_Name?.name, contacto.Full_Name]
     .filter(Boolean).join(" | "));
   if (RE_COMUNIDAD.test(nombres)) return "comunidad";
@@ -1601,6 +1605,31 @@ async function avisarAceptadoParaTramitar({ caseId, ref, nombre, telefono, msg }
 
 // ¿Sigue el parte en Presupuesto / Enviado en Zoho? Si no, se cierra el
 // seguimiento con el estado al que pasó. null = no se pudo comprobar.
+// Cuando el cliente contesta a Marta, ella misma mueve el parte en Zoho:
+//   acepta  → Material / Pedir Material (y aviso a José, como siempre)
+//   declina → Cerrado / Anulada por el Cliente (con el motivo en la nota)
+// PRESU_ESTADO_ACEPTA / PRESU_ESTADO_DECLINA cambian los valores
+// ("Estado|Subestado"); PRESU_CAMBIAR_ESTADO=off lo desactiva.
+const PRESU_ESTADO_RESPUESTA = {
+  acepta:  (process.env.PRESU_ESTADO_ACEPTA  || "Material|Pedir Material").split("|"),
+  declina: (process.env.PRESU_ESTADO_DECLINA || "Cerrado|Anulada por el Cliente").split("|"),
+};
+async function cambiarEstadoPresu(caseId, decision) {
+  if (!caseId || process.env.PRESU_CAMBIAR_ESTADO === "off") return { ok: false, motivo: "desactivado" };
+  const [Status, Subestado] = PRESU_ESTADO_RESPUESTA[decision] || [];
+  if (!Status) return { ok: false, motivo: "sin_estado" };
+  try {
+    const token = await obtenerTokenZoho();
+    const r = await axios.put("https://www.zohoapis.eu/crm/v2/Cases", { data: [{ id: caseId, Status, ...(Subestado ? { Subestado } : {}) }] },
+      { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+    const d = r.data?.data?.[0];
+    if (d?.code !== "SUCCESS") return { ok: false, motivo: d?.code || "respuesta_rara", detalle: d?.message };
+    return { ok: true, estado: `${Status} / ${Subestado || "—"}` };
+  } catch (e) {
+    return { ok: false, motivo: e.response?.data?.data?.[0]?.code || e.response?.status || e.message };
+  }
+}
+
 async function presupuestoSigueEnviado(seg) {
   try {
     const token = await obtenerTokenZoho();
@@ -3317,16 +3346,22 @@ async function procesarRespuestaPresu(telefono) {
 
   const acepta = async () => {
     await enviarMensaje(telefono, "¡Genial! 🙌 Le paso ahora mismo tu confirmación al equipo y te llaman para cuadrar fechas. ¡Gracias por confiar en Ibérica!");
-    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente ACEPTA. Respuesta: "${msg.slice(0, 300)}"`);
+    const cambio = await cambiarEstadoPresu(caseId, "acepta");
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente ACEPTA. Respuesta: "${msg.slice(0, 300)}"` +
+      (cambio.ok ? ` · Marta ha pasado el parte a ${cambio.estado}.` : ` · Marta NO pudo cambiar el estado (${cambio.motivo}): hay que pasarlo a mano a Material / Pedir Material.`));
     registrarResultadoPresu(ref, "respondio_ACEPTA");
+    if (cambio.ok) { registrarResultadoPresu(ref, `estado_cambiado_por_marta: ${cambio.estado}`); if (seg) { seg.estado = "aceptado"; seg.estadoFinalCrm = cambio.estado; guardarSeguimientosPresu(); } }
     const joseAvisado = await avisarAceptadoParaTramitar({ caseId, ref, nombre: estado.nombre || seg?.nombre, telefono, msg });
     await avisar(joseAvisado ? "🎯 PRESUPUESTO ACEPTADO (ya avisado José para tramitarlo)" : "🎯 PRESUPUESTO ACEPTADO (avisa a José: no se le pudo escribir)");
   };
   const declina = async () => {
     await enviarMensaje(telefono, "Entendido, ¡y gracias por decírnoslo! 🙏 Te guardamos el presupuesto por si más adelante lo retomas. Aquí nos tienes para lo que necesites 🔐");
-    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente DECLINA. Motivo/respuesta: "${msg.slice(0, 300)}"`);
+    const cambio = await cambiarEstadoPresu(caseId, "declina");
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): el cliente NO acepta el presupuesto. Motivo (lo que ha contestado): "${msg.slice(0, 300)}"` +
+      (cambio.ok ? ` · Marta ha pasado el parte a ${cambio.estado}.` : ` · Marta NO pudo cambiar el estado (${cambio.motivo}): hay que pasarlo a mano a Cerrado / Anulada por el Cliente.`));
     registrarResultadoPresu(ref, "respondio_declina");
-    await avisar("❌ Presupuesto declinado");
+    if (cambio.ok) { registrarResultadoPresu(ref, `estado_cambiado_por_marta: ${cambio.estado}`); if (seg) { seg.estado = "declinado"; seg.estadoFinalCrm = cambio.estado; guardarSeguimientosPresu(); } }
+    await avisar(cambio.ok ? "❌ Presupuesto declinado (Marta ya lo ha pasado a Cerrado / Anulada por el Cliente)" : "❌ Presupuesto declinado (pásalo a mano a Cerrado / Anulada por el Cliente)");
   };
 
   // ── Paso 2: qué falta y cuándo volver a escribir ──

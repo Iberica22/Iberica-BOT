@@ -29,18 +29,16 @@ Fuentes: [Sandler, prospects que no devuelven la llamada](https://go.sandler.com
 2. **Tipo de cliente**, sacado del campo **Origen del Parte** de Zoho:
    - Compañía de Seguros → **compañía**;
    - Administrador de Fincas → **comunidad**;
-   - Teléfono, Tienda y Recomendación de terceros → **particular**, salvo
-     que el nombre diga otra cosa (ver abajo).
+   - Teléfono, Tienda y Recomendación de terceros → **particular**, aunque
+     sea una empresa: son presupuestos que deben tener seguimiento.
 
    Además:
    - Si la **cuenta** del parte es una compañía de seguros o de asistencia
      (ASITUR, Mapfre, Allianz…), el presupuesto es de **compañía** aunque el
      cliente sea una empresa. Se pueden añadir más con `PRESU_CUENTAS_COMPANIA`.
-   - Si el nombre lo dice, es **comunidad** («Comunidad», «Com. Prop.», «C.P.»,
-     «Propietarios») o **empresa** («S.L.», «S.A.», «Investments», «Real
-     Estate», «Asesoría», «Farmacia», «Museo», «Pub», «Bar», «Restaurante»,
-     «Clínica», «Academia»…), aunque haya llamado por teléfono o venido a la
-     tienda. Los nombres sin pista (Galp, Audiconsa…) siguen como particular.
+   - Si el origen está vacío (-None-), se deduce por el nombre: **comunidad**
+     («Comunidad», «Com. Prop.», «C.P.», «Propietarios»), **empresa** («S.L.»,
+     «S.A.», «Investments», «Asesoría», «Farmacia»…) o particular.
 
    **Importe**: el campo Importe del parte NO se usa (ahí va lo facturado).
    La oficina pone una **nota en el parte**, por ejemplo «Presupuesto:
@@ -109,7 +107,26 @@ Marta:
 2. manda un WhatsApp a **José (674 163 818)**: «✅ PRESUPUESTO ACEPTADO por
    WhatsApp: tramitar y pedir material», con el cliente, el parte, el
    asunto, el nº de presupuesto (Anotaciones) y lo que dijo el cliente;
-3. avisa a Mari con 🎯 y le dice que José ya está avisado.
+3. pasa el parte en Zoho a **Material / Pedir Material** y lo apunta en una
+   nota (si Zoho no le deja, la nota dice que hay que pasarlo a mano);
+4. avisa a Mari con 🎯 y le dice que José ya está avisado.
+
+## Presupuesto rechazado
+
+Si el cliente le dice a Marta que no, Marta le da las gracias, pasa el parte
+a **Cerrado / Anulada por el Cliente** y pone en la nota el motivo, con lo que
+ha contestado el cliente. Avisa a Mari con ❌.
+
+`PRESU_ESTADO_ACEPTA` y `PRESU_ESTADO_DECLINA` (formato `Estado|Subestado`)
+cambian los valores; `PRESU_CAMBIAR_ESTADO=off` hace que Marta no toque el
+estado. Si el cliente lo aplaza («lo pienso», «después de Navidad») Marta no
+cambia el estado: apunta la fecha y Mari le llama ese día.
+
+## Si no contesta
+
+Cuando Marta ha mandado todos sus mensajes sin respuesta, a los 2 días el
+cliente aparece en la agenda de las 10:00 de Mari, en «📞 Llamar»: «no contestó
+a N mensajes de Marta». Mari sigue el seguimiento por teléfono.
 
 `PRESU_AVISO_ACEPTADO` (Railway) cambia a quién va el aviso.
 
