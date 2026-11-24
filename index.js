@@ -1216,19 +1216,37 @@ function campoOrigenParte(caso) {
   return v ? normalizaTxt(typeof v === "object" ? (v.name || "") : String(v)) : "";
 }
 
+// Cuentas de Zoho que son compañías de seguros o de asistencia: el parte es
+// de compañía aunque el cliente final sea una empresa (p. ej. cuenta ASITUR).
+// PRESU_CUENTAS_COMPANIA añade más nombres, separados por comas.
+const CUENTAS_COMPANIA = ["asitur", "mapfre", "allianz", "axa", "generali", "zurich", "mutua", "catalana occidente", "reale", "liberty",
+  "santalucia", "santa lucia", "ocaso", "helvetia", "pelayo", "linea directa", "caser", "multiasistencia", "homeserve", "europ assistance",
+  "inter partner", "fiatc", "plus ultra", "seguros", "asistencia", "aseguradora"]
+  .concat(String(process.env.PRESU_CUENTAS_COMPANIA || "").split(",").map((x) => normalizaTxt(x.trim())).filter(Boolean));
+function cuentaEsCompania(caso) {
+  const cuenta = normalizaTxt(caso?.Account_Name?.name || (typeof caso?.Account_Name === "string" ? caso.Account_Name : ""));
+  return !!cuenta && CUENTAS_COMPANIA.some((c) => cuenta.includes(c));
+}
+
+// Por el nombre: empresas y comunidades que llaman por teléfono o vienen a
+// la tienda (el origen del parte no lo dice, pero el nombre sí).
+const RE_COMUNIDAD = /(comunidad|\bcdad\b|\bc\.\s?p\.|\bccpp\b|\bcom\.?\s*prop|propietarios|administracion de fincas|administrador)/;
+const RE_EMPRESA = /(\bs\.?\s?l\.?u?\b|\bs\.\s?a\.?\b|\bs\.?\s?c\.\b|\bsociedad\b|\binvestments?\b|real estate|\bgrupo\b|\bhotel|\bhostal\b|\basesori|\bgestori|\bfarmacia|\bparafarmacia|\bmuseo\b|\bpub\b|\bbar\b|\brestaurante|\bcafeteria|\bclinica|\bacademia|\bcolegio|\bguarderia|\baula\b|\binmobiliaria|\babogados|\bconsultor|\bayuntamiento|\bdistribuciones|\bconstrucciones|\binstalaciones|\bservicios\b|\benergy\b|\bsupermercado)/;
+
 function tipoClientePresu(caso, contacto = {}) {
   const v = campoOrigenParte(caso);
   if (v && v !== "-none-") {
     if (v.includes("compa") || v.includes("segur")) return "compania";
     if (v.includes("administrador") || v.includes("finca") || v.includes("comunidad")) return "comunidad";
     if (v.includes("empresa")) return "empresa";
-    if (/telefono|tienda|recomendacion|particular/.test(v)) return "particular";
   }
-  if (parteDeAseguradora(caso)) return "compania";
+  if (parteDeAseguradora(caso) || cuentaEsCompania(caso)) return "compania";
+  // Teléfono, tienda o recomendación: particular, salvo que el nombre diga
+  // que es una empresa o una comunidad.
   const nombres = normalizaTxt([caso?.Related_To?.name, caso?.Account_Name?.name, contacto.Account_Name?.name, contacto.Full_Name]
     .filter(Boolean).join(" | "));
-  if (/(comunidad|\bcdad\b|\bc\.\s?p\.|\bccpp\b|propietarios|administracion de fincas|administrador)/.test(nombres)) return "comunidad";
-  if (/(\bs\.?\s?l\.?u?\b|\bs\.\s?a\.?\b|\bsociedad\b|\binvestments?\b|real estate|\bgrupo\b|\bhotel\b)/.test(nombres)) return "empresa";
+  if (RE_COMUNIDAD.test(nombres)) return "comunidad";
+  if (RE_EMPRESA.test(nombres)) return "empresa";
   return "particular";
 }
 
@@ -1272,6 +1290,32 @@ function importePresu(caso, notas = []) {
   return cantidadEnTexto(caso?.Description, true);
 }
 
+// Número del presupuesto de FactuSOL que la oficina apunta en el parte
+// («PR 6/260144» en Anotaciones o en una nota) → serie 6, número 260144.
+function refFactusolPresu(caso, notas = []) {
+  const textos = [JSON.stringify(caso || {})].concat((notas || []).map((n) => `${n.Note_Title || ""} ${n.Note_Content || ""}`));
+  for (const t of textos) {
+    const m = String(t).match(/\bPR\.?\s*(\d{1,2})\s*[\/-]\s*(\d{6})\b/i);
+    if (m) return { serie: Number(m[1]), numero: m[2] };
+  }
+  return null;
+}
+
+async function importeFactusol(ref) {
+  if (!ref || !process.env.FACTUSOL_KEY) return null;
+  try {
+    const r = await axios.get(`${FACTUSOL_URL}/importe`, { params: { serie: ref.serie, numero: ref.numero, k: process.env.FACTUSOL_KEY }, timeout: 30000 });
+    const t = Number(r.data?.total);
+    return r.data?.ok && Number.isFinite(t) && t > 0 ? Math.round(t * 100) / 100 : null;
+  } catch (e) { console.error("[Presupuestos] Importe FactuSOL:", e.response?.status || e.message); return null; }
+}
+
+// Importe: primero lo que diga el parte o las notas; si no, el total del
+// presupuesto en FactuSOL por su número (PR serie/número).
+async function importePresuCompleto(caso, notas = []) {
+  return importePresu(caso, notas) ?? await importeFactusol(refFactusolPresu(caso, notas));
+}
+
 async function notasDelParte(caseId, token) {
   if (!caseId) return [];
   try {
@@ -1291,7 +1335,7 @@ async function refrescarImportePresu(seg) {
     const r = await axios.get(`https://www.zohoapis.eu/crm/v2/Cases/${seg.caseId}`, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
     const caso = r.data?.data?.[0];
     if (!caso) return;
-    const importe = importePresu(caso, await notasDelParte(seg.caseId, token));
+    const importe = await importePresuCompleto(caso, await notasDelParte(seg.caseId, token));
     if (importe) { seg.importe = importe; guardarSeguimientosPresu(); }
   } catch (e) { console.error("[Presupuestos] Refrescar importe:", e.message); }
 }
@@ -1413,7 +1457,7 @@ async function sondearPresupuestosEnviados() {
       const ref = caso.ref_Parte || caso.id;
       const base = {
         version: 2, caseId: caso.id, ref, nombre: nombreCli, enviadoTs,
-        tipo: tipoClientePresu(caso, contacto), importe: importePresu(caso, await notasDelParte(caso.id, token)),
+        tipo: tipoClientePresu(caso, contacto), importe: await importePresuCompleto(caso, await notasDelParte(caso.id, token)),
         enviados: 0, avisos: {},
       };
       // Compañía: sin Marta (no se escribe nunca al asegurado). Solo agenda
@@ -4774,7 +4818,7 @@ app.get("/admin/api/presupuestos-tipos", authAdmin, async (req, res) => {
       salida.push({
         ref: caso.ref_Parte || caso.id, cliente: caso.Related_To?.name || null,
         estado: `${caso.Status || "?"} / ${caso.Subestado || "—"}`,
-        tipoDeducido: tipoClientePresu(caso, contacto), importeDeducido: importePresu(caso, await notasDelParte(caso.id, token)),
+        tipoDeducido: tipoClientePresu(caso, contacto), importeDeducido: await importePresuCompleto(caso, await notasDelParte(caso.id, token)),
         empresaDelContacto: contacto.Account_Name?.name || null,
         camposPosibles,
       });

@@ -29,10 +29,18 @@ Fuentes: [Sandler, prospects que no devuelven la llamada](https://go.sandler.com
 2. **Tipo de cliente**, sacado del campo **Origen del Parte** de Zoho:
    - Compañía de Seguros → **compañía**;
    - Administrador de Fincas → **comunidad**;
-   - Teléfono, Tienda y Recomendación de terceros → **particular**, siempre.
+   - Teléfono, Tienda y Recomendación de terceros → **particular**, salvo
+     que el nombre diga otra cosa (ver abajo).
 
-   Si el origen está vacío (-None-), el bot lo deduce del nombre (comunidad,
-   empresa con S.L./S.A., o particular).
+   Además:
+   - Si la **cuenta** del parte es una compañía de seguros o de asistencia
+     (ASITUR, Mapfre, Allianz…), el presupuesto es de **compañía** aunque el
+     cliente sea una empresa. Se pueden añadir más con `PRESU_CUENTAS_COMPANIA`.
+   - Si el nombre lo dice, es **comunidad** («Comunidad», «Com. Prop.», «C.P.»,
+     «Propietarios») o **empresa** («S.L.», «S.A.», «Investments», «Real
+     Estate», «Asesoría», «Farmacia», «Museo», «Pub», «Bar», «Restaurante»,
+     «Clínica», «Academia»…), aunque haya llamado por teléfono o venido a la
+     tienda. Los nombres sin pista (Galp, Audiconsa…) siguen como particular.
 
    **Importe**: el campo Importe del parte NO se usa (ahí va lo facturado).
    La oficina pone una **nota en el parte**, por ejemplo «Presupuesto:
@@ -40,6 +48,9 @@ Fuentes: [Sandler, prospects que no devuelven la llamada](https://go.sandler.com
    «importe» o «total». Las notas de Marta no cuentan. Si no hay nota, se
    mira la descripción, pero solo si pone «Presupuesto: X €». La nota puede
    ponerse después: el día 7 se vuelve a mirar antes de decidir la llamada.
+   Si no hay nota con el importe, Marta busca el número de presupuesto de
+   FactuSOL que pone la oficina en el parte («PR 6/260144», en Anotaciones o
+   en una nota) y le pide el total a FactuSOL (necesita `FACTUSOL_KEY`).
    Para comprobarlo: `/admin/api/presupuestos-tipos`.
 3. **Plan por tipo** (días desde el envío). Los WhatsApp salen solo L-V de
    9:30 a 19:00 y nunca en festivo:

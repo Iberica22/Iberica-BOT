@@ -34,7 +34,7 @@
  * VARIABLES opcionales:
  *   ALLOWED_ORIGIN → origen CORS permitido (defecto https://iberica22.github.io)
  *   DIAG_KEY       → si se define, habilita GET /diag?k=<clave>
- *   MARTA_KEY      → clave de Marta para GET /nocom (si no está, vale DIAG_KEY)
+ *   MARTA_KEY      → clave de Marta para GET /nocom y GET /importe (si no está, vale DIAG_KEY)
  */
 
 const DELSOL_BASE = 'https://api.sdelsol.com';
@@ -158,6 +158,25 @@ export default {
         return json({ ok: true, resultado }, 200, cors);
       }
 
+      // Total de un presupuesto (para el seguimiento de Marta):
+      // GET /importe?serie=6&numero=260144&k=<MARTA_KEY>
+      if (url.pathname === '/importe') {
+        const clave = env.MARTA_KEY || env.DIAG_KEY;
+        if (!clave || url.searchParams.get('k') !== clave) {
+          return json({ ok: false, error: 'Clave incorrecta' }, 403, cors);
+        }
+        const serie = parseInt(url.searchParams.get('serie'), 10);
+        const numero = parseInt(url.searchParams.get('numero'), 10);
+        if (!(serie >= 0) || !(numero > 0)) return json({ ok: false, error: 'Faltan serie y numero' }, 400, cors);
+        // CODPRE lleva el año delante (260144 → 2026): ese es el ejercicio
+        const ejercicio = String(numero).length === 6 ? '20' + String(numero).slice(0, 2) : ejercicioActual();
+        const token = await autenticar(env);
+        let r = await consultaEjercicio(env, token, `SELECT TIPPRE, CODPRE, TOTPRE, FECPRE FROM F_PRE WHERE TIPPRE = ${serie} AND CODPRE = ${numero}`, ejercicio);
+        if (!r.length) r = await consultaEjercicio(env, token, `SELECT TIPPRE, CODPRE, TOTPRE, FECPRE FROM F_PRE WHERE TIPPRE = '${serie}' AND CODPRE = ${numero}`, ejercicio);
+        if (!r.length) return json({ ok: false, error: 'No encuentro ese presupuesto', serie, numero, ejercicio }, 200, cors);
+        return json({ ok: true, serie, numero, ejercicio, total: Number(r[0].TOTPRE), fecha: r[0].FECPRE }, 200, cors);
+      }
+
       if (url.pathname === '/presupuesto' && request.method === 'POST') {
         const datos = await request.json();
         const resultado = await grabarPresupuesto(env, datos);
@@ -262,6 +281,11 @@ async function llamadaApi(env, token, endpoint, payload) {
 /** SELECT vía LanzarConsulta. Devuelve array de filas como objetos {COLUMNA: dato}. */
 async function consulta(env, token, sql) {
   const j = await llamadaApi(env, token, EP.consulta, { ejercicio: ejercicioActual(), consulta: sql });
+  return filas(j);
+}
+
+async function consultaEjercicio(env, token, sql, ejercicio) {
+  const j = await llamadaApi(env, token, EP.consulta, { ejercicio, consulta: sql });
   return filas(j);
 }
 
