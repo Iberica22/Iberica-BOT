@@ -156,6 +156,21 @@ trabajos o más, o 600 € o más) entran en Navidad por el 674 09 66 10.
 - **Sus «SÍ» los lleva Noemí:** Marta dice «Noemí» en lugar de «Nieves» y el
   aviso va al móvil de empresa de Noemí (670 71 02 02), enviado desde el número de Marta; si no le llega, a Mari con «PARA
   NOEMÍ». Cuando Nieves vuelva: `/admin/api/campanas/nieves-baja?baja=0`.
+
+### Mientras Nieves está de baja (Marta lleva su teléfono)
+
+Con `nieves-baja` activado (lo está por defecto):
+
+- **WhatsApp de Nieves (663 30 34 61):** Marta contesta **a todas horas**, no
+  solo en sus franjas de 14–17 h y 20–09 h. Si alguien de la oficina escribe
+  en ese chat, Marta se aparta como siempre.
+- **Avisos de partes de 17:00 a 20:00** (la franja de Nieves): van a la
+  **guardia**.
+- **Campañas:** todo lo que iba a Nieves (sus clientes altos y el resto de
+  Navidad) lo atiende **Noemí**, y Marta dice «te llama Noemí». Los avisos
+  generales de campañas van a Noemí y a Mari.
+
+Cuando vuelva, `/admin/api/campanas/nieves-baja?baja=0` lo deja todo como antes.
 - **Pasos:**
   1. `/admin/api/campanas/nieves?calcular=1` y, al rato,
      `/admin/api/campanas/nieves` para ver quién entra y por qué se excluye

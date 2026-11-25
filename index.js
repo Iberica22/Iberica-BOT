@@ -371,7 +371,10 @@ function minutosActualesMadrid() {
  * Comprueba si el bot debe estar activo ahora para un canal dado.
  * Sin horario configurado → siempre activo.
  */
+const CANAL_NIEVES = "69c3a0276c369daa9f0bbf81";
 function dentroDeHorario(channelId) {
+  // Nieves de baja: Marta lleva su WhatsApp a todas horas
+  if (channelId === CANAL_NIEVES && nievesDeBaja()) return true;
   const franjas = HORARIOS_CANALES[channelId];
   if (!franjas) return true; // Sin restricción (Noe)
   const minutos = minutosActualesMadrid();
@@ -1890,7 +1893,8 @@ function determinarDestinatarioNotificacion() {
   const NIEVES_FIN = 20 * 60;      // 20:00
 
   if (min >= MARI_INI   && min < MARI_FIN)   return NOTIFICACIONES_CONFIG.mari;
-  if (min >= NIEVES_INI && min < NIEVES_FIN) return NOTIFICACIONES_CONFIG.nieves;
+  // Nieves de baja: su franja de 17:00 a 20:00 la cubre la guardia
+  if (min >= NIEVES_INI && min < NIEVES_FIN) return nievesDeBaja() ? NOTIFICACIONES_CONFIG.guardia : NOTIFICACIONES_CONFIG.nieves;
   return NOTIFICACIONES_CONFIG.guardia;
 }
 
@@ -5970,7 +5974,8 @@ const enviadosHoyCampana = (campana) => {
 
 async function avisarEquipoCampana(texto) {
   const ahoraStr = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false });
-  for (const d of [NOTIFICACIONES_CONFIG.nieves, NOTIFICACIONES_CONFIG.mari]) {
+  const equipo = nievesDeBaja() ? [(await destinoNoemi()) || null, NOTIFICACIONES_CONFIG.mari].filter(Boolean) : [NOTIFICACIONES_CONFIG.nieves, NOTIFICACIONES_CONFIG.mari];
+  for (const d of equipo) {
     await enviarAvisoInterno(d, { origen: "Campañas de Marta", cliente: "—", telefono: "—", que: texto },
       { nombre: "Campañas de Marta", telefono: "—", direccion: "—", descripcion: texto, apertura: ahoraStr, refParte: "—", agente: "Marta · Campañas" }).catch(() => {});
   }
@@ -7273,7 +7278,9 @@ async function destinoNoemi() {
     return destinoNoemiCache;
   } catch (e) { console.error("[Avisos] No se pudo preparar el aviso a Noemí:", e.message); return null; }
 }
-const atiendeNoemi = (conv) => conv?.atiende === "noemi" && nievesDeBaja();
+// Mientras Nieves está de baja, todo lo de las campañas que iba a ella
+// (sus clientes altos y el resto de Navidad) lo atiende Noemí.
+const atiendeNoemi = (conv) => nievesDeBaja() && !!conv;
 
 function estadisticasCampanas() {
   const listas = Object.values(campanas.listas).sort((a, b) => b.creada - a.creada).map((l) => {
