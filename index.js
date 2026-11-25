@@ -2979,12 +2979,64 @@ En "datos" extrae SOLO lo que el cliente haya dicho literalmente (nombre, teléf
 
 // ── Respuestas de la rama "servicios" con conocimiento cerrado ──
 // (sustituye a la antigua Assistants API, en vías de retirada por OpenAI)
+// ── Cómo escribe la oficina (aprendido de conversaciones reales) ──
+// Se guarda en Redis (iberica:estiloOficina) desde /admin/api/aprender-woztell.
+let estiloOficinaTxt = "";
+const estiloOficina = () => estiloOficinaTxt ? `CÓMO ESCRIBE LA OFICINA DE IBÉRICA (imita el tono y las respuestas, nunca copies datos de otros clientes):\n${estiloOficinaTxt}` : "";
+
+// ── Lo que Marta sabe del cliente (sin nada interno) ─────────
+// Solo los partes recientes con un estado traducido para el cliente y el
+// asunto si no tiene nada que no deba leer. NUNCA notas, descripciones,
+// importes ni la «zona privada» de Zoho.
+const PALABRAS_PRIVADAS = /(moros|impag|deuda|\bdebe\b|no paga|pesad|borde|conflictiv|cuidado|\bojo\b|abogad|denuncia|reclamaci|queja|mentir|cabread|\bloco\b|tont|gilip|por adelantado|no fiar|lista negra|nocom|\bbaja\b|garantia|compania|seguro|asitur|mapfre|perito)/;
+function estadoParaCliente(caso) {
+  const st = normalizaTxt(caso?.Status || ""), sub = normalizaTxt(caso?.Subestado || "");
+  if (/cerrado|facturado|solucionado|acabado|resuelto|closed/.test(st)) return sub.includes("anulad") ? null : "terminado";
+  if (st.includes("material")) return "estamos pidiendo el material";
+  if (st.includes("taller")) return "en el taller, preparándolo";
+  if (st.includes("presupuesto")) {
+    if (sub.includes("rechaz")) return null;
+    return sub.includes("enviado") ? "presupuesto enviado, pendiente de su respuesta" : "preparando el presupuesto";
+  }
+  if (st.includes("pendiente")) return "pendiente de concretar con el cliente";
+  return "en gestión por la oficina";
+}
+async function contextoClienteSeguro(telefono, estado) {
+  if (!telefono || !/^\d{9,15}$/.test(String(telefono))) return "";
+  if (estado?.ctxCliente && Date.now() - estado.ctxCliente.ts < 30 * 60 * 1000) return estado.ctxCliente.texto;
+  let texto = "";
+  try {
+    const partes = await consultarPartesPorContacto(String(telefono));
+    const limite = Date.now() - 180 * 24 * 3600 * 1000;
+    const lineas = partes
+      .filter((c) => new Date(c.Created_Time || 0).getTime() > limite)
+      .map((c) => {
+        const est = estadoParaCliente(c);
+        if (!est) return null;
+        const asunto = String(c.Subject || "").replace(/\s+/g, " ").trim();
+        const asuntoOk = asunto && asunto.length <= 70 && !PALABRAS_PRIVADAS.test(normalizaTxt(asunto));
+        const dias = Math.round((Date.now() - new Date(c.Created_Time).getTime()) / 86400000);
+        return `- Parte ${c.ref_Parte || "—"}${asuntoOk ? ` («${asunto}»)` : ""}: ${est} (abierto hace ${dias} días)`;
+      }).filter(Boolean).slice(0, 3);
+    if (lineas.length) {
+      texto = "LO QUE SABEMOS DE ESTE CLIENTE (solo para orientarte):\n" + lineas.join("\n") +
+        "\nReglas: úsalo para entender de qué te habla y contestar con naturalidad («tu parte de la puerta está en marcha»). " +
+        "Da solo una idea general del estado, con tus palabras; no copies el texto, no des fechas ni nombres de técnicos, " +
+        "y nunca hables de notas internas, importes, compañías de seguros ni de nada que no esté aquí. " +
+        "Si pregunta algo concreto que no sabes (día y hora, precio), dile que se lo confirma la oficina y ofrece avisarles.";
+    }
+  } catch (e) { console.error("[IA] Contexto del cliente:", e.message); }
+  if (estado) estado.ctxCliente = { ts: Date.now(), texto };
+  return texto;
+}
+
 async function responderServicios(estado, mensaje, contextoFlujo) {
   estado.historialIA = estado.historialIA || [];
   estado.historialIA.push({ role: "user", content: mensaje });
   estado.historialIA = estado.historialIA.slice(-12);
 
-  const mensajesExtra = contextoFlujo ? [{ role: "system", content: contextoFlujo }] : [];
+  const ctxCliente = await contextoClienteSeguro(estado.waTel, estado);
+  const mensajesExtra = [ctxCliente, contextoFlujo, estiloOficina()].filter(Boolean).map((c) => ({ role: "system", content: c }));
   const res = await openai.chat.completions.create({
     model: "gpt-4o",
     temperature: 0.4,
@@ -3472,6 +3524,7 @@ async function procesarMensaje(telefono, texto) {
     resetearConversacion(telefono);
   }
   const estado = conversaciones[telefono];
+  estado.waTel = telefono;
 
   console.log(`[Bot] ${telefono} | step: ${estado.step} | msg: "${msg}"`);
 
@@ -3656,7 +3709,19 @@ async function procesarMensaje(telefono, texto) {
         estado.avisadoOpcionInvalida = false;
         return;
       }
-      // no_claro (o fallo del clasificador): pedir aclaración; a la segunda, menú clásico
+      // no_claro (o fallo del clasificador): Marta conversa como lo haría
+      // alguien de la oficina, en vez de volver al menú. MARTA_CONVERSA=off
+      // vuelve al comportamiento anterior.
+      if ((process.env.MARTA_CONVERSA || "on").toLowerCase() !== "off") {
+        try {
+          const respuesta = await responderServicios(estado, msg,
+            "El mensaje no encaja en un trámite concreto. Contesta como lo haría alguien de la oficina de Ibérica: con naturalidad, entendiendo lo que dice y siguiendo el hilo de la conversación. " +
+            "Si no está claro qué necesita, pregúntaselo con tus palabras. Si hace falta, ofrece abrirle un aviso de urgencia, pedir un presupuesto o que le llame un compañero, pero sin menús numerados ni listas de opciones.");
+          await enviarNatural(telefono, respuesta);
+          estado.avisadoOpcionInvalida = false;
+          return;
+        } catch (e) { console.error("[IA] Conversación libre:", e.message); }
+      }
       if (estado.avisadoOpcionInvalida) {
         estado.avisadoOpcionInvalida = false;
         await enviarMensaje(telefono, MENU_PRINCIPAL);
@@ -4865,6 +4930,26 @@ app.get("/admin/api/presupuestos-tipos", authAdmin, async (req, res) => {
     res.json({ ok: true, campoTipo: process.env.PRESU_CAMPO_TIPO || null, campoImporte: process.env.PRESU_CAMPO_IMPORTE || null, presupuestos: salida });
   } catch (e) {
     res.json({ ok: false, error: String(e.message).slice(0, 200) });
+  }
+});
+
+// ── Esquema de la API de Woztell (para leer el historial de chats) ──
+// Devuelve los campos que tiene la API para conversaciones y mensajes, y
+// así preparar la lectura del historial con clientes.
+app.get("/admin/api/woztell-esquema", authAdmin, async (req, res) => {
+  try {
+    const tipo = String(req.query.tipo || "ApiViewer");
+    const d = await graphqlWoztell(
+      `query esquema($n: String!) { __type(name: $n) { name fields { name args { name type { name kind ofType { name kind } } } type { name kind ofType { name kind ofType { name } } } } } }`,
+      { n: tipo });
+    const campos = (d?.__type?.fields || []).map((f) => ({
+      campo: f.name,
+      args: (f.args || []).map((a) => `${a.name}:${a.type?.name || a.type?.ofType?.name || a.type?.kind}`).join(", "),
+      tipo: f.type?.name || f.type?.ofType?.name || f.type?.ofType?.ofType?.name || f.type?.kind,
+    }));
+    res.json({ ok: true, tipo, campos });
+  } catch (e) {
+    res.json({ ok: false, error: String(e.message).slice(0, 300) });
   }
 });
 
