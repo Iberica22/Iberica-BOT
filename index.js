@@ -4963,6 +4963,67 @@ app.get("/admin/api/presupuestos-resultados", authAdmin, async (req, res) => {
 
 // Marcar a mano que un presupuesto ya lo lleva una persona (sale del
 // seguimiento de Marta y de la agenda): /admin/api/presupuestos/atendido?ref=2026-12045
+// ── Resumen semanal de presupuestos para Noemí (lunes por la mañana) ──
+// Lo que se queda sin tocar: clientes que contestaron y nadie ha movido,
+// aceptados sin tramitar y presupuestos parados. Más lo ganado y perdido.
+const RESUMEN_SEMANAL_HORA = 8 * 60 + 40; // lunes 8:40
+const GANADO_RE = /material|taller|fabricaci|facturad|acabado|instalac|cobrad|programad/;
+const PERDIDO_RE = /rechaz|anulad/;
+async function resumenSemanalPresupuestos() {
+  const ahora = Date.now(), dia = 86400000, desde = ahora - 7 * dia;
+  const quien = (seg) => `${seg.nombre ? String(seg.nombre).split(" ")[0] : "Cliente"} ${seg.ref}`;
+  const porRef = Object.fromEntries(Object.values(seguimientosPresu).map((x) => [x.ref, x]));
+  // Ganados y perdidos de la semana (cambios de estado vistos en Zoho)
+  const ganados = new Set(), perdidos = new Set();
+  for (const h of presuHistorial) {
+    if (new Date(h.ts).getTime() < desde) continue;
+    const r = normalizaTxt(String(h.resultado || ""));
+    if (!/cancelado_cambio_de_estado_en_crm|estado_cambiado_por_marta/.test(r)) continue;
+    if (PERDIDO_RE.test(r)) perdidos.add(h.ref); else if (GANADO_RE.test(r)) ganados.add(h.ref);
+  }
+  const vivos = Object.values(seguimientosPresu).map((x) => normalizarSegPresu(x)).filter((x) => PRESU_ESTADOS_VIVOS.includes(x.estado));
+  const respondidos = vivos.filter((x) => x.estado === "respondido" && !x.volverLlamarTs && !x.juntaTs &&
+    ahora - (x.respondidoTs || x.ultimoMensajeTs || x.enviadoTs) > 3 * dia);
+  const aceptados = [];
+  for (const x of Object.values(seguimientosPresu).filter((y) => y.estado === "aceptado")) {
+    if (await presupuestoAunAbierto(x)) aceptados.push(x); // sigue en presupuesto: nadie lo ha tramitado
+  }
+  const parados = vivos.filter((x) => x.estado !== "compania" && ahora - x.enviadoTs > 30 * dia && !respondidos.includes(x));
+  const lista = (arr, max = 6) => arr.length ? arr.slice(0, max).map(quien).join(", ") + (arr.length > max ? ` y ${arr.length - max} más` : "") : "ninguno";
+  const nombreRef = (ref) => porRef[ref] ? quien(porRef[ref]) : ref;
+  const partes = [
+    `Ganados esta semana: ${ganados.size}${ganados.size ? ` (${[...ganados].slice(0, 5).map(nombreRef).join(", ")})` : ""}`,
+    `Perdidos: ${perdidos.size}${perdidos.size ? ` (${[...perdidos].slice(0, 5).map(nombreRef).join(", ")})` : ""}`,
+    `Contestaron y nadie los ha movido: ${lista(respondidos)}`,
+    `Aceptados sin tramitar: ${lista(aceptados)}`,
+    `Más de 30 días parados: ${lista(parados)}`,
+    `En seguimiento ahora: ${vivos.length}`,
+  ];
+  return { texto: partes.join(" · "), ganados: [...ganados], perdidos: [...perdidos],
+    respondidos: respondidos.map(quien), aceptados: aceptados.map(quien), parados: parados.map(quien), enSeguimiento: vivos.length };
+}
+let resumenSemanalEnviado = null; // YYYY-MM-DD del lunes en que se envió
+async function resumenSemanalDiario() {
+  const hoy = diaMadrid(new Date());
+  const esLunes = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", weekday: "long" }).format(new Date()).toLowerCase() === "lunes";
+  if (!esLunes || minutosActualesMadrid() < RESUMEN_SEMANAL_HORA || (process.env.RESUMEN_SEMANAL || "on") === "off") return;
+  if (!resumenSemanalEnviado) resumenSemanalEnviado = await redisGet("iberica:resumenSemanalDia");
+  if (resumenSemanalEnviado === hoy) return;
+  resumenSemanalEnviado = hoy; await redisSet("iberica:resumenSemanalDia", hoy);
+  const r = await resumenSemanalPresupuestos();
+  await avisarANoemi({ origen: "📊 RESUMEN SEMANAL · presupuestos", cliente: "Seguimiento de presupuestos", telefono: "—", que: r.texto, agente: "Marta" });
+  console.log("[Presupuestos] Resumen semanal enviado:", r.texto);
+}
+// Ver el resumen (y mandarlo ya con ?enviar=1): /admin/api/presupuestos/resumen-semanal
+app.get("/admin/api/presupuestos/resumen-semanal", authAdmin, async (req, res) => {
+  try {
+    const r = await resumenSemanalPresupuestos();
+    let enviado = false;
+    if (req.query.enviar === "1") enviado = await avisarANoemi({ origen: "📊 RESUMEN SEMANAL · presupuestos", cliente: "Seguimiento de presupuestos", telefono: "—", que: r.texto, agente: "Marta" });
+    res.json({ ok: true, enviado, ...r });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+
 // Cambiar el tipo de cliente de un seguimiento (p. ej. era una comunidad y
 // entró como particular): /admin/api/presupuestos/tipo?ref=2026-12070&tipo=comunidad
 // Si Marta ya había terminado sus mensajes y el nuevo calendario tiene más,
@@ -8026,6 +8087,8 @@ app.listen(PORT, async () => {
   setInterval(() => altasCasaDiario().catch((e) => console.error("[Altas T7] Falló:", e.message)), 5 * 60 * 1000);
   // Reactivación a los 3 meses del cierre del parte (antes en Zoho Flow)
   setInterval(() => react3mDiario().catch((e) => console.error("[Reactivación 3m] Falló:", e.message)), 5 * 60 * 1000);
+  // Resumen semanal de presupuestos a Noemí: los lunes a las 8:40
+  setInterval(() => resumenSemanalDiario().catch((e) => console.error("[Resumen semanal] Falló:", e.message)), 5 * 60 * 1000);
 
   // Pre-cargar el token de Zoho al arrancar para detectar errores de configuración
   try {

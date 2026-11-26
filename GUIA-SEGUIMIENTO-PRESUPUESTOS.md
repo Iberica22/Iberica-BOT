@@ -288,3 +288,15 @@ Le llegan desde el número de Marta. Si no le llegan, van a Mari con «PARA NOEM
     molestias», «compensarte»…). En `EJEMPLOS_RESPUESTA` hay 8 ejemplos de
     respuesta. Para cambiar el tono o el criterio se editan esos dos textos.
 - Mientras Nieves está de baja, los «SÍ» de su lista de clientes altos.
+
+## Resumen semanal para Noemí
+
+Los **lunes a las 8:40** le llega a Noemí (670 71 02 02) un WhatsApp con:
+- presupuestos **ganados** y **perdidos** de la semana (cambios de estado en Zoho);
+- clientes que **contestaron a Marta y nadie ha movido** (más de 3 días);
+- **aceptados sin tramitar** (Marta los pasó a aceptado y el parte sigue en presupuesto);
+- presupuestos **parados más de 30 días**.
+
+Para verlo en cualquier momento: `/admin/api/presupuestos/resumen-semanal`
+(y `?enviar=1` para mandarlo ya). `RESUMEN_SEMANAL=off` en Railway lo apaga.
+
