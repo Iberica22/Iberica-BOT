@@ -1640,6 +1640,15 @@ async function cambiarEstadoPresu(caseId, decision) {
   }
 }
 
+// ¿El parte sigue abierto (presupuesto o pendiente, sin rechazar)?
+async function presupuestoAunAbierto(seg) {
+  try {
+    const caso = (await zohoGet(`Cases/${seg.caseId}`)).data?.[0];
+    const st = normalizaTxt(caso?.Status || ""), sub = normalizaTxt(caso?.Subestado || "");
+    return !!caso && (st.includes("presupuesto") || st.includes("pendiente")) && !sub.includes("rechaz") && !sub.includes("anulad");
+  } catch (_) { return false; }
+}
+
 async function presupuestoSigueEnviado(seg) {
   try {
     const token = await obtenerTokenZoho();
@@ -1783,7 +1792,17 @@ async function agendaPresupuestos({ forzar = false } = {}) {
   const tareas = []; // { seg, claves, grupo, texto }
   for (const seg of Object.values(seguimientosPresu)) {
     normalizarSegPresu(seg);
-    if (!PRESU_ESTADOS_VIVOS.includes(seg.estado)) continue;
+    // «Volver a llamar» acordado con Marta: se avisa en su fecha aunque el
+    // seguimiento se cancelara después, si el parte sigue abierto en Zoho
+    // (presupuesto o pendiente). Caso de Serafín (2026-11995, 28/12).
+    const soloVolver = !PRESU_ESTADOS_VIVOS.includes(seg.estado) && seg.estado === "cancelado" && seg.volverLlamarTs && !seg.avisos.volver;
+    if (!PRESU_ESTADOS_VIVOS.includes(seg.estado) && !soloVolver) continue;
+    if (soloVolver) {
+      if (ahora < seg.volverLlamarTs) continue;
+      if (!(await presupuestoAunAbierto(seg))) continue;
+      tareas.push({ seg, claves: ["volver"], grupo: "llamar", texto: `${seg.nombre || "Cliente"} ${seg.ref} (volver a llamar, lo acordó con Marta)` });
+      continue;
+    }
     const plan = PLANES_PRESU[seg.tipo] || PLANES_PRESU.particular;
     const dias = (ahora - seg.enviadoTs) / dia;
     const quien = `${seg.nombre || "Cliente"} ${seg.ref}`;
@@ -4944,6 +4963,27 @@ app.get("/admin/api/presupuestos-resultados", authAdmin, async (req, res) => {
 
 // Marcar a mano que un presupuesto ya lo lleva una persona (sale del
 // seguimiento de Marta y de la agenda): /admin/api/presupuestos/atendido?ref=2026-12045
+// Cambiar el tipo de cliente de un seguimiento (p. ej. era una comunidad y
+// entró como particular): /admin/api/presupuestos/tipo?ref=2026-12070&tipo=comunidad
+// Si Marta ya había terminado sus mensajes y el nuevo calendario tiene más,
+// vuelve a escribirle según el calendario nuevo.
+app.get("/admin/api/presupuestos/tipo", authAdmin, (req, res) => {
+  const ref = String(req.query.ref || "").trim();
+  const tipo = String(req.query.tipo || "").trim().toLowerCase();
+  if (!PLANES_PRESU[tipo]) return res.json({ ok: false, error: `Tipo no válido. Usa: ${Object.keys(PLANES_PRESU).join(", ")}` });
+  const seg = Object.values(seguimientosPresu).find((x) => x.ref === ref);
+  if (!seg) return res.json({ ok: false, error: "No encuentro ese presupuesto en el seguimiento de Marta" });
+  normalizarSegPresu(seg);
+  const antes = { tipo: seg.tipo, estado: seg.estado };
+  seg.tipo = tipo;
+  const plan = PLANES_PRESU[tipo];
+  if (seg.estado === "fin_marta" && (seg.enviados || 0) < plan.marta.length) { seg.estado = "en_curso"; delete seg.avisos.llamada_fin; }
+  guardarSeguimientosPresu();
+  registrarResultadoPresu(ref, `tipo_cambiado_a_mano: ${antes.tipo} → ${tipo}`);
+  crearNotaParte(seg.caseId, `Seguimiento presupuesto (Marta): tipo de cliente corregido a mano (${antes.tipo} → ${tipo}). Calendario nuevo: Marta escribe los días ${plan.marta.join(", ") || "—"} desde el envío.`);
+  res.json({ ok: true, ref, nombre: seg.nombre || null, antes, ahora: { tipo: seg.tipo, estado: seg.estado }, mensajesYaEnviados: seg.enviados || 0, calendario: plan.marta });
+});
+
 app.get("/admin/api/presupuestos/atendido", authAdmin, (req, res) => {
   const ref = String(req.query.ref || "").trim();
   const seg = Object.values(seguimientosPresu).find((x) => x.ref === ref);
