@@ -256,8 +256,10 @@ function manejarAcuseEnvio(body, tipo) {
   // También si el chat es con alguien del equipo (Mari, Nieves…) que está
   // probando: los avisos internos salen por la API, nunca desde la app.
   if (esWamidDeApp(wamid)) {
-    if (!conocido()) return; // número desconocido
-    registrarAcuseAjeno({ tipo, telefono, pista, accion: "pausa (app)" });
+    // Escrito a mano desde el móvil: pausa SIEMPRE, también si el cliente
+    // aún no había hablado con Marta (p. ej. Noemí le escribe primero desde
+    // el 670 71 02 02 y el cliente contesta: Marta no debe meterse).
+    registrarAcuseAjeno({ tipo, canal: CANALES_AGENTES[canal] || canal, telefono, pista, accion: conocido() ? "pausa (app)" : "pausa (app, cliente nuevo)" });
     pausarPorIntervencion(canal, telefono, "respuesta manual desde la app de WhatsApp");
     return;
   }
@@ -272,13 +274,13 @@ function manejarAcuseEnvio(body, tipo) {
   // de un mensaje del bot anterior a que existiera el registro persistente.
   const registroFiable = wamidsCargados && Date.now() - arranqueTs > 2 * 60 * 1000;
   if (tipo === "READ" || (tipo === "DELIVERED" && !registroFiable)) {
-    if (conocido()) registrarAcuseAjeno({ tipo, telefono, pista, accion: "ignorado" + (tipo === "READ" ? "" : " (registro aún no fiable)") });
+    if (conocido()) registrarAcuseAjeno({ tipo, canal: CANALES_AGENTES[canal] || canal, telefono, pista, accion: "ignorado" + (tipo === "READ" ? "" : " (registro aún no fiable)") });
     return;
   }
   setTimeout(() => {
     if (wamidsBot.has(wamid)) return;
     if (!conocido()) return;
-    registrarAcuseAjeno({ tipo, telefono, pista, accion: "pausa" });
+    registrarAcuseAjeno({ tipo, canal: CANALES_AGENTES[canal] || canal, telefono, pista, accion: "pausa" });
     pausarPorIntervencion(canal, telefono, `respuesta manual de oficina (acuse ${tipo} ajeno)`);
   }, 4000);
 }
