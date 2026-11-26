@@ -4967,6 +4967,63 @@ app.get("/admin/api/woztell-esquema", authAdmin, async (req, res) => {
   }
 });
 
+// ── Historial de chats de Woztell ────────────────────────────
+// conversationHistory(channelId, from, to, first, after) → ChatConnection.
+// Los campos de Chat se leen del propio esquema (Woztell no los documenta):
+// se piden todos los escalares y los subcampos escalares de los objetos.
+let camposChatCache = null;
+async function seleccionChatWoztell() {
+  if (camposChatCache) return camposChatCache;
+  const F = `fields { name type { name kind ofType { name kind ofType { name kind } } } }`;
+  const tipoDe = (t) => { let x = t; while (x && (x.kind === "NON_NULL" || x.kind === "LIST")) x = x.ofType; return x || {}; };
+  const d = await graphqlWoztell(`query { __type(name: "Chat") { ${F} } }`);
+  const partes = [];
+  for (const f of d?.__type?.fields || []) {
+    const t = tipoDe(f.type);
+    if (["SCALAR", "ENUM"].includes(t.kind)) partes.push(f.name);
+    else if (t.kind === "OBJECT" && t.name) {
+      const sub = await graphqlWoztell(`query($n: String!) { __type(name: $n) { ${F} } }`, { n: t.name }).catch(() => null);
+      const esc = (sub?.__type?.fields || []).filter((g) => ["SCALAR", "ENUM"].includes(tipoDe(g.type).kind)).map((g) => g.name);
+      if (esc.length) partes.push(`${f.name} { ${esc.join(" ")} }`);
+    }
+  }
+  camposChatCache = partes.join(" ");
+  return camposChatCache;
+}
+async function historialWoztell(channelId, { desde, hasta, max = 300, memberId } = {}) {
+  const sel = await seleccionChatWoztell();
+  const nodos = []; let after = null;
+  while (nodos.length < max) {
+    const d = await graphqlWoztell(
+      `query h($channelId: String, $memberId: String, $from: Long, $to: Long, $first: IntMax100, $after: String) {
+         apiViewer { conversationHistory(channelId: $channelId, memberId: $memberId, from: $from, to: $to, first: $first, after: $after) {
+           pageInfo { hasNextPage endCursor } edges { node { ${sel} } } } } }`,
+      { channelId, memberId: memberId || undefined, from: desde, to: hasta, first: Math.min(100, max - nodos.length), after });
+    const ch = d?.apiViewer?.conversationHistory;
+    nodos.push(...(ch?.edges || []).map((e) => e.node));
+    if (!ch?.pageInfo?.hasNextPage || !ch?.pageInfo?.endCursor) break;
+    after = ch.pageInfo.endCursor;
+  }
+  return nodos;
+}
+// Muestra para ver cómo vienen los mensajes (quién los escribe, el texto…):
+// /admin/api/woztell-historial?canal=Nieves&n=20
+app.get("/admin/api/woztell-historial", authAdmin, async (req, res) => {
+  try {
+    const nombre = String(req.query.canal || "Nieves").toLowerCase();
+    const channelId = Object.keys(CANALES_AGENTES).find((id) => CANALES_AGENTES[id].toLowerCase() === nombre) || req.query.canal;
+    const n = Math.min(60, parseInt(req.query.n || "20", 10) || 20);
+    const desde = Date.now() - (parseInt(req.query.dias || "30", 10) || 30) * 86400000;
+    const nodos = await historialWoztell(channelId, { desde, hasta: Date.now(), max: n });
+    // Teléfonos tapados y textos recortados: es solo para ver el formato
+    const tapar = (v) => JSON.parse(JSON.stringify(v, (k, x) => typeof x === "string"
+      ? x.replace(/\b(34)?[6789]\d{8}\b/g, "6XXXXXXXX").slice(0, 120) : x));
+    res.json({ ok: true, canal: CANALES_AGENTES[channelId] || channelId, campos: await seleccionChatWoztell(), mensajes: nodos.map(tapar) });
+  } catch (e) {
+    res.json({ ok: false, error: String(e.message).slice(0, 400), campos: camposChatCache });
+  }
+});
+
 // ── Canales visibles en Woztell (diagnóstico) ────────────────
 // Lista los canales reales con sus IDs exactos, para configurar
 // WOZTELL_CHANNEL_ID sin teclear a mano (un ID mal copiado rompe la
