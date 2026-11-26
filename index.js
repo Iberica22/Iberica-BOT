@@ -5180,7 +5180,9 @@ app.get("/admin/api/aprender-woztell", authAdmin, async (req, res) => {
     return res.json({ ok: true, lanzado: true, dias, mira: "/admin/api/aprender-woztell en unos minutos" });
   }
   res.json({ ok: true, ...aprendizaje, ts: aprendizaje.ts ? new Date(aprendizaje.ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }) : null,
-    guiaEnUso: estiloOficinaTxt || null });
+    guiaEnUso: (process.env.ESTILO_OFICINA || "").toLowerCase() === "auto" ? (estiloOficinaTxt || null) : ESTILO_OFICINA_REVISADO,
+    guiaAprendida: estiloOficinaTxt || null,
+    nota: (process.env.ESTILO_OFICINA || "").toLowerCase() === "auto" ? "Marta usa la guía aprendida tal cual" : "Marta usa la guía revisada a mano (guiaEnUso); la aprendida de los chats queda solo como referencia" });
 });
 
 // ── Canales visibles en Woztell (diagnóstico) ────────────────
