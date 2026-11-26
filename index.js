@@ -34,6 +34,12 @@ const botActivo = {};
 // (la pausa manual desde el panel sigue siendo indefinida)
 const pausaExpira = {};
 const PAUSA_TAKEOVER_H = 6; // al detectar a una persona de oficina escribiendo
+// En los móviles del equipo (Noe, Mari, José, Isabel, Nieves) la persona
+// lleva sus propios clientes: si escribe ella, Marta se aparta 48 h, no 6.
+const PAUSA_TAKEOVER_EQUIPO_H = parseInt(process.env.PAUSA_TAKEOVER_EQUIPO_H || "48", 10);
+const CANALES_EQUIPO = ["69af0932bd6b88aaf5da3887", "69a6981752ac843492cb9ed5", "69af0e9ee1c709083b065b8a", "69bd11ce7614bf4b4d6f2d3c", "69c3a0276c369daa9f0bbf81"];
+const horasPausaTakeover = (canal) => CANALES_EQUIPO.includes(canal) ? PAUSA_TAKEOVER_EQUIPO_H : PAUSA_TAKEOVER_H;
+const ultimaIntervencion = {}; // "canal_tel" -> ts del último mensaje escrito por una persona
 const PAUSA_AGENTE_H   = 8; // cuando el cliente pide hablar con una persona
 
 function pausarBot(clave, horas, motivo) {
@@ -184,6 +190,11 @@ function detectarIntervencionHumana(body) {
     ...Object.keys(actividad),
   ])];
   let telefono = candidatos.find((t) => conversaciones[t] || captacionLeads[t] || actividad[t]);
+  // Los envíos desde el inbox de Woztell pueden traer solo el memberId
+  if (!telefono) {
+    const members = [body?.member, body?.memberId, body?.messageEvent?.member, body?.messageEvent?.memberId].filter(Boolean).map(String);
+    telefono = Object.keys(conversaciones).find((t) => members.includes(String(conversaciones[t]?.memberId || "")));
+  }
   if (!telefono) {
     const digitos = (s) => String(s).replace(/\D/g, "");
     for (const cand of candidatos) {
@@ -195,16 +206,7 @@ function detectarIntervencionHumana(body) {
   }
   if (!telefono) return;                       // no es un cliente conocido
   if (esEnvioDelBot(telefono, texto)) return;  // es el eco de un envío del bot
-  const clave = `${canal}_${telefono}`;
-  if (botActivo[clave] === false) {
-    // Ya pausado: si era pausa temporal, extenderla mientras la persona siga escribiendo
-    if (pausaExpira[clave]) {
-      pausaExpira[clave] = Date.now() + PAUSA_TAKEOVER_H * 3600 * 1000;
-      redisSet("iberica:pausaExpira", pausaExpira);
-    }
-    return;
-  }
-  pausarBot(clave, PAUSA_TAKEOVER_H, "intervención humana detectada (mensaje manual de oficina)");
+  pausarPorIntervencion(canal, telefono, "intervención humana detectada (mensaje manual de oficina)");
 }
 
 // ¿wamid de un mensaje escrito desde la app de WhatsApp Business (modo
@@ -222,16 +224,18 @@ function esWamidDeApp(wamid) {
 
 function pausarPorIntervencion(canal, telefono, motivo) {
   const clave = `${canal}_${telefono}`;
+  ultimaIntervencion[clave] = Date.now();
+  const horas = horasPausaTakeover(canal);
   if (botActivo[clave] === false) {
     // Ya pausado: si era pausa temporal, extenderla mientras siga la persona
     if (pausaExpira[clave]) {
-      pausaExpira[clave] = Date.now() + PAUSA_TAKEOVER_H * 3600 * 1000;
+      pausaExpira[clave] = Math.max(pausaExpira[clave], Date.now() + horas * 3600 * 1000);
       redisSet("iberica:pausaExpira", pausaExpira);
     }
     return;
   }
   console.log(`[Takeover] ${motivo} — ${telefono} (canal ${canal})`);
-  pausarBot(clave, PAUSA_TAKEOVER_H, motivo);
+  pausarBot(clave, horas, motivo);
 }
 
 // Acuses de envío (SENT/DELIVERED/READ): llegan para TODO mensaje que sale
@@ -932,7 +936,8 @@ async function pedirResena({ telefono, nombre, refParte, caseId }) {
   const claveBot = `${channelId}_${clave}`;
   if (botActivo[claveBot] === false) {
     const expira = pausaExpira[claveBot];
-    const intervinoHace = expira ? Date.now() - (expira - PAUSA_TAKEOVER_H * 3600 * 1000) : 0;
+    const intervinoHace = ultimaIntervencion[claveBot] ? Date.now() - ultimaIntervencion[claveBot]
+      : expira ? Date.now() - (expira - horasPausaTakeover(channelId) * 3600 * 1000) : 0;
     if (!expira || intervinoHace < 2 * 3600 * 1000) {
       return { ok: false, motivo: "conversacion_atendida_por_persona", reintentable: true };
     }
@@ -3068,6 +3073,9 @@ REGLAS INQUEBRANTABLES:
 4. Si preguntan si eres una persona o un robot: di con simpatía que eres la asistente virtual de Ibérica Seguridad, que puedes gestionarlo todo igualmente, y ofrece pasar con una persona si lo prefiere.
 5. No inventes NADA. Ante la duda, deriva a un compañero.
 6. No hables de otras empresas o competidores, ni de temas ajenos a los servicios de Ibérica Seguridad: reconduce con amabilidad.
+7. Noemí, Mari, María, Nieves, José e Isabel son del equipo de Ibérica: el cliente NO se llama así aunque los nombre («gracias, Noemí»). Si no sabes su nombre, no lo uses.
+8. No digas que «tomas nota», que «lo apuntas» ni que algo «está en marcha» si no lo sabes: tú no apuntas nada. Si el cliente da detalles de un trabajo que lleva una persona del equipo (medidas, colores, modelo), dile con naturalidad que lo verá esa persona y le contestará ella.
+9. No repitas en cada mensaje lo mismo («tu parte está en marcha», «aquí estoy para ayudarte»). Contesta a lo que dice, corto, y sin despedidas largas.
 
 FICHA DE LA EMPRESA:
 ${BASE_CONOCIMIENTO}
@@ -3148,9 +3156,11 @@ async function desvioAtendido(telefono, estado, msg, campo) {
   return true; // el dato sigue pendiente; no se guarda la pregunta como respuesta
 }
 
+// El cliente que escribe «gracias Noemí» no se llama Noemí
+const esNombreDelEquipo = (n) => /^(noe|noemi|mari|maria|nieves|jose|isabel|marta)$/.test(normalizaTxt(String(n || "").trim().split(/\s+/)[0]));
 function aplicarDatosExtraidos(estado, datos) {
   if (!datos) return;
-  if (datos.nombre && !estado.nombre) estado.nombre = datos.nombre;
+  if (datos.nombre && !estado.nombre && !esNombreDelEquipo(datos.nombre)) estado.nombre = datos.nombre;
   if (datos.telefono && !estado.telefono) {
     const t = validarTelefono(datos.telefono);
     if (t) estado.telefono = t;
