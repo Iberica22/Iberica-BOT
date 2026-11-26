@@ -2038,6 +2038,8 @@ async function cargarEstadoDesdeRedis() {
     redisGet("iberica:captacionLeads"),
   ]);
   const historialGuardado = await redisGet("iberica:resenasHistorial");
+  const estiloGuardado = await redisGet("iberica:estiloOficina");
+  if (estiloGuardado?.guia) estiloOficinaTxt = estiloGuardado.guia;
   const wamidsGuardados = await redisGet("iberica:wamidsBot");
   if (wamidsGuardados) {
     for (const [id, ts] of Object.entries(wamidsGuardados)) wamidsBot.set(id, ts);
@@ -5026,6 +5028,37 @@ async function historialWoztell(channelId, { desde, hasta, max = 300, memberId }
   }
   return nodos;
 }
+// ¿Quién escribió este mensaje del historial?
+//   cliente  → from MEMBER
+//   persona  → escrito a mano: desde la app del móvil (smbAgentMessage) o
+//              desde el inbox de Woztell (admin)
+//   marta    → el resto de los de BOT (los envía la API)
+function autorChatWoztell(n) {
+  if (n?.from === "MEMBER") return "cliente";
+  if (n?.from !== "BOT") return null;
+  const wa = n?.meta?.["whatsapp-cloud"] || {};
+  if (wa.smbAgentMessage || n?.admin?._id || esWamidDeApp(n?.messageEvent?.messageId || "")) return wa.coexistenceHistorySync ? "persona_antiguo" : "persona";
+  return "marta";
+}
+const textoChatWoztell = (n) => {
+  const d = n?.messageEvent?.data || {};
+  return typeof d.text === "string" ? d.text : (d.text?.body || d.caption || "");
+};
+const cachePersonaReciente = new Map(); // "canal_member" -> { ts, valor }
+async function personaEscribioHaPoco(channelId, memberId) {
+  const k = `${channelId}_${memberId}`;
+  const c = cachePersonaReciente.get(k);
+  if (c && Date.now() - c.ts < 60 * 1000) return c.valor;
+  let valor = false;
+  try {
+    const horas = horasPausaTakeover(channelId);
+    const nodos = await historialWoztell(channelId, { memberId, desde: Date.now() - horas * 3600 * 1000, hasta: Date.now(), max: 40 });
+    valor = nodos.some((n) => autorChatWoztell(n) === "persona");
+  } catch (e) { console.error("[Takeover] Historial Woztell:", e.message); }
+  cachePersonaReciente.set(k, { ts: Date.now(), valor });
+  return valor;
+}
+
 // Muestra para ver cómo vienen los mensajes (quién los escribe, el texto…):
 // /admin/api/woztell-historial?canal=Nieves&n=20
 app.get("/admin/api/woztell-historial", authAdmin, async (req, res) => {
@@ -5042,6 +5075,83 @@ app.get("/admin/api/woztell-historial", authAdmin, async (req, res) => {
   } catch (e) {
     res.json({ ok: false, error: String(e.message).slice(0, 400), campos: camposChatCache });
   }
+});
+
+// ── Aprender de cómo escribe la oficina ─────────────────────
+// Lee los chats de los móviles del equipo, se queda con las conversaciones
+// en las que contestó una persona y saca con la IA una guía de tono y de
+// respuestas habituales (sin datos de clientes). Se guarda en Redis y Marta
+// la usa al conversar. /admin/api/aprender-woztell?dias=90 (lanza) y
+// /admin/api/aprender-woztell (estado y guía).
+const aprendizaje = { estado: "sin_lanzar", progreso: "", conversaciones: 0, ts: null, error: null };
+const taparDatos = (t) => String(t || "")
+  .replace(/\b(\+?34)?[6789]\d{2}\s?\d{3}\s?\d{3}\b/g, "[teléfono]")
+  .replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, "[email]")
+  .replace(/\bES\d{2}[\s\d]{20,}\b/gi, "[cuenta]")
+  .replace(/\b(c\/|calle|avda\.?|avenida|plaza|pza\.?)\s+[^,.\n]{2,40}/gi, "[dirección]");
+async function aprenderDeWoztell(dias = 90) {
+  aprendizaje.estado = "leyendo"; aprendizaje.error = null; aprendizaje.conversaciones = 0;
+  const desde = Date.now() - dias * 86400000;
+  const conversacionesTxt = [];
+  for (const canal of CANALES_EQUIPO) {
+    aprendizaje.progreso = `leyendo ${CANALES_AGENTES[canal]}`;
+    let nodos = [];
+    try { nodos = await historialWoztell(canal, { desde, hasta: Date.now(), max: 3000 }); }
+    catch (e) { console.error("[Aprender]", CANALES_AGENTES[canal], e.message); continue; }
+    const porMember = {};
+    for (const n of nodos) {
+      const autor = autorChatWoztell(n); const t = textoChatWoztell(n);
+      if (!autor || !t) continue;
+      (porMember[n.memberId] = porMember[n.memberId] || []).push({ ts: n.createdAt, autor, t: taparDatos(t).slice(0, 400) });
+    }
+    for (const msgs of Object.values(porMember)) {
+      if (!msgs.some((m) => m.autor.startsWith("persona"))) continue;
+      msgs.sort((a, b) => a.ts - b.ts);
+      const quien = { cliente: "Cliente", persona: "Oficina", persona_antiguo: "Oficina", marta: "Marta (bot)" };
+      conversacionesTxt.push(msgs.slice(-30).map((m) => `${quien[m.autor]}: ${m.t}`).join("\n"));
+    }
+  }
+  aprendizaje.conversaciones = conversacionesTxt.length;
+  if (!conversacionesTxt.length) throw new Error("No hay conversaciones con respuestas de la oficina en ese periodo");
+  // Por tandas: cada una saca notas; al final se juntan en una guía
+  aprendizaje.estado = "analizando";
+  const tandas = [];
+  let actual = "";
+  for (const c of conversacionesTxt) {
+    if ((actual + c).length > 14000) { tandas.push(actual); actual = ""; }
+    actual += `\n\n=== CONVERSACIÓN ===\n${c}`;
+  }
+  if (actual) tandas.push(actual);
+  const notas = [];
+  for (let i = 0; i < Math.min(tandas.length, 25); i++) {
+    aprendizaje.progreso = `analizando tanda ${i + 1} de ${Math.min(tandas.length, 25)}`;
+    const r = await openai.chat.completions.create({ model: "gpt-4o", temperature: 0.2, max_tokens: 900, messages: [
+      { role: "system", content: "Analizas chats de WhatsApp de una cerrajería de Almería (Ibérica Seguridad) entre clientes y la oficina. Saca, en viñetas cortas: 1) cómo escribe la oficina (tono, saludo, despedida, longitud, tuteo, emojis, expresiones típicas); 2) preguntas habituales de los clientes y cómo las contesta la oficina (respuesta tipo, generalizada); 3) qué NO hace la oficina (p. ej. no da precios sin ver la puerta). NUNCA incluyas nombres, teléfonos, direcciones ni datos de clientes concretos. Ignora los mensajes de «Marta (bot)» salvo para ver qué corrige la oficina." },
+      { role: "user", content: tandas[i] },
+    ] });
+    notas.push(r.choices?.[0]?.message?.content || "");
+  }
+  aprendizaje.progreso = "redactando la guía";
+  const r = await openai.chat.completions.create({ model: "gpt-4o", temperature: 0.2, max_tokens: 1400, messages: [
+    { role: "system", content: "Junta estas notas en UNA guía para Marta, la asistente de WhatsApp de Ibérica Seguridad, para que conteste como la oficina. Máximo 3.500 caracteres. Secciones: TONO, EXPRESIONES QUE USA LA OFICINA, CÓMO CONTESTA A LO HABITUAL (pregunta → respuesta tipo), QUÉ NO HACE. Sin nombres ni datos de clientes. Sin precios concretos (Marta tiene su propia tarifa). En español de España." },
+    { role: "user", content: notas.join("\n\n---\n\n") },
+  ] });
+  const guia = String(r.choices?.[0]?.message?.content || "").trim().slice(0, 4000);
+  if (!guia) throw new Error("La IA no devolvió la guía");
+  estiloOficinaTxt = guia;
+  await redisSet("iberica:estiloOficina", { guia, ts: Date.now(), conversaciones: conversacionesTxt.length, dias });
+  aprendizaje.estado = "hecho"; aprendizaje.ts = Date.now(); aprendizaje.progreso = "";
+  return guia;
+}
+app.get("/admin/api/aprender-woztell", authAdmin, async (req, res) => {
+  if (req.query.borrar === "1") { estiloOficinaTxt = ""; await redisSet("iberica:estiloOficina", null); return res.json({ ok: true, borrada: true }); }
+  if (req.query.dias && !["leyendo", "analizando"].includes(aprendizaje.estado)) {
+    const dias = Math.min(365, Math.max(7, parseInt(req.query.dias, 10) || 90));
+    aprenderDeWoztell(dias).catch((e) => { aprendizaje.estado = "error"; aprendizaje.error = String(e.message).slice(0, 300); });
+    return res.json({ ok: true, lanzado: true, dias, mira: "/admin/api/aprender-woztell en unos minutos" });
+  }
+  res.json({ ok: true, ...aprendizaje, ts: aprendizaje.ts ? new Date(aprendizaje.ts).toLocaleString("es-ES", { timeZone: "Europe/Madrid", hour12: false }) : null,
+    guiaEnUso: estiloOficinaTxt || null });
 });
 
 // ── Canales visibles en Woztell (diagnóstico) ────────────────
@@ -5526,6 +5636,13 @@ app.post("/webhook", async (req, res) => {
 
     // ── Comprobar si el bot está pausado para este cliente en este canal ──
     const claveBot = `${channelId}_${telefono}`;
+    // En los móviles del equipo, además, se mira en Woztell si una persona ha
+    // escrito a este cliente en las últimas horas (desde la app del móvil o
+    // desde el inbox). Así Marta no se mete aunque no le llegara el acuse.
+    if (!enFlujoResena && !botPausado(claveBot) && CANALES_EQUIPO.includes(channelId) && memberId &&
+        await personaEscribioHaPoco(channelId, memberId)) {
+      pausarPorIntervencion(channelId, telefono, "una persona del equipo escribió hace poco (historial de Woztell)");
+    }
     if (!enFlujoResena && botPausado(claveBot)) {
       console.log(`[Webhook] Bot pausado para ${telefono} en canal ${channelId} — mensaje ignorado`);
       return res.sendStatus(200);
