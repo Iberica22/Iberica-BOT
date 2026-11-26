@@ -4937,19 +4937,33 @@ app.get("/admin/api/presupuestos-tipos", authAdmin, async (req, res) => {
 // Devuelve los campos que tiene la API para conversaciones y mensajes, y
 // así preparar la lectura del historial con clientes.
 app.get("/admin/api/woztell-esquema", authAdmin, async (req, res) => {
+  const tipo = req.query.tipo ? String(req.query.tipo) : null;
+  const campos = (t) => (t?.fields || []).map((f) => ({
+    campo: f.name,
+    args: (f.args || []).map((a) => `${a.name}:${a.type?.name || a.type?.ofType?.name || a.type?.kind}`).join(", "),
+    tipo: f.type?.name || f.type?.ofType?.name || f.type?.ofType?.ofType?.name || f.type?.kind,
+  }));
+  const F = `fields { name args { name type { name kind ofType { name kind } } } type { name kind ofType { name kind ofType { name } } } }`;
   try {
-    const tipo = String(req.query.tipo || "ApiViewer");
-    const d = await graphqlWoztell(
-      `query esquema($n: String!) { __type(name: $n) { name fields { name args { name type { name kind ofType { name kind } } } type { name kind ofType { name kind ofType { name } } } } } }`,
-      { n: tipo });
-    const campos = (d?.__type?.fields || []).map((f) => ({
-      campo: f.name,
-      args: (f.args || []).map((a) => `${a.name}:${a.type?.name || a.type?.ofType?.name || a.type?.kind}`).join(", "),
-      tipo: f.type?.name || f.type?.ofType?.name || f.type?.ofType?.ofType?.name || f.type?.kind,
-    }));
-    res.json({ ok: true, tipo, campos });
+    if (tipo) {
+      const d = await graphqlWoztell(`query esquema($n: String!) { __type(name: $n) { name ${F} } }`, { n: tipo });
+      return res.json({ ok: true, tipo, existe: !!d?.__type, campos: campos(d?.__type) });
+    }
+    // Sin tipo: la raíz de la API, el tipo de apiViewer y los tipos que
+    // parecen de conversaciones o mensajes
+    const d = await graphqlWoztell(`{ __schema { queryType { name ${F} } types { name kind } } }`);
+    const raiz = d?.__schema?.queryType;
+    const viewer = (raiz?.fields || []).find((f) => f.name === "apiViewer");
+    const tipoViewer = viewer?.type?.name || viewer?.type?.ofType?.name || null;
+    let camposViewer = [];
+    if (tipoViewer) {
+      const v = await graphqlWoztell(`query esquema($n: String!) { __type(name: $n) { name ${F} } }`, { n: tipoViewer });
+      camposViewer = campos(v?.__type);
+    }
+    const interesantes = (d?.__schema?.types || []).map((t) => t.name).filter((n) => /conver|messag|chat|histor|event|inbox|log/i.test(n || ""));
+    res.json({ ok: true, raiz: raiz?.name, camposRaiz: campos(raiz).map((c) => c.campo), tipoViewer, camposViewer, tiposDeMensajes: interesantes });
   } catch (e) {
-    res.json({ ok: false, error: String(e.message).slice(0, 300) });
+    res.json({ ok: false, error: String(e.message).slice(0, 400) });
   }
 });
 
