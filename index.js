@@ -4998,7 +4998,10 @@ async function seleccionChatWoztell() {
   for (const f of d?.__type?.fields || []) {
     const t = tipoDe(f.type);
     if (["SCALAR", "ENUM"].includes(t.kind)) partes.push(f.name);
-    else if (t.kind === "OBJECT" && t.name) {
+    // member, channel y app fallan en Woztell (appId nulo); admin = la
+    // persona del inbox que escribió el mensaje, solo con su nombre
+    else if (f.name === "admin") partes.push("admin { _id name firstName }");
+    else if (t.kind === "OBJECT" && t.name && !["member", "channel", "app"].includes(f.name)) {
       const sub = await graphqlWoztell(`query($n: String!) { __type(name: $n) { ${F} } }`, { n: t.name }).catch(() => null);
       const esc = (sub?.__type?.fields || []).filter((g) => ["SCALAR", "ENUM"].includes(tipoDe(g.type).kind)).map((g) => g.name);
       if (esc.length) partes.push(`${f.name} { ${esc.join(" ")} }`);
