@@ -4685,8 +4685,13 @@ app.get("/admin/api/takeover-diag", authAdmin, (req, res) => {
   });
 });
 
+// ?canal=Noe&tel=611222333 → solo los eventos de ese canal y ese cliente
 app.get("/admin/api/eventos", authAdmin, (req, res) => {
-  res.json({ total: eventosRecientes.length, eventos: eventosRecientes });
+  const canal = req.query.canal ? (Object.keys(CANALES_AGENTES).find((id) => CANALES_AGENTES[id].toLowerCase() === String(req.query.canal).toLowerCase()) || String(req.query.canal)) : null;
+  const tel = req.query.tel ? String(req.query.tel).replace(/\D/g, "").slice(-9) : null;
+  const eventos = eventosRecientes.filter((e) => (!canal || (e.body?.channel || e.body?.channelId) === canal) &&
+    (!tel || JSON.stringify(e.body).includes(tel)));
+  res.json({ total: eventos.length, eventos });
 });
 
 // ── Prueba de la llamada de aviso desde el navegador ─────────
