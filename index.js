@@ -2851,6 +2851,16 @@ const ESQUEMA_CLASIFICACION = {
 // `toque` = el mensaje de Marta al que responde: tras el 3.º ("¿has
 // aparcado el presupuesto?") un "sí" significa que NO sigue adelante.
 const CATEGORIAS_PRESU = ["acepta", "precio", "aplaza", "consulta", "declina", "duda"];
+// Antes de dar un presupuesto por ACEPTADO (aviso a José y parte a Material),
+// la IA no basta: el mensaje tiene que decirlo claro y no quejarse del
+// precio. «Me parece excesivo» se tomó una vez por un sí (2026-12274).
+const OBJECION_PRECIO_RE = /(caro|carisim|excesiv|elevad|mucho dinero|demasiad|precio|rebaj|descuento|mas barato|otro presupuesto|competencia|no me lo puedo permitir|no (lo )?puedo pagar|se me va|se sale)/;
+function aceptacionClara(mensaje) {
+  const t = normalizaTxt(mensaje || "");
+  if (OBJECION_PRECIO_RE.test(t)) return false;
+  return clasificarRespuestaPresuPorPalabras(mensaje) === "acepta" || /^(si|sii+|vale|ok|okey|perfecto|de acuerdo|adelante|venga)\b/.test(t.trim());
+}
+
 async function clasificarRespuestaPresu(mensaje, toque) {
   const contexto = toque === 3
     ? `\nCONTEXTO: Marta le acaba de preguntar si ha decidido aparcar o dejar el presupuesto. Un "sí", "sí, lo dejamos" o similar es "declina"; un "no, sigo interesado" es "aplaza" salvo que pida seguir adelante ya ("acepta"). Ojo: "sí, pídelo", "sí, adelante" o "sí, lo quiero" son "acepta".`
@@ -3463,11 +3473,31 @@ async function procesarRespuestaPresu(telefono) {
     await avisar(cambio.ok ? "❌ Presupuesto declinado (Marta ya lo ha pasado a Cerrado / Anulada por el Cliente)" : "❌ Presupuesto declinado (pásalo a mano a Cerrado / Anulada por el Cliente)");
   };
 
+  // Le parece caro: Marta lo entiende, recuerda lo que incluye y avisa.
+  const objecionPrecio = async () => {
+    await enviarMensaje(
+      telefono,
+      "Te entiendo, es una inversión importante. Incluye la instalación por nuestro equipo propio y 3 años de garantía, y tenemos financiación para pagarlo con comodidad. Si quieres, un compañero te llama y ve contigo cómo ajustarlo, sin compromiso.\n"
+    );
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): objeción de PRECIO. Respuesta: "${msg.slice(0, 300)}"`);
+    registrarResultadoPresu(ref, "respondio_objecion_precio");
+    await avisar("💶 Objeción de precio");
+  };
+  // La IA cree que acepta pero el mensaje no lo deja claro: ni aviso a José
+  // ni cambio de estado; lo confirma una persona.
+  const posibleAceptacion = async () => {
+    await enviarMensaje(telefono, "¡Gracias por contestar! Se lo paso ahora a la oficina y te llaman para confirmarlo contigo.");
+    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): parece que quiere seguir adelante, pero no está claro. Hay que confirmarlo con el cliente. Respuesta: "${msg.slice(0, 300)}"`);
+    registrarResultadoPresu(ref, "respondio_posible_acepta");
+    await avisar("🤔 ¿Acepta? No está claro — confírmalo antes de tramitar");
+  };
+
   // ── Paso 2: qué falta y cuándo volver a escribir ──
   if (paso === "presu_siguiente") {
     const sig = await extraerSiguientePaso(msg);
     console.log(`[Presupuestos] Siguiente paso de ${telefono} (${ref}):`, JSON.stringify(sig));
-    if (sig.decision === "acepta") return acepta();
+    if (OBJECION_PRECIO_RE.test(normalizaTxt(msg))) return objecionPrecio();
+    if (sig.decision === "acepta") return aceptacionClara(msg) ? acepta() : posibleAceptacion();
     if (sig.decision === "declina") return declina();
 
     const partes = [];
@@ -3507,19 +3537,10 @@ async function procesarRespuestaPresu(telefono) {
   const categoria = await clasificarRespuestaPresu(msg, toque);
   console.log(`[Presupuestos] Respuesta de ${telefono} (${ref}) clasificada como: ${categoria}`);
 
-  if (categoria === "acepta") return acepta();
+  if (categoria === "acepta") return aceptacionClara(msg) ? acepta() : (OBJECION_PRECIO_RE.test(normalizaTxt(msg)) ? objecionPrecio() : posibleAceptacion());
   if (categoria === "declina") return declina();
 
-  if (categoria === "precio") {
-    await enviarMensaje(
-      telefono,
-      "Te entiendo, es una inversión importante. Incluye la instalación por nuestro equipo propio y 3 años de garantía, y tenemos financiación para pagarlo con comodidad. Si quieres, un compañero te llama y ve contigo cómo ajustarlo, sin compromiso.\n" + NO_ES_PROBLEMA
-    );
-    crearNotaParte(caseId, `Seguimiento presupuesto (Marta): objeción de PRECIO. Respuesta: "${msg.slice(0, 300)}"`);
-    registrarResultadoPresu(ref, "respondio_objecion_precio");
-    await avisar("💶 Objeción de precio");
-    return;
-  }
+  if (categoria === "precio") return objecionPrecio();
   if (categoria === "aplaza") {
     await enviarMensaje(
       telefono,
